@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home as HomeIcon, Search, Library as LibraryIcon, User, Settings, Info } from 'lucide-react';
+import { Home as HomeIcon, Search, Library as LibraryIcon, User, Settings, Info, Heart as HeartIcon } from 'lucide-react';
 import { Home } from './components/Home';
 import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
@@ -15,6 +15,7 @@ const App: React.FC = () => {
     { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },
     { id: 'search', icon: <Search size={24} />, label: 'Search' },
     { id: 'library', icon: <LibraryIcon size={24} />, label: 'Library' },
+    { id: 'favorites', icon: <HeartIcon size={24} />, label: 'Favorites' },
     { id: 'profile', icon: <User size={24} />, label: 'Profile' },
   ];
 
@@ -32,16 +33,20 @@ const App: React.FC = () => {
               className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
               onClick={() => setActiveTab(item.id)}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              <div className="icon-wrapper">
+                {item.icon}
+              </div>
+              <span className="label">{item.label}</span>
             </div>
           ))}
         </div>
 
         <div className="nav-footer">
           <div className="nav-item">
-            <Settings size={24} />
-            <span>Settings</span>
+            <div className="icon-wrapper">
+              <Settings size={24} />
+            </div>
+            <span className="label">Settings</span>
           </div>
         </div>
       </nav>
@@ -69,6 +74,7 @@ const App: React.FC = () => {
           {activeTab === 'home' && <Home />}
           {activeTab === 'search' && <Home />}
           {activeTab === 'library' && <Library />}
+          {activeTab === 'favorites' && <Home />}
           {activeTab === 'profile' && <div className="placeholder">Profile view coming soon...</div>}
         </section>
       </main>
@@ -77,16 +83,26 @@ const App: React.FC = () => {
       {isLoginOpen && <LoginModal onClose={() => setIsLoginOpen(false)} />}
 
       <style>{`
-        .app-logo { margin-bottom: 24px; }
-        .logo-circle { width: 42px; height: 42px; border-radius: 21px; background: linear-gradient(135deg, var(--md-sys-color-primary), var(--md-sys-color-secondary)); box-shadow: 0 4px 12px rgba(0, 100, 147, 0.3); }
-        .nav-items-container { flex: 1; display: flex; flex-direction: column; gap: 12px; }
-        .nav-footer { margin-top: auto; margin-bottom: 24px; }
-        .top-bar-actions { display: flex; align-items: center; gap: 12px; }
-        .user-profile-mini { padding: 4px 12px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border-radius: var(--radius-xl); cursor: pointer; font-weight: 600; font-size: 14px; }
-        .primary-btn.sm { padding: 6px 16px; font-size: 13px; }
-        .icon-btn { width: 40px; height: 40px; border-radius: 20px; border: none; background: transparent; color: var(--md-sys-color-on-surface-variant); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s; }
-        .icon-btn:hover { background-color: var(--md-sys-color-surface-variant); }
-        .placeholder { display: flex; align-items: center; justify-content: center; height: 300px; color: var(--md-sys-color-on-surface-variant); font-style: italic; }
+        .app-container { display: flex; height: 100vh; background-color: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); }
+        .nav-rail { width: 90px; background-color: var(--md-sys-color-surface-container-low); display: flex; flex-direction: column; align-items: center; padding: 20px 0; border-right: 1px solid var(--md-sys-color-outline-variant); }
+        .app-logo { margin-bottom: 32px; }
+        .logo-circle { width: 48px; height: 48px; border-radius: 16px; background: linear-gradient(135deg, #0369a1, #0ea5e9); box-shadow: 0 4px 12px rgba(3, 105, 161, 0.2); }
+        
+        .nav-items-container { flex: 1; display: flex; flex-direction: column; gap: 16px; width: 100%; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--md-sys-color-on-surface-variant); transition: all 0.2s; width: 100%; }
+        .icon-wrapper { padding: 4px 20px; border-radius: 20px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+        .nav-item:hover .icon-wrapper { background-color: var(--md-sys-color-surface-variant); }
+        .nav-item.active .icon-wrapper { background-color: #e0f2fe; color: #0369a1; }
+        .nav-item.active { color: var(--md-sys-color-on-surface); font-weight: 700; }
+        .nav-item .label { font-size: 11px; font-weight: 600; text-align: center; }
+        
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .top-bar { height: 72px; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--md-sys-color-outline-variant); background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); }
+        .title { font-size: 22px; font-weight: 800; margin: 0; color: #1e293b; }
+        
+        .scroll-area { flex: 1; overflow-y: auto; padding: 0; background: #f8fafc; }
+        .nav-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--md-sys-color-outline-variant); width: 100%; }
+        .placeholder { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 18px; color: #64748b; font-weight: 600; }
       `}</style>
     </div>
   );

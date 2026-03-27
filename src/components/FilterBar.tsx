@@ -1,5 +1,5 @@
 import React from 'react';
-import { SortAsc, SortDesc, ChevronDown, Calendar, Hash, Globe, Monitor } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
@@ -7,15 +7,14 @@ interface FilterBarProps {
   isLoading?: boolean;
 }
 
-export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSortChange, isLoading }) => {
-  const [activeSort, setActiveSort] = React.useState('resource_update_time');
-  const [activeOrder, setActiveOrder] = React.useState('desc');
+export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, isLoading }) => {
   const [filters, setFilters] = React.useState({
-    type: 'all',
-    language: 'all',
-    platform: 'all',
-    year: 'all',
-    month: 'all'
+    selectedType: 'all',
+    selectedLanguage: 'all',
+    selectedPlatform: 'all',
+    selectedYears: ['all'],
+    selectedMonths: ['all'],
+    minRatingCount: 10
   });
 
   const categories = {
@@ -25,11 +24,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSortChan
       { label: '汉化资源', value: 'chinese' },
       { label: '手机游戏', value: 'mobile' },
       { label: '模拟器资源', value: 'emulator' },
-      { label: '生肉资源', value: 'row' },
+      { label: '生肉资源', value: 'raw' },
       { label: '直装资源', value: 'app' },
       { label: '补丁资源', value: 'patch' },
       { label: '游戏工具', value: 'tool' },
-      { label: '官方通知', value: 'notice' },
       { label: '其它', value: 'other' }
     ],
     languages: [
@@ -51,105 +49,95 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSortChan
     ],
     years: [
       { label: '全部年份', value: 'all' },
-      { label: '未发售', value: 'future' },
-      { label: '未知年份', value: 'unknown' },
-      ...Array.from({ length: 45 }, (_, i) => ({ label: `${2025 - i}年`, value: String(2025 - i) }))
+      { label: '2026', value: '2026' },
+      { label: '2025', value: '2025' },
+      { label: '2024', value: '2024' },
+      { label: '2023', value: '2023' },
+      { label: '2022', value: '2022' },
+      ...Array.from({ length: 20 }, (_, i) => ({ label: `${2021 - i}年`, value: String(2021 - i) }))
+    ],
+    months: [
+      { label: '全部月份', value: 'all' },
+      ...Array.from({ length: 12 }, (_, i) => ({ label: `${i + 1}月`, value: String(i + 1) }))
     ]
   };
 
-  const sortOptions = [
-    { label: '更新时间', value: 'resource_update_time' },
-    { label: '创建时间', value: 'created' },
-    { label: '浏览量', value: 'view' },
-    { label: '下载量', value: 'download' },
-    { label: '收藏量', value: 'favorite' },
-    { label: '评分', value: 'rating' },
-  ];
-
-  const handleSort = (field: string) => {
-    const newOrder = field === activeSort && activeOrder === 'desc' ? 'asc' : 'desc';
-    setActiveSort(field);
-    setActiveOrder(newOrder);
-    onSortChange({ field, order: newOrder });
-  };
-
-  const handleFilterChange = (key: string, value: string) => {
+  const handleChange = (key: string, value: any) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-    onFilterChange({
-      ...newFilters,
-      sortField: activeSort,
-      sortOrder: activeOrder
-    });
+    onFilterChange(newFilters);
   };
 
   return (
-    <div className="filter-bar">
-      <div className="filter-rows">
-        <div className="filter-row">
-           <div className="filter-select-wrapper">
-            <Hash size={14} className="icon-prefix" />
-            <select value={filters.type} disabled={isLoading} onChange={(e) => handleFilterChange('type', e.target.value)}>
-              {categories.types.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="select-arrow" />
-          </div>
-
-          <div className="filter-select-wrapper">
-            <Globe size={14} className="icon-prefix" />
-            <select value={filters.language} disabled={isLoading} onChange={(e) => handleFilterChange('language', e.target.value)}>
-              {categories.languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="select-arrow" />
-          </div>
-
-          <div className="filter-select-wrapper">
-            <Monitor size={14} className="icon-prefix" />
-            <select value={filters.platform} disabled={isLoading} onChange={(e) => handleFilterChange('platform', e.target.value)}>
-              {categories.platforms.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="select-arrow" />
-          </div>
-
-          <div className="filter-select-wrapper">
-            <Calendar size={14} className="icon-prefix" />
-            <select value={filters.year} disabled={isLoading} onChange={(e) => handleFilterChange('year', e.target.value)}>
-              {categories.years.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="select-arrow" />
-          </div>
+    <div className="advanced-filter-pane">
+      <div className="filter-grid">
+        <div className="filter-item-box">
+          <span className="floating-label">类型</span>
+          <select value={filters.selectedType} onChange={(e) => handleChange('selectedType', e.target.value)} disabled={isLoading}>
+             {categories.types.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <ChevronDown size={18} className="arrow" />
         </div>
 
-        <div className="sort-group">
-          {sortOptions.map(option => (
-            <button 
-              key={option.value}
-              className={`sort-btn ${activeSort === option.value ? 'active' : ''}`}
-              onClick={() => handleSort(option.value)}
-            >
-              {option.label}
-              {activeSort === option.value && (
-                activeOrder === 'desc' ? <SortDesc size={14} /> : <SortAsc size={14} />
-              )}
-            </button>
-          ))}
+        <div className="filter-item-box">
+          <span className="floating-label">语言</span>
+          <select value={filters.selectedLanguage} onChange={(e) => handleChange('selectedLanguage', e.target.value)} disabled={isLoading}>
+             {categories.languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+          <ChevronDown size={18} className="arrow" />
+        </div>
+
+        <div className="filter-item-box">
+          <span className="floating-label">平台</span>
+          <select value={filters.selectedPlatform} onChange={(e) => handleChange('selectedPlatform', e.target.value)} disabled={isLoading}>
+             {categories.platforms.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+          <ChevronDown size={18} className="arrow" />
+        </div>
+
+        <div className="filter-item-box">
+          <span className="floating-label">发售年份</span>
+          <select value={filters.selectedYears[0]} onChange={(e) => handleChange('selectedYears', [e.target.value])} disabled={isLoading}>
+             {categories.years.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
+          </select>
+          <ChevronDown size={18} className="arrow" />
+        </div>
+
+        <div className="filter-item-box">
+          <span className="floating-label">发售月份</span>
+          <select value={filters.selectedMonths[0]} onChange={(e) => handleChange('selectedMonths', [e.target.value])} disabled={isLoading}>
+             {categories.months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+          <ChevronDown size={18} className="arrow" />
+        </div>
+
+        <div className="filter-item-box">
+          <span className="floating-label">最低评分人数</span>
+          <input 
+            type="number" 
+            value={filters.minRatingCount} 
+            onChange={(e) => handleChange('minRatingCount', parseInt(e.target.value))} 
+            disabled={isLoading}
+            placeholder="10"
+          />
         </div>
       </div>
 
       <style>{`
-        .filter-bar { display: flex; flex-direction: column; gap: 16px; padding: 16px; background-color: var(--md-sys-color-surface-container-low); border-radius: 24px; border: 1px solid var(--md-sys-color-outline-variant); }
-        .filter-rows { display: flex; flex-direction: column; gap: 12px; }
-        .filter-row { display: flex; flex-wrap: wrap; gap: 10px; }
-        .filter-select-wrapper { position: relative; display: flex; align-items: center; gap: 6px; padding: 8px 14px; background-color: var(--md-sys-color-surface-container); border-radius: 12px; border: 1.5px solid var(--md-sys-color-outline-variant); transition: all 0.2s ease; flex: 1; min-width: 120px; }
-        .filter-select-wrapper:hover { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-surface-container-high); }
-        .filter-select-wrapper select { appearance: none; background: transparent; border: none; outline: none; font-size: 13px; font-weight: 600; color: var(--md-sys-color-on-surface); cursor: pointer; width: 100%; padding-right: 20px; }
-        .icon-prefix { color: var(--md-sys-color-primary); opacity: 0.8; }
-        .select-arrow { position: absolute; right: 10px; pointer-events: none; opacity: 0.6; }
-        .sort-group { display: flex; gap: 6px; overflow-x: auto; padding-top: 4px; scrollbar-width: none; }
-        .sort-group::-webkit-scrollbar { display: none; }
-        .sort-btn { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 10px; border: 1.5px solid transparent; background: var(--md-sys-color-surface-container-highest); font-size: 13px; font-weight: 700; cursor: pointer; color: var(--md-sys-color-on-surface-variant); transition: all 0.2s ease; white-space: nowrap; }
-        .sort-btn:hover { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
-        .sort-btn.active { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+        .advanced-filter-pane { background: #f0f4f8; padding: 24px; border-radius: 24px; border: 1.5px solid #cbd5e1; margin-bottom: 24px; }
+        .filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        
+        .filter-item-box { position: relative; border: 1.5px solid #94a3b8; border-radius: 12px; height: 56px; display: flex; align-items: center; padding: 0 16px; background: transparent; }
+        .floating-label { position: absolute; top: -10px; left: 12px; background: #f0f4f8; padding: 0 4px; font-size: 13px; font-weight: 700; color: #64748b; }
+        
+        .filter-item-box select, .filter-item-box input { width: 100%; border: none; background: transparent; outline: none; font-size: 16px; font-weight: 600; color: #1e293b; appearance: none; cursor: pointer; }
+        .filter-item-box input::-webkit-inner-spin-button { display: none; }
+        
+        .arrow { position: absolute; right: 16px; pointer-events: none; color: #64748b; }
+        
+        @media (max-width: 600px) {
+          .filter-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
     </div>
   );

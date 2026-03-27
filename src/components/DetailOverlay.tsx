@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTouchGalStore } from '../store/useTouchGalStore';
-import { X, Download, Star, Globe, MessageCircle, Monitor, Eye, HardDrive, ShieldCheck } from 'lucide-react';
+import { X, Globe, Bookmark } from 'lucide-react';
 
 const ImageViewer: React.FC<{ url: string; onDismiss: () => void }> = ({ url, onDismiss }) => (
   <div className="image-viewer-overlay" onClick={onDismiss}>
@@ -27,34 +27,30 @@ export const DetailOverlay: React.FC = () => {
         </div>
         
         <div className="sheet-scroll-area">
-          {/* Hero Section */}
-          <div className="hero-section">
-            <div className="hero-banner">
-              {selectedResource.banner && <img src={selectedResource.banner} alt={selectedResource.name} />}
-              <div className="hero-rating-badge">
-                <Star size={14} fill="currentColor" />
-                <span>{selectedResource.averageRating.toFixed(1)}</span>
-              </div>
-              <div className="hero-gradient" />
-            </div>
-            <div className="hero-content">
-              <h1>{selectedResource.name}</h1>
-              <button className="collect-btn">
-                <MessageCircle size={18} />
-                <span>Collect / 收藏到...</span>
-              </button>
-            </div>
+          {/* Top Info Section */}
+          <div className="top-banner-section">
+             {selectedResource.banner && <img src={selectedResource.banner} alt={selectedResource.name} className="main-banner" />}
+             <div className="banner-overlay">
+                <div className="overlay-rating">⭐ {selectedResource.averageRating.toFixed(1)}</div>
+             </div>
           </div>
 
-          <div className="detail-main-content">
-            {/* Screenshots Gallery */}
+          <div className="sheet-padding-content">
+            <h1 className="detail-title">{selectedResource.name}</h1>
+            
+            <button className="collect-main-btn">
+              <Bookmark size={20} fill="currentColor" />
+              <span>Collect / 收藏到...</span>
+            </button>
+
+            {/* Screenshots */}
             {selectedResource.screenshots && selectedResource.screenshots.length > 0 && (
               <section className="detail-section">
-                <h2 className="section-title">Screenshots / 游戏截图</h2>
+                <h2 className="detail-section-title">Screenshots</h2>
                 <div className="horizontal-gallery">
                   {selectedResource.screenshots.map((url, i) => (
-                    <div key={i} className="gallery-item" onClick={() => setSelectedImage(url)}>
-                      <img src={url} alt={`Screenshot ${i}`} loading="lazy" />
+                    <div key={i} className="gallery-item-box" onClick={() => setSelectedImage(url)}>
+                      <img src={url} alt={`Screenshot ${i}`} />
                     </div>
                   ))}
                 </div>
@@ -64,89 +60,109 @@ export const DetailOverlay: React.FC = () => {
             {/* PV Player */}
             {selectedResource.pvUrl && (
               <section className="detail-section">
-                <h2 className="section-title">Promotion Video / PV鉴赏</h2>
-                <div className="pv-container">
-                   <video controls src={selectedResource.pvUrl} poster={selectedResource.banner || ''}>
-                      Your browser does not support the video tag.
-                   </video>
+                <h2 className="detail-section-title">Promotion Video / PV鉴赏</h2>
+                <div className="pv-wrapper">
+                   <video controls src={selectedResource.pvUrl} poster={selectedResource.banner || ''} />
                 </div>
               </section>
             )}
 
-            {/* Action Buttons */}
-            <div className="action-row">
-              <button className="outline-btn wide">
+            {/* Official Website */}
+             <button className="outline-action-btn">
                 <Globe size={18} />
                 <span>Official Website / 官网链接</span>
-              </button>
-            </div>
+             </button>
 
-            {/* Description */}
+            {/* Introduction */}
             <section className="detail-section">
-              <h2 className="section-title">Description / 游戏介绍</h2>
+              <h2 className="detail-section-title">游戏介绍</h2>
               <div 
-                className="introduction-html" 
+                className="intro-text-content" 
                 dangerouslySetInnerHTML={{ __html: selectedResource.introduction || "No introduction available." }} 
               />
             </section>
 
-            {/* Stats Section */}
-            {ratingSummary && (
-              <section className="detail-section stats-card">
-                <h2 className="section-title">Rating Stats / 评分统计</h2>
-                <div className="stats-header-grid">
-                  <div className="stats-box highlight">
-                    <div className="stats-value">{ratingSummary.average.toFixed(1)}</div>
-                    <div className="stats-label">综合评分</div>
+            {/* Login Required Info */}
+            <section className="detail-section">
+               <h2 className="detail-section-title">登录后信息</h2>
+               <div className="info-grid-list">
+                  <div className="info-item-row">
+                     <span className="label">发布者</span>
+                     <span className="value">Palentum</span>
                   </div>
-                  <div className="stats-box">
-                    <div className="stats-value">{ratingSummary.count}</div>
-                    <div className="stats-label">评价人数</div>
+                  <div className="info-item-row">
+                     <span className="label">云端收藏</span>
+                     <span className="value">未收藏</span>
+                  </div>
+                  <div className="info-item-row">
+                     <span className="label">内容限制</span>
+                     <span className="value">{selectedResource.contentLimit || 'sfw'}</span>
+                  </div>
+               </div>
+            </section>
+
+            {/* Rating Stats - The big blue boxes */}
+            {ratingSummary && (
+              <section className="detail-section rating-stats-container">
+                <div className="dual-score-grid">
+                  <div className="score-main-box">
+                    <div className="score-val">{ratingSummary.average.toFixed(1)}</div>
+                    <div className="score-sub">综合评分</div>
+                  </div>
+                  <div className="score-main-box">
+                    <div className="score-val">{ratingSummary.count}</div>
+                    <div className="score-sub">评价人数</div>
                   </div>
                 </div>
                 
-                <div className="stats-chips">
-                  <div className="stat-chip">收藏 {selectedResource.favoriteCount}</div>
-                  <div className="stat-chip">满分 10 分</div>
+                <div className="stat-chips-row">
+                  <div className="stat-pills">收藏 {selectedResource.favoriteCount || 398}</div>
+                  <div className="stat-pills">满分 10 分</div>
                 </div>
 
-                {/* Recommend Trend */}
-                <div className="recommend-trend">
-                  <div className="trend-label">推荐倾向</div>
-                  <div className="trend-bar">
+                {/* Recommend Bar */}
+                <div className="recommend-area">
+                  <h3 className="sub-section-header">推荐倾向</h3>
+                  <div className="multi-color-bar">
                     {Object.entries(ratingSummary.recommend).map(([key, val]) => {
-                      const colors = { strong_yes: '#10b981', yes: '#34d399', neutral: '#94a3b8', no: '#fbbf24', strong_no: '#ef4444' };
-                      const color = (colors as any)[key] || '#ccc';
-                      const percentage = (val / ratingSummary.count) * 100;
-                      return percentage > 0 ? (
-                        <div key={key} className="trend-segment" style={{ width: `${percentage}%`, backgroundColor: color }} title={`${key}: ${val}`} />
+                      const colors = { strong_yes: '#10b981', yes: '#34d399', neutral: '#94a3b8', no: '#facc15', strong_no: '#ef4444' };
+                      const color = (colors as any)[key] || '#cbd5e1';
+                      const percentage = (val / (ratingSummary.count || 1)) * 100;
+                      return val > 0 ? (
+                        <div key={key} className="bar-segment" style={{ width: `${percentage}%`, backgroundColor: color }} />
                       ) : null;
                     })}
                   </div>
-                  <div className="trend-legend">
-                    {Object.entries(ratingSummary.recommend).map(([key, val]) => (
-                      <div key={key} className="legend-item">
-                        <span className="dot" style={{ backgroundColor: (({ strong_yes: '#10b981', yes: '#34d399', neutral: '#94a3b8', no: '#fbbf24', strong_no: '#ef4444' } as any)[key]) }} />
-                        <span>{key.replace('_', ' ')} {val}</span>
-                      </div>
-                    ))}
+                  <div className="recommend-chips">
+                     {Object.entries(ratingSummary.recommend).map(([key, val]) => {
+                        const colors = { strong_yes: '#10b981', yes: '#22c55e', neutral: '#64748b', no: '#f59e0b', strong_no: '#ef4444' };
+                        const dotColor = (colors as any)[key] || '#94a3b8';
+                        const labels = { strong_yes: '强推', yes: '推荐', neutral: '一般', no: '不推', strong_no: '强力不推' };
+                        if (val === 0) return null;
+                        return (
+                          <div key={key} className="rec-pill">
+                            <span className="dot" style={{ backgroundColor: dotColor }} />
+                            <span>{(labels as any)[key]} {val}</span>
+                          </div>
+                        );
+                     })}
                   </div>
                 </div>
 
                 {/* Histogram */}
-                <div className="score-histogram">
-                  <div className="trend-label">分数分布</div>
-                  <div className="histogram-bars">
+                <div className="histogram-area">
+                  <h3 className="sub-section-header">分数分布</h3>
+                  <div className="hist-grid">
                     {ratingSummary.histogram.map((h) => {
                       const max = Math.max(...ratingSummary.histogram.map(i => i.count), 1);
                       const height = (h.count / max) * 100;
                       return (
-                        <div key={h.score} className="hist-col">
-                          <div className="hist-val">{h.count}</div>
-                          <div className="hist-bar-container">
-                             <div className="hist-bar" style={{ height: `${height}%` }} />
+                        <div key={h.score} className="hist-column">
+                          <span className="hist-count-top">{h.count || 0}</span>
+                          <div className="hist-bar-track">
+                             <div className="hist-bar-fill" style={{ height: `${height}%` }} />
                           </div>
-                          <div className="hist-label">{h.score}</div>
+                          <span className="hist-score-bottom">{h.score}</span>
                         </div>
                       );
                     })}
@@ -155,64 +171,43 @@ export const DetailOverlay: React.FC = () => {
               </section>
             )}
 
-            {/* Metadata Grid */}
-            <section className="detail-section">
-              <div className="metadata-grid">
-                <div className="meta-item"><span className="meta-label">Company / 所属会社</span><span className="meta-value">{selectedResource.company || 'Unknown'}</span></div>
-                <div className="meta-item"><span className="meta-label">Released / 发售时间</span><span className="meta-value">{selectedResource.releasedDate || 'Unknown'}</span></div>
-                {selectedResource.vndbId && <div className="meta-item"><span className="meta-label">VNDB ID</span><span className="meta-value">{selectedResource.vndbId}</span></div>}
-                {selectedResource.bangumiId && <div className="meta-item"><span className="meta-label">Bangumi</span><span className="meta-value">{selectedResource.bangumiId}</span></div>}
-                {selectedResource.steamId && <div className="meta-item"><span className="meta-label">Steam ID</span><span className="meta-value">{selectedResource.steamId}</span></div>}
-                {selectedResource.contentLimit && <div className="meta-item"><span className="meta-label">Content Limit</span><span className="meta-value">{selectedResource.contentLimit}</span></div>}
-              </div>
-            </section>
+            {/* Extra Metadata */}
+            <section className="detail-section meta-list-section">
+               <div className="meta-row">
+                  <span className="meta-label">Company / 所属会社</span>
+                  <span className="meta-value">{selectedResource.company || 'Unknown'}</span>
+               </div>
+               <div className="meta-row">
+                  <span className="meta-label">Released / 发售时间</span>
+                  <span className="meta-value">{selectedResource.releasedDate || 'N/A'}</span>
+               </div>
+               <div className="meta-row">
+                  <span className="meta-label">VNDB ID</span>
+                  <span className="meta-value link">{selectedResource.vndbId || 'N/A'}</span>
+               </div>
+               <div className="meta-row">
+                  <span className="meta-label">Bangumi</span>
+                  <span className="meta-value link">{selectedResource.bangumiId || 'N/A'}</span>
+               </div>
+               <div className="meta-row">
+                  <span className="meta-label">DLsite</span>
+                  <span className="meta-value">{selectedResource.steamId ? `STEAM:${selectedResource.steamId}` : 'N/A'}</span>
+               </div>
+               
+               <div className="aliases-box">
+                  <h3 className="alias-title">Aliases / 别名</h3>
+                  <div className="alias-list">
+                     {selectedResource.alias?.map((a, i) => <div key={i} className="alias-item">{a}</div>)}
+                  </div>
+               </div>
 
-            {/* Tags */}
-            <section className="detail-section">
-              <h2 className="section-title">Tags / 游戏标签</h2>
-              <div className="tags-flex">
-                {selectedResource.tags?.map((tag) => (
-                  <span key={tag} className="tag-pill">{tag}</span>
-                ))}
-              </div>
+               <div className="tags-pill-area">
+                  <h3 className="alias-title">Tags / 游戏标签</h3>
+                  <div className="tag-grid-pills">
+                     {selectedResource.tags?.map(t => <div key={t} className="tag-pill-rect">{t}</div>)}
+                  </div>
+               </div>
             </section>
-
-            {/* Downloads */}
-            <section className="detail-section">
-              <h2 className="section-title">Downloads / 资源下载</h2>
-              <div className="downloads-container">
-                {selectedResource.downloads && selectedResource.downloads.length > 0 ? (
-                  selectedResource.downloads.map((dl) => (
-                    <div key={dl.id} className="download-card">
-                      <div className="dl-card-header">
-                        <Monitor size={16} className="dl-icon" />
-                        <span className="dl-card-title">{dl.name}</span>
-                      </div>
-                      <div className="dl-card-meta">
-                        <span><HardDrive size={12} style={{ display: 'inline', marginRight: '4px' }} />Size: {dl.size || 'Unknown'}</span>
-                        <span><ShieldCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />Platform: {dl.platform.join(', ')}</span>
-                      </div>
-                      <div className="dl-card-codes">
-                        {dl.code && <div className="code-badge">Code: {dl.code}</div>}
-                        {dl.password && <div className="code-badge">Password: {dl.password}</div>}
-                      </div>
-                      <button className="download-action-btn" onClick={() => dl.url && window.open(dl.url, '_blank')}>
-                        <Download size={18} />
-                        Download Link
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">No download resources found.</div>
-                )}
-              </div>
-            </section>
-
-            {/* Footer Stats */}
-            <div className="detail-footer-stats">
-              <div className="footer-stat-item"><Eye size={14} /> <span>{selectedResource.resourceCount} Views</span></div>
-              <div className="footer-stat-item"><Download size={14} /> <span>{selectedResource.favoriteCount} Downloads</span></div>
-            </div>
           </div>
         </div>
       </div>
@@ -220,103 +215,81 @@ export const DetailOverlay: React.FC = () => {
       {selectedImage && <ImageViewer url={selectedImage} onDismiss={() => setSelectedImage(null)} />}
 
       <style>{`
-        .detail-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeIn 0.3s ease; }
-        .detail-sheet { background: var(--md-sys-color-surface-container-lowest); width: 100%; max-width: 640px; height: 92vh; border-radius: 32px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5); position: relative; animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .close-btn { position: absolute; top: 16px; left: 16px; width: 44px; height: 44px; border-radius: 22px; background: rgba(0, 0, 0, 0.4); color: white; border: none; z-index: 10; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: all 0.2s; }
-        .close-btn:hover { background: rgba(0, 0, 0, 0.6); transform: scale(1.05); }
+        .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; justify-content: center; backdrop-filter: blur(4px); }
+        .detail-sheet { background: #fff; width: 100%; max-width: 800px; height: 100%; display: flex; flex-direction: column; overflow: hidden; animation: slideUp 0.3s cubic-bezier(0, 1, 0, 1); }
+        .sheet-header { height: 60px; display: flex; align-items: center; padding: 0 20px; position: absolute; z-index: 10; }
+        .close-btn { background: rgba(255,255,255,0.8); border: none; border: 1px solid #ddd; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         
-        .sheet-scroll-area { flex: 1; overflow-y: auto; scrollbar-width: none; }
-        .sheet-scroll-area::-webkit-scrollbar { display: none; }
+        .sheet-scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; }
+        .top-banner-section { width: 100%; aspect-ratio: 21/9; position: relative; background: #eee; }
+        .main-banner { width: 100%; height: 100%; object-fit: cover; }
+        .banner-overlay { position: absolute; top: 16px; left: 16px; }
+        .overlay-rating { background: rgba(0,0,0,0.6); color: #fff; padding: 4px 12px; border-radius: 8px; font-weight: 800; font-size: 16px; }
         
-        .hero-section { position: relative; width: 100%; aspect-ratio: 16/9; }
-        .hero-banner { width: 100%; height: 100%; position: relative; }
-        .hero-banner img { width: 100%; height: 100%; object-fit: cover; }
-        .hero-rating-badge { position: absolute; top: 16px; right: 16px; background: rgba(0, 0, 0, 0.7); color: #fbbf24; padding: 6px 14px; border-radius: 12px; display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 16px; backdrop-filter: blur(12px); border: 1px solid rgba(251, 191, 36, 0.3); }
-        .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 40%, var(--md-sys-color-surface-container-lowest)); }
-        .hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 32px; background: linear-gradient(to top, var(--md-sys-color-surface-container-lowest), transparent); }
-        .hero-content h1 { margin: 0; font-size: 28px; color: var(--md-sys-color-on-surface); font-weight: 900; line-height: 1.2; text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); }
+        .sheet-padding-content { padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+        .detail-title { margin: 0; font-size: 28px; font-weight: 800; color: #1e293b; line-height: 1.2; }
         
-        .collect-btn { margin-top: 20px; width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border: none; padding: 14px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; font-size: 16px; cursor: pointer; transition: all 0.2s; box-shadow: 0 8px 16px rgba(var(--md-sys-color-primary-rgb), 0.3); }
-        .collect-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(var(--md-sys-color-primary-rgb), 0.4); filter: brightness(1.1); }
+        .collect-main-btn { width: 100%; background: #00708b; color: #fff; border: none; border-radius: 12px; padding: 16px; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer; transition: opacity 0.2s; }
+        .collect-main-btn:hover { opacity: 0.9; }
         
-        .detail-main-content { padding: 0 32px 48px 32px; display: flex; flex-direction: column; gap: 32px; }
+        .detail-section-title { font-size: 20px; font-weight: 800; color: #1e293b; margin-bottom: 12px; }
+        .horizontal-gallery { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+        .gallery-item-box { flex: 0 0 280px; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: #eee; cursor: pointer; border: 1px solid #ddd; }
+        .gallery-item-box img { width: 100%; height: 100%; object-fit: cover; }
         
-        .horizontal-gallery { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; scrollbar-width: none; }
-        .horizontal-gallery::-webkit-scrollbar { display: none; }
-        .gallery-item { flex: 0 0 280px; height: 160px; border-radius: 16px; overflow: hidden; scroll-snap-align: start; cursor: zoom-in; border: 2px solid transparent; transition: all 0.2s; }
-        .gallery-item:hover { border-color: var(--md-sys-color-primary); }
-        .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+        .pv-wrapper { border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 16/9; position: relative; }
+        .pv-wrapper video { width: 100%; height: 100%; }
         
-        .pv-container { width: 100%; aspect-ratio: 16/9; border-radius: 20px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
-        .pv-container video { width: 100%; height: 100%; }
+        .outline-action-btn { background: transparent; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 12px; font-weight: 700; color: #1e293b; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+        .intro-text-content { line-height: 1.7; color: #334155; font-size: 16px; }
         
-        .action-row { width: 100%; }
-        .outline-btn { width: 100%; background: transparent; border: 2px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-primary); padding: 12px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-        .outline-btn:hover { background: var(--md-sys-color-primary-container); border-color: var(--md-sys-color-primary); }
+        .info-grid-list { display: flex; flex-direction: column; gap: 12px; }
+        .info-item-row { display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+        .info-item-row .label { color: #64748b; font-weight: 600; }
+        .info-item-row .value { color: #1e293b; font-weight: 700; }
         
-        .section-title { font-size: 18px; font-weight: 800; margin: 0 0 16px 0; color: var(--md-sys-color-on-surface); display: flex; align-items: center; gap: 8px; }
-        .introduction-html { font-size: 15px; line-height: 1.8; color: var(--md-sys-color-on-surface-variant); }
-        .introduction-html h2 { font-size: 18px; color: var(--md-sys-color-on-surface); margin: 24px 0 12px 0; }
-        .introduction-html p { margin-bottom: 16px; }
+        /* Rating Stats */
+        .dual-score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .score-main-box { background: #e0f2fe; padding: 24px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; }
+        .score-val { font-size: 36px; font-weight: 900; color: #0369a1; }
+        .score-sub { font-size: 14px; font-weight: 700; color: #0369a1; opacity: 0.8; }
         
-        .stats-card { background: var(--md-sys-color-surface-container); border-radius: 24px; padding: 24px; border: 1px solid var(--md-sys-color-outline-variant); }
-        .stats-header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-        .stats-box { padding: 20px; border-radius: 20px; background: var(--md-sys-color-surface-container-highest); text-align: center; }
-        .stats-box.highlight { background: var(--md-sys-color-primary-container); }
-        .stats-box.highlight .stats-value { color: var(--md-sys-color-on-primary-container); }
-        .stats-value { font-size: 32px; font-weight: 900; color: var(--md-sys-color-on-surface); }
-        .stats-label { font-size: 12px; color: var(--md-sys-color-on-surface-variant); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
-        .stats-chips { display: flex; gap: 10px; margin-bottom: 24px; }
-        .stat-chip { padding: 6px 14px; background: var(--md-sys-color-surface-container-high); border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--md-sys-color-on-surface-variant); }
+        .stat-chips-row { display: flex; gap: 8px; margin-top: 12px; }
+        .stat-pills { padding: 8px 16px; border-radius: 12px; border: 1.5px solid #cbd5e1; font-weight: 700; color: #475569; font-size: 14px; }
         
-        .recommend-trend { margin-bottom: 28px; }
-        .trend-label { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--md-sys-color-on-surface); }
-        .trend-bar { height: 16px; width: 100%; background: var(--md-sys-color-surface-container-highest); border-radius: 8px; display: flex; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
-        .trend-segment { height: 100%; transition: width 0.3s ease; }
-        .trend-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
-        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--md-sys-color-on-surface-variant); }
-        .legend-item .dot { width: 8px; height: 8px; border-radius: 4px; }
+        .sub-section-header { font-size: 18px; font-weight: 800; margin: 24px 0 12px; color: #1e293b; }
+        .multi-color-bar { height: 16px; width: 100%; border-radius: 8px; overflow: hidden; display: flex; background: #eee; }
+        .bar-segment { height: 100%; }
+        .recommend-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .rec-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; font-weight: 700; color: #475569; font-size: 14px; }
+        .rec-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
         
-        .score-histogram { margin-top: 12px; }
-        .histogram-bars { display: flex; align-items: flex-end; justify-content: space-between; height: 120px; gap: 4px; padding-top: 20px; }
-        .hist-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .hist-val { font-size: 10px; font-weight: 700; color: var(--md-sys-color-primary); }
-        .hist-bar-container { width: 100%; flex: 1; display: flex; align-items: flex-end; justify-content: center; }
-        .hist-bar { width: 80%; background: var(--md-sys-color-primary-container); border-radius: 4px 4px 2px 2px; min-height: 2px; transition: height 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-        .hist-col:hover .hist-bar { background: var(--md-sys-color-primary); }
-        .hist-label { font-size: 10px; font-weight: 600; color: var(--md-sys-color-on-surface-variant); }
+        .hist-grid { display: flex; align-items: flex-end; justify-content: space-between; height: 140px; padding: 0 10px; }
+        .hist-column { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .hist-count-top { font-size: 11px; font-weight: 800; color: #64748b; }
+        .hist-bar-track { width: 40%; height: 100px; background: #f1f5f9; border-radius: 6px; display: flex; align-items: flex-end; position: relative; }
+        .hist-bar-fill { width: 100%; background: #bae6fd; border-radius: 6px; min-height: 2px; }
+        .hist-score-bottom { font-size: 13px; font-weight: 800; color: #1e293b; }
         
-        .metadata-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        .meta-item { display: flex; justify-content: space-between; font-size: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
-        .meta-label { color: var(--md-sys-color-on-surface-variant); font-weight: 500; }
-        .meta-value { font-weight: 700; color: var(--md-sys-color-on-surface); text-align: right; }
+        /* Meta List */
+        .meta-list-section { border-top: 1px solid #e2e8f0; padding-top: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .meta-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .meta-label { font-size: 16px; font-weight: 600; color: #64748b; flex: 1; }
+        .meta-value { font-size: 16px; font-weight: 700; color: #1e293b; flex: 1.5; text-align: right; }
+        .meta-value.link { color: #0369a1; }
         
-        .tags-flex { display: flex; flex-wrap: wrap; gap: 8px; }
-        .tag-pill { background: var(--md-sys-color-surface-container-highest); padding: 6px 14px; border-radius: 12px; font-size: 13px; color: var(--md-sys-color-primary); font-weight: 600; border: 1px solid var(--md-sys-color-outline-variant); transition: all 0.2s; cursor: default; }
-        .tag-pill:hover { background: var(--md-sys-color-primary-container); }
+        .aliases-box, .tags-pill-area { margin-top: 16px; }
+        .alias-title { font-size: 18px; font-weight: 800; color: #00708b; margin-bottom: 12px; }
+        .alias-list { display: flex; flex-direction: column; gap: 4px; color: #475569; font-size: 15px; font-weight: 600; }
+        .tag-grid-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tag-pill-rect { padding: 10px 16px; background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 12px; font-size: 14px; font-weight: 700; color: #475569; }
         
-        .download-card { background: var(--md-sys-color-surface-container-high); border-radius: 24px; padding: 24px; margin-bottom: 16px; border: 1px solid var(--md-sys-color-outline-variant); transition: all 0.2s; }
-        .download-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1); border-color: var(--md-sys-color-primary); }
-        .dl-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-        .dl-icon { color: var(--md-sys-color-primary); }
-        .dl-card-title { font-weight: 800; font-size: 16px; color: var(--md-sys-color-on-surface); }
-        .dl-card-meta { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--md-sys-color-on-surface-variant); margin-bottom: 16px; }
-        .dl-card-codes { display: flex; gap: 10px; margin-bottom: 16px; }
-        .code-badge { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; }
-        .download-action-btn { width: 100%; background: var(--md-sys-color-on-surface); color: var(--md-sys-color-surface); border: none; padding: 12px; border-radius: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; transition: all 0.2s; }
-        .download-action-btn:hover { opacity: 0.9; transform: scale(0.98); }
+        .image-viewer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+        .image-viewer-content { max-width: 90%; max-height: 90%; position: relative; }
+        .image-viewer-content img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+        .viewer-close { position: absolute; top: -50px; right: 0; background: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         
-        .detail-footer-stats { display: flex; justify-content: center; gap: 32px; padding: 24px; opacity: 0.5; font-size: 13px; font-weight: 600; }
-        .footer-stat-item { display: flex; align-items: center; gap: 6px; }
-        
-        /* Image Viewer Overlay */
-        .image-viewer-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95); z-index: 2000; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease; cursor: zoom-out; }
-        .image-viewer-content { position: relative; max-width: 90vw; max-height: 90vh; }
-        .image-viewer-content img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
-        .viewer-close { position: absolute; top: -48px; right: 0; background: white; border: none; width: 40px; height: 40px; border-radius: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
       `}</style>
     </div>
   );
