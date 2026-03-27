@@ -12,6 +12,18 @@ export interface TouchGalResource {
   favoriteCount: number;
   resourceCount: number;
   commentCount: number;
+  ratingSummary: {
+    average: number;
+    count: number;
+    histogram: { score: number; count: number }[];
+    recommend: {
+      strong_no: number;
+      no: number;
+      neutral: number;
+      yes: number;
+      strong_yes: number;
+    };
+  };
 }
 
 export interface TouchGalDetail extends TouchGalResource {
@@ -20,6 +32,9 @@ export interface TouchGalDetail extends TouchGalResource {
   vndbId: string | null;
   bangumiId: number | null;
   steamId: string | null;
+  contentLimit: string | null;
+  screenshots: string[];
+  pvUrl: string | null;
   downloads: TouchGalDownload[];
 }
 
@@ -28,6 +43,10 @@ export interface TouchGalDownload {
   name: string;
   size: string | null;
   url: string | null;
+  storage: string | null;
+  code: string | null;
+  password: string | null;
+  platform: string[];
 }
 
 export interface TouchGalComment {

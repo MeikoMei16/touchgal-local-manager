@@ -22,8 +22,9 @@ const API_CLIENT = axios.create({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     Referer: 'https://www.touchgal.top/',
     Origin: 'https://www.touchgal.top',
+    'Cookie': 'kun-patch-setting-store|state|data|kunNsfwEnable=all'
   },
-  timeout: 15000,
+  timeout: 30000,
 })
 
 interface RawCount {
@@ -57,6 +58,16 @@ interface RawResource {
   introduction?: string | null
   _count?: RawCount | null
   contentLimit?: string | null
+  ratingSummary?: {
+    average: number
+    count: number
+    histogram: { score: number; count: number }[]
+    recommend: {
+      strong_no: number; no: number; neutral: number; yes: number; strong_yes: number
+    }
+  } | null
+  fullScreenshotUrls?: string[] | null
+  pvVideoUrl?: string | null
 }
 
 interface RawDownload {
@@ -65,6 +76,10 @@ interface RawDownload {
   size?: string | null
   content?: string | null
   url?: string | null
+  storage?: string | null
+  code?: string | null
+  password?: string | null
+  platform?: string | string[] | null
 }
 
 const asArray = (value: string[] | string | null | undefined): string[] => {
@@ -116,6 +131,14 @@ const normalizeResource = (resource: RawResource) => {
     bangumiId: resource.bangumiId ?? resource.bangumi_id ?? null,
     steamId: resource.steamId != null ? String(resource.steamId) : resource.steam_id != null ? String(resource.steam_id) : null,
     contentLimit: resource.contentLimit ?? null,
+    ratingSummary: resource.ratingSummary ?? {
+      average: 0,
+      count: 0,
+      histogram: Array.from({ length: 10 }, (_, i) => ({ score: i + 1, count: 0 })),
+      recommend: { strong_no: 0, no: 0, neutral: 0, yes: 0, strong_yes: 0 }
+    },
+    screenshots: resource.fullScreenshotUrls ?? [],
+    pvUrl: resource.pvVideoUrl ?? null,
   }
 }
 
@@ -125,6 +148,10 @@ const normalizeDownloads = (downloads: RawDownload[]) =>
     name: download.name ?? 'Unnamed resource',
     size: download.size ?? null,
     url: download.url ?? download.content ?? null,
+    storage: download.storage ?? null,
+    code: download.code ?? null,
+    password: download.password ?? null,
+    platform: asArray(download.platform),
   }))
 
 const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: number }) => ({
@@ -152,51 +179,49 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
 
 const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
   if (typeof payload === 'string') {
+    console.error('[API] Error payload (string):', payload)
     throw new Error(payload)
   }
 
   if (Array.isArray(payload)) {
-    const firstError = payload[0]
-    if (firstError && typeof firstError === 'object' && 'message' in firstError) {
-      throw new Error(String(firstError.message))
+    const first = payload[0]
+    // Zod error objects always have 'code' and 'path'
+    if (first && typeof first === 'object' && 'code' in first && 'path' in first) {
+      console.error('[API] Validation errors (Zod):', JSON.stringify(payload, null, 2))
+      throw new Error(String((first as any).message || 'TouchGal returned a validation error'))
     }
-
-    throw new Error('TouchGal returned a validation error')
   }
 
   return payload as T
 }
 
-const scanForGalgameFolders = (rootPaths: string[]) => {
+const scanForGalgameFolders = async (rootPaths: string[]) => {
   const results: Array<{ path: string; folderName: string; tg_id: string | null }> = []
 
-  rootPaths.forEach((rootPath) => {
-    if (!fs.existsSync(rootPath)) return
-
-    const dirs = fs.readdirSync(rootPath, { withFileTypes: true })
-    dirs.forEach((dir) => {
-      if (!dir.isDirectory()) return
-
-      const fullPath = path.join(rootPath, dir.name)
-      const tgIdPath = path.join(fullPath, '.tg_id')
-
-      if (fs.existsSync(tgIdPath)) {
-        const id = fs.readFileSync(tgIdPath, 'utf8').trim()
-        results.push({
-          path: fullPath,
-          folderName: dir.name,
-          tg_id: id,
-        })
-      } else {
-        results.push({
-          path: fullPath,
-          folderName: dir.name,
-          tg_id: null,
-        })
-      }
-    })
+  const scanTasks = rootPaths.map(async (rootPath) => {
+    try {
+      if (!fs.existsSync(rootPath)) return
+      const dirs = await fs.promises.readdir(rootPath, { withFileTypes: true })
+      
+      const dirTasks = dirs.map(async (dir) => {
+        if (!dir.isDirectory()) return
+        const fullPath = path.join(rootPath, dir.name)
+        const tgIdPath = path.join(fullPath, '.tg_id')
+        
+        let tg_id: string | null = null
+        try {
+          if (fs.existsSync(tgIdPath)) {
+            tg_id = (await fs.promises.readFile(tgIdPath, 'utf8')).trim()
+          }
+        } catch (e) { /* ignore */ }
+        
+        results.push({ path: fullPath, folderName: dir.name, tg_id })
+      })
+      await Promise.all(dirTasks)
+    } catch (e) { /* ignore */ }
   })
 
+  await Promise.all(scanTasks)
   return results
 }
 
@@ -237,8 +262,8 @@ app.on('activate', () => {
   }
 })
 
-ipcMain.handle('scan-local-library', (_event: unknown, paths: string[]) => {
-  return scanForGalgameFolders(paths)
+ipcMain.handle('scan-local-library', async (_event: unknown, paths: string[]) => {
+  return await scanForGalgameFolders(paths)
 })
 
 ipcMain.handle('tag-folder', (_event: unknown, folderPath: string, id: string) => {
@@ -282,9 +307,20 @@ ipcMain.handle('tg-search-resources', async (_event: unknown, keyword: string, p
 
 ipcMain.handle('tg-get-patch-detail', async (_event: unknown, uniqueId: string) => {
   console.log(`[IPC] Fetching detail for: ${uniqueId}`)
+  
+  if (!uniqueId || uniqueId.length !== 8) {
+    console.error(`[IPC] Invalid uniqueId: ${uniqueId}`)
+    throw new Error('Invalid resource ID (must be 8 characters)')
+  }
+
   try {
-    const detailResponse = await API_CLIENT.get('/patch', { params: { uniqueId } })
-    const detail = normalizeResource(ensureValidResponse<RawResource>(detailResponse.data))
+    const [detailResponse, introResponse] = await Promise.all([
+       API_CLIENT.get('/patch', { params: { uniqueId } }),
+       API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
+    ]);
+
+    const detailData = ensureValidResponse<RawResource>(detailResponse.data);
+    const detail = normalizeResource(detailData);
 
     const downloadsResponse = await API_CLIENT.get('/patch/resource', {
       params: { patchId: detail.id },
@@ -294,6 +330,7 @@ ipcMain.handle('tg-get-patch-detail', async (_event: unknown, uniqueId: string) 
 
     return {
       ...detail,
+      ...ensureValidResponse(introResponse.data), // In case intro has more fields
       downloads,
     }
   } catch (error) {
