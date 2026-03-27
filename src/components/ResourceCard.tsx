@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchGalResource } from '../types';
-import { Star, Download, MessageSquare } from 'lucide-react';
+import { Star, Download, MessageSquare, Calendar, Heart } from 'lucide-react';
 
 interface ResourceCardProps {
   resource: TouchGalResource;
@@ -22,6 +22,20 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       </div>
       <div className="card-content">
         <h3 className="card-title" title={resource.name}>{resource.name}</h3>
+        
+        <div className="card-info-row">
+          {resource.releasedDate && (
+            <div className="info-item">
+              <Calendar size={12} />
+              <span>{resource.releasedDate}</span>
+            </div>
+          )}
+          <div className="info-item favorite">
+            <Heart size={12} fill={resource.favoriteCount > 0 ? "currentColor" : "none"} />
+            <span>{resource.favoriteCount}</span>
+          </div>
+        </div>
+
         <div className="card-meta">
           <div className="rating">
             <Star size={14} fill="currentColor" stroke="none" />
@@ -46,6 +60,9 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         .resource-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1); border-color: var(--md-sys-color-primary); }
         .card-image-container { position: relative; aspect-ratio: 16/9; overflow: hidden; background-color: var(--md-sys-color-surface-variant); }
         .card-image-container img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
+        .card-info-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; margin-bottom: 8px; font-size: 11px; color: var(--md-sys-color-on-surface-variant); opacity: 0.8; }
+        .info-item { display: flex; align-items: center; gap: 4px; }
+        .info-item.favorite { color: #f43f5e; opacity: 1; font-weight: 500; }
         .card-title { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; height: 42px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .card-meta { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
         .rating { display: flex; align-items: center; gap: 4px; color: #f59e0b; }

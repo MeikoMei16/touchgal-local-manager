@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron/renderer'
 
 contextBridge.exposeInMainWorld('api', {
   // Local File System
@@ -9,8 +9,8 @@ contextBridge.exposeInMainWorld('api', {
   fetchResources: (page: number, limit: number, query: any) => 
     ipcRenderer.invoke('tg-fetch-resources', page, limit, query),
   
-  searchResources: (keyword: string, page: number, limit: number) => 
-    ipcRenderer.invoke('tg-search-resources', keyword, page, limit),
+  searchResources: (keyword: string, page: number, limit: number, options?: any) => 
+    ipcRenderer.invoke('tg-search-resources', keyword, page, limit, options),
   
   getPatchDetail: (uniqueId: string) => 
     ipcRenderer.invoke('tg-get-patch-detail', uniqueId),

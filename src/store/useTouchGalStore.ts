@@ -12,8 +12,8 @@ interface TouchGalState {
   user: any | null;
   captchaUrl: string | null;
 
-  fetchResources: (page?: number, query?: any) => Promise<void>;
-  searchResources: (keyword: string, page?: number) => Promise<void>;
+  fetchResources: (page?: number, query?: Record<string, unknown>) => Promise<void>;
+  searchResources: (keyword: string, page?: number, options?: Record<string, any>) => Promise<void>;
   selectResource: (uniqueId: string) => Promise<void>;
   clearSelected: () => void;
   fetchCaptcha: () => Promise<void>;
@@ -25,7 +25,6 @@ export const useTouchGalStore = create<TouchGalState>((set) => ({
   resources: [],
   totalResources: 0,
   currentPage: 1,
-  totalPages: 1,
   isLoading: false,
   error: null,
   selectedResource: null,
@@ -36,16 +35,21 @@ export const useTouchGalStore = create<TouchGalState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await TouchGalClient.fetchGalgameResources(page, 24, query);
-      set({ resources: data.list, totalResources: data.total, currentPage: page, isLoading: false });
+      set((state) => ({
+        resources: page > 1 ? [...state.resources, ...data.list] : data.list,
+        totalResources: data.total,
+        currentPage: page,
+        isLoading: false
+      }));
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch resources', isLoading: false });
     }
   },
 
-  searchResources: async (keyword: string, page = 1) => {
+  searchResources: async (keyword: string, page = 1, options = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const data = await TouchGalClient.searchResources(keyword, page);
+      const data = await TouchGalClient.searchResources(keyword, page, 20, options);
       set({ resources: data.list, totalResources: data.total, currentPage: page, isLoading: false });
     } catch (err: any) {
       set({ error: err.message || 'Search failed', isLoading: false });
@@ -57,7 +61,20 @@ export const useTouchGalStore = create<TouchGalState>((set) => ({
     try {
       const detail = await TouchGalClient.getPatchDetail(uniqueId);
       const introData = await TouchGalClient.getPatchIntroduction(uniqueId);
-      set({ selectedResource: { ...detail, introduction: introData.introduction }, isLoading: false });
+      set({
+        selectedResource: {
+          ...detail,
+          introduction: introData.introduction ?? detail.introduction,
+          releasedDate: introData.releasedDate ?? detail.releasedDate,
+          alias: introData.alias?.length ? introData.alias : detail.alias,
+          tags: introData.tags?.length ? introData.tags : detail.tags,
+          company: introData.company ?? detail.company,
+          vndbId: introData.vndbId ?? detail.vndbId,
+          bangumiId: introData.bangumiId ?? detail.bangumiId,
+          steamId: introData.steamId ?? detail.steamId,
+        },
+        isLoading: false
+      });
     } catch (err: any) {
       set({ error: err.message || 'Failed to load details', isLoading: false });
     }
@@ -67,7 +84,10 @@ export const useTouchGalStore = create<TouchGalState>((set) => ({
 
   fetchCaptcha: async () => {
     try {
-      const url = await TouchGalClient.fetchCaptcha();
+      const payload = await TouchGalClient.fetchCaptcha();
+      const url = typeof payload === 'string'
+        ? payload
+        : payload?.images?.[0]?.data ?? payload?.images?.[0]?.image ?? null;
       set({ captchaUrl: url });
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch captcha' });

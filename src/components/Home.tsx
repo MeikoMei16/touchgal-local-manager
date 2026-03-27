@@ -1,21 +1,43 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTouchGalStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
+import { FilterBar } from './FilterBar.tsx';
 import { Loader2, Search } from 'lucide-react';
 
 export const Home: React.FC = () => {
   const { resources, totalResources, currentPage, isLoading, error, fetchResources, searchResources, selectResource } = useTouchGalStore();
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [lastQuery, setLastQuery] = useState<any>({});
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      fetchResources(1);
+      fetchResources(1, lastQuery);
     }
-  }, [fetchResources, searchQuery]);
+  }, [fetchResources, searchQuery, lastQuery]);
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim() !== '') {
-      searchResources(searchQuery);
+      searchResources(searchQuery, 1, lastQuery);
+    }
+  };
+
+  const handleFilterChange = (filters: any) => {
+    const newQuery = { ...lastQuery, ...filters };
+    setLastQuery(newQuery);
+    if (searchQuery.trim() !== '') {
+      searchResources(searchQuery, 1, newQuery);
+    } else {
+      fetchResources(1, newQuery);
+    }
+  };
+
+  const handleSortChange = (sort: { field: string, order: string }) => {
+    const newQuery = { ...lastQuery, sortField: sort.field, sortOrder: sort.order };
+    setLastQuery(newQuery);
+    if (searchQuery.trim() !== '') {
+      searchResources(searchQuery, 1, newQuery);
+    } else {
+      fetchResources(1, newQuery);
     }
   };
 
@@ -23,7 +45,7 @@ export const Home: React.FC = () => {
     return (
       <div className="error-container">
         <p>{error}</p>
-        <button onClick={() => fetchResources(1)}>Retry</button>
+        <button onClick={() => fetchResources(1, lastQuery)}>Retry</button>
       </div>
     );
   }
@@ -47,6 +69,13 @@ export const Home: React.FC = () => {
           )}
         </div>
       </div>
+
+      <FilterBar 
+        onFilterChange={handleFilterChange} 
+        onSortChange={handleSortChange} 
+        isLoading={isLoading} 
+      />
+
       <div className="resource-grid">
         {resources?.map((resource: any) => (
           <ResourceCard 

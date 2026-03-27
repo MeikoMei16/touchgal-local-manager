@@ -10,8 +10,8 @@ export const TouchGalClient = {
     return await window.api.fetchResources(page, limit, query) as TouchGalFeedResponse;
   },
 
-  searchResources: async (keyword: string, page = 1, limit = 20) => {
-    return await window.api.searchResources(keyword, page, limit) as { list: TouchGalResource[], total: number };
+  searchResources: async (keyword: string, page = 1, limit = 20, options?: Record<string, any>) => {
+    return await window.api.searchResources(keyword, page, limit, options) as { list: TouchGalResource[], total: number };
   },
 
   getPatchDetail: async (uniqueId: string) => {
@@ -19,11 +19,20 @@ export const TouchGalClient = {
   },
 
   getPatchIntroduction: async (uniqueId: string) => {
-    return await window.api.getPatchIntroduction(uniqueId) as { introduction: string };
+    return await window.api.getPatchIntroduction(uniqueId) as {
+      introduction: string | null;
+      releasedDate: string | null;
+      alias: string[];
+      tags: string[];
+      company: string | null;
+      vndbId: string | null;
+      bangumiId: number | null;
+      steamId: string | null;
+    };
   },
 
   fetchCaptcha: async () => {
-    return await window.api.fetchCaptcha(); // Returns base64 string
+    return await window.api.fetchCaptcha();
   },
 
   login: async (username: string, password: string, captcha: string) => {

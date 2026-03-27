@@ -9,6 +9,9 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
+release
+tmp
 dist-ssr
 *.local
 

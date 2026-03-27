@@ -1,14 +1,1 @@
-"use strict";
-const electron = require("electron");
-electron.contextBridge.exposeInMainWorld("api", {
-  // Local File System
-  scanLocalLibrary: (paths) => electron.ipcRenderer.invoke("scan-local-library", paths),
-  tagFolder: (folderPath, id) => electron.ipcRenderer.invoke("tag-folder", folderPath, id),
-  // TouchGal API Relay (Bypass CORS)
-  fetchResources: (page, limit, query) => electron.ipcRenderer.invoke("tg-fetch-resources", page, limit, query),
-  searchResources: (keyword, page, limit) => electron.ipcRenderer.invoke("tg-search-resources", keyword, page, limit),
-  getPatchDetail: (uniqueId) => electron.ipcRenderer.invoke("tg-get-patch-detail", uniqueId),
-  getPatchIntroduction: (uniqueId) => electron.ipcRenderer.invoke("tg-get-patch-introduction", uniqueId),
-  fetchCaptcha: () => electron.ipcRenderer.invoke("tg-fetch-captcha"),
-  login: (username, password, captcha) => electron.ipcRenderer.invoke("tg-login", username, password, captcha)
-});
+let e=require(`electron/renderer`);e.contextBridge.exposeInMainWorld(`api`,{scanLocalLibrary:t=>e.ipcRenderer.invoke(`scan-local-library`,t),tagFolder:(t,n)=>e.ipcRenderer.invoke(`tag-folder`,t,n),fetchResources:(t,n,r)=>e.ipcRenderer.invoke(`tg-fetch-resources`,t,n,r),searchResources:(t,n,r,i)=>e.ipcRenderer.invoke(`tg-search-resources`,t,n,r,i),getPatchDetail:t=>e.ipcRenderer.invoke(`tg-get-patch-detail`,t),getPatchIntroduction:t=>e.ipcRenderer.invoke(`tg-get-patch-introduction`,t),fetchCaptcha:()=>e.ipcRenderer.invoke(`tg-fetch-captcha`),login:(t,n,r)=>e.ipcRenderer.invoke(`tg-login`,t,n,r)});

@@ -2,17 +2,32 @@
 description: fix-electron-env
 ---
 
-1. Download the Electron `v30.0.1` win32-x64 zip.
-// turbo
-2. Run this powershell to repair the installation:
-```powershell
-$electronVer = "30.5.1";
-$electronPkg = "node_modules\.pnpm\electron@$electronVer\node_modules\electron";
-if (Test-Path "electron.zip") {
-  New-Item -ItemType Directory -Path "$electronPkg\dist" -Force;
-  Expand-Archive -Path "electron.zip" -DestinationPath "$electronPkg\dist" -Force;
-  New-Item -ItemType File -Path "$electronPkg\path.txt" -Value "electron.exe" -Force;
-}
+## Fix Electron Runtime Environment
+
+Use this workflow if the Electron window fails to launch or if there are ESM/CJS bundling errors.
+
+1. **Clean Project & System Architecture**
+Run this to remove build artifacts and the system Electron cache:
+```bash
+rm -rf dist dist-electron release node_modules pnpm-lock.yaml ~/.cache/electron/
 ```
-3. Ensure `electron/main.ts` includes the ESM `__dirname` polyfill.
-4. Run `pnpm run dev`.
+
+2. **Install System Dependencies (Fedora)**
+// turbo
+```bash
+sudo dnf install libX11 libXcomposite libXcursor libXdamage libXext libXfixes libXi libXrender libXtst cups-libs alsa-lib libXrandr pango cairo-gobject mesa-libGBM
+```
+
+3. **Re-install Dependencies**
+Ensure proper Electron binary download for Linux:
+```bash
+pnpm install
+```
+
+4. **Verify ESM Configuration**
+Ensure `electron/main.ts` uses native ESM `import` statements and **NOT** `createRequire`.
+
+5. **Run Development Mode**
+```bash
+pnpm run dev
+```
