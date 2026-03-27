@@ -1,0 +1,142 @@
+:root {
+  --md-sys-color-primary: #006493;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #cae6ff;
+  --md-sys-color-on-primary-container: #001e30;
+  --md-sys-color-secondary: #50606e;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #d3e5f5;
+  --md-sys-color-on-secondary-container: #0c1d29;
+  --md-sys-color-surface: #fdfcff;
+  --md-sys-color-on-surface: #1a1c1e;
+  --md-sys-color-surface-variant: #dee3eb;
+  --md-sys-color-on-surface-variant: #42474e;
+  --md-sys-color-outline: #72777f;
+  
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
+  
+  --font-main: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* Main window is non-scrollable, internal parts are */
+}
+
+h1, h2, h3, h4, .title {
+  font-family: var(--font-main);
+  font-weight: 500;
+}
+
+#root {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar / Rail Navigation */
+.nav-rail {
+  width: 80px;
+  background-color: var(--md-sys-color-surface);
+  border-right: 1px solid var(--md-sys-color-surface-variant);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 40px;
+  gap: 12px;
+}
+
+.nav-item {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--md-sys-color-on-surface-variant);
+  gap: 4px;
+}
+
+.nav-item:hover {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.nav-item.active {
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.nav-item span {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* Main Content Area */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.top-bar {
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  -webkit-app-region: drag; /* For custom title bar */
+}
+
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+/* Glassmorphism Details Overlay */
+.detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.detail-sheet {
+  width: 100%;
+  max-width: 1200px;
+  height: 85vh;
+  background-color: var(--md-sys-color-surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
