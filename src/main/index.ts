@@ -2,7 +2,10 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { join } from 'node:path'
+import { spawn } from 'node:child_process'
 import axios from 'axios'
+import { initDb, getDb, upsertGame } from './db'
+import { cleanFolderName, discoverExecutables } from './utils'
 
 const API_CLIENT = axios.create({
   baseURL: 'https://www.touchgal.top/api',
@@ -231,6 +234,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  initDb()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -247,7 +251,23 @@ app.on('window-all-closed', () => {
 // IPC Handlers
 
 ipcMain.handle('scan-local-library', async (_event, paths: string[]) => {
-  return await scanForGalgameFolders(paths)
+  const folders = await scanForGalgameFolders(paths)
+  const db = getDb()
+  
+  const insertPath = db.prepare(`
+    INSERT INTO local_paths (path, game_id)
+    VALUES (?, (SELECT id FROM games WHERE unique_id = ?))
+    ON CONFLICT DO NOTHING
+  `)
+
+  const transaction = db.transaction((items) => {
+    for (const item of items) {
+      insertPath.run(item.path, item.tg_id)
+    }
+  })
+
+  transaction(folders)
+  return folders
 })
 
 ipcMain.handle('tag-folder', (_event, folderPath: string, id: string) => {
@@ -276,13 +296,23 @@ ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number,
       ...query,
     },
   })
-  return normalizeFeedResponse(ensureValidResponse(response.data))
+  const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
+  
+  // Delta Sync: Upsert to local DB
+  normalized.list.forEach(upsertGame)
+  
+  return normalized
 })
 
 ipcMain.handle('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, unknown>) => {
   const body = { ...buildSearchBody(keyword, page, limit), ...options }
   const response = await API_CLIENT.post('/search', body)
-  return normalizeFeedResponse(ensureValidResponse(response.data))
+  const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
+
+  // Delta Sync: Upsert to local DB
+  normalized.list.forEach(upsertGame)
+
+  return normalized
 })
 
 ipcMain.handle('tg-get-patch-detail', async (_event, uniqueId: string) => {
@@ -294,6 +324,10 @@ ipcMain.handle('tg-get-patch-detail', async (_event, uniqueId: string) => {
     API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
   ])
   const detail = normalizeResource(ensureValidResponse<RawResource>(detailResponse.data))
+  
+  // Delta Sync: Upsert detail to local DB
+  upsertGame(detail)
+  
   const downloadsResponse = await API_CLIENT.get('/patch/resource', {
     params: { patchId: detail.id },
   })
@@ -322,6 +356,58 @@ ipcMain.handle('tg-get-patch-introduction', async (_event, uniqueId: string) => 
     vndbId: payload.vndbId ?? null,
     bangumiId: payload.bangumiId ?? null,
     steamId: payload.steamId != null ? String(payload.steamId) : null,
+  }
+})
+
+ipcMain.handle('tg-match-folder', async (_event, folderName: string) => {
+  const cleaned = cleanFolderName(folderName)
+  const db = getDb()
+  
+  // Search in FTS5 (matches both main title and aliases)
+  const results = db.prepare(`
+    SELECT g.* FROM games g
+    JOIN games_fts f ON g.id = f.rowid
+    WHERE f.name MATCH ?
+    LIMIT 10
+  `).all(cleaned + '*')
+
+  return results
+})
+
+ipcMain.handle('tg-link-folder', async (_event, folderPath: string, uniqueId: string) => {
+  const db = getDb()
+  try {
+    const game = db.prepare('SELECT id FROM games WHERE unique_id = ?').get(uniqueId) as { id: number } | undefined
+    if (!game) return { success: false, error: 'Game metadata not found in local DB' }
+
+    db.prepare(`
+      INSERT INTO local_paths (path, game_id)
+      VALUES (?, ?)
+      ON CONFLICT(path) DO UPDATE SET game_id = excluded.game_id
+    `).run(folderPath, game.id)
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('tg-get-executables', async (_event, folderPath: string) => {
+  return await discoverExecutables(folderPath)
+})
+
+ipcMain.handle('tg-launch-game', async (_event, folderPath: string, exeName: string) => {
+  const fullPath = path.join(folderPath, exeName)
+  try {
+    const child = spawn(fullPath, [], {
+      cwd: folderPath,
+      detached: true,
+      stdio: 'ignore'
+    })
+    child.unref() // Allow the parent to exit independently
+    return { success: true, pid: child.pid }
+  } catch (error) {
+    return { success: false, error: String(error) }
   }
 })
 
