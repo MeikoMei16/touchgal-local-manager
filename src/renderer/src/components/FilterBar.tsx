@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react';
 
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
-  onSortChange: (sort: { field: string, order: string }) => void;
+  onSortChange?: (sort: { field: string, order: string }) => void;
   isLoading?: boolean;
 }
 

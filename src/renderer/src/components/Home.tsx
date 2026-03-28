@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useTouchGalStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
-import { Loader2, Search, ChevronLeft, ChevronRight, ArrowDown, Settings, User } from 'lucide-react';
+import { SortDropdown } from './SortDropdown.tsx';
+import { Loader2, Search, ChevronLeft, ChevronRight, Settings, User, SortAsc, SortDesc } from 'lucide-react';
 
 export const Home: React.FC = () => {
   const { resources, totalResources, currentPage, isLoading, error, fetchResources, searchResources, selectResource, user, logout, setIsLoginOpen } = useTouchGalStore();
@@ -10,6 +11,8 @@ export const Home: React.FC = () => {
   const [lastQuery, setLastQuery] = useState<any>({});
   const [showFilters, setShowFilters] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [sortField, setSortField] = useState('resource_update_time');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   const totalPages = Math.ceil(totalResources / 24);
   const [jumpPage, setJumpPage] = useState(String(currentPage));
@@ -36,13 +39,13 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      fetchResources(1, lastQuery);
+      fetchResources(1, { ...lastQuery, sortField, sortOrder });
     }
-  }, [fetchResources, searchQuery, lastQuery]);
+  }, [fetchResources, searchQuery, lastQuery, sortField, sortOrder]);
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim() !== '') {
-      searchResources(searchQuery, 1, lastQuery);
+      searchResources(searchQuery, 1, { ...lastQuery, sortField, sortOrder });
     }
   };
 
@@ -50,28 +53,39 @@ export const Home: React.FC = () => {
     const newQuery = { ...lastQuery, ...filters };
     setLastQuery(newQuery);
     if (searchQuery.trim() !== '') {
-      searchResources(searchQuery, 1, newQuery);
+      searchResources(searchQuery, 1, { ...newQuery, sortField, sortOrder });
     } else {
-      fetchResources(1, newQuery);
+      fetchResources(1, { ...newQuery, sortField, sortOrder });
     }
   };
 
-  const handleSortChange = (sort: { field: string, order: string }) => {
-    const newQuery = { ...lastQuery, sortField: sort.field, sortOrder: sort.order };
-    setLastQuery(newQuery);
+  const sortOptions = [
+    { label: '资源更新时间', value: 'resource_update_time' },
+    { label: '游戏创建时间', value: 'created' },
+    { label: '评分', value: 'rating' },
+    { label: '浏览量', value: 'visit' },
+    { label: '下载量', value: 'download' },
+    { label: '收藏量', value: 'favorite' }
+  ];
+
+  const updateSort = (field: string, order: string) => {
+    setSortField(field);
+    setSortOrder(order);
+    const query = { ...lastQuery, sortField: field, sortOrder: order };
     if (searchQuery.trim() !== '') {
-      searchResources(searchQuery, 1, newQuery);
+      searchResources(searchQuery, 1, query);
     } else {
-      fetchResources(1, newQuery);
+      fetchResources(1, query);
     }
   };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
+    const query = { ...lastQuery, sortField, sortOrder };
     if (searchQuery.trim() !== '') {
-      searchResources(searchQuery, page, lastQuery);
+      searchResources(searchQuery, page, query);
     } else {
-      fetchResources(page, lastQuery);
+      fetchResources(page, query);
     }
   };
 
@@ -88,16 +102,20 @@ export const Home: React.FC = () => {
     <div className="home-container">
       <div className="top-action-bar">
         <div className="pill-group">
-          <div className="sort-dropdown-pill">
-            <span className="label">排序</span>
-            <div className="current-sort">
-               <span className="text">更新时间</span>
-               <ArrowDown size={14} />
-            </div>
-          </div>
-          <button className="icon-pill blue">
-            <ArrowDown size={18} />
-            <span>降序</span>
+          <SortDropdown 
+            value={sortField} 
+            options={sortOptions} 
+            onSelect={(val) => updateSort(val, sortOrder)}
+            disabled={isLoading}
+          />
+
+          <button 
+            className={`order-toggle-btn-header ${sortOrder === 'asc' ? 'asc' : 'desc'}`}
+            onClick={() => updateSort(sortField, sortOrder === 'desc' ? 'asc' : 'desc')}
+            disabled={isLoading}
+          >
+            {sortOrder === 'desc' ? <SortDesc size={18} /> : <SortAsc size={18} />}
+            <span>{sortOrder === 'desc' ? '降序' : '升序'}</span>
           </button>
         </div>
         
@@ -138,24 +156,24 @@ export const Home: React.FC = () => {
       {showFilters && (
         <FilterBar 
           onFilterChange={handleFilterChange} 
-          onSortChange={handleSortChange} 
           isLoading={isLoading} 
         />
       )}
 
-      <div className="resource-grid">
-        {resources?.map((resource: any) => (
-          <ResourceCard 
-            key={resource.uniqueId} 
-            resource={resource} 
-            onClick={selectResource}
-          />
-        ))}
-      </div>
-
-      {isLoading && (
+      {isLoading ? (
         <div className="loading-container">
-          <Loader2 className="animate-spin" />
+          <Loader2 className="animate-spin" size={48} />
+          <span>正在寻找更多游戏...</span>
+        </div>
+      ) : (
+        <div className="resource-grid">
+          {resources?.map((resource: any) => (
+            <ResourceCard 
+              key={resource.uniqueId} 
+              resource={resource} 
+              onClick={selectResource}
+            />
+          ))}
         </div>
       )}
 
@@ -193,18 +211,18 @@ export const Home: React.FC = () => {
       </div>
 
       <style>{`
-        .home-container { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 16px; padding-bottom: 60px; background-color: #f8fafc; }
+        .home-container { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 16px; padding-bottom: 60px; background-color: #f8fafc; }
         
-        .top-action-bar { display: flex; justify-content: space-between; align-items: center; }
-        .pill-group, .action-group { display: flex; align-items: center; gap: 12px; }
-        
-        .sort-dropdown-pill { background: #fff; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 6px 12px; display: flex; flex-direction: column; min-width: 140px; position: relative; }
-        .sort-dropdown-pill .label { position: absolute; top: -10px; left: 10px; background: #f8fafc; padding: 0 4px; font-size: 11px; font-weight: 700; color: #64748b; }
-        .current-sort { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
-        .current-sort .text { font-size: 15px; font-weight: 600; }
-        
+        .top-action-bar { display: flex; justify-content: space-between; align-items: center; margin: 0 auto 0 auto; width: 100%; max-width: 1100px; padding: 0 12px; }
+        .pill-group { display: flex; align-items: center; gap: 6px; }
+        .action-group { display: flex; align-items: center; gap: 6px; }
+
+        .order-toggle-btn-header { display: flex; align-items: center; gap: 6px; padding: 0 14px; border-radius: 40px; border: 1.5px solid transparent; height: 44px; font-weight: 700; font-size: 13.5px; cursor: pointer; transition: all 0.2s; background: #f1f5f9; color: #475569; position: relative; }
+        .order-toggle-btn-header:hover { background: #e2e8f0; }
+        .order-toggle-btn-header.active { background: #f1f5f9; }
+
         .icon-pill { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 32px; border: none; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; background: #e2e8f0; color: #1e293b; }
-        .icon-pill.blue { background: #dcfce7; color: #166534; } 
+        .icon-pill.blue { background: #e0f2fe; color: #0369a1; }
         .icon-pill.high-screen.active { background: #bae6fd; border: 1.5px solid #0369a1; }
         .icon-pill-circle.active { background: #bae6fd; border: 1.5px solid #0369a1; }
         .icon-pill-circle { width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0369a1; border: none; cursor: pointer; transition: all 0.2s; }
@@ -212,11 +230,13 @@ export const Home: React.FC = () => {
         .search-input-pill { background: #fff; border: 1.5px solid #cbd5e1; border-radius: 22px; padding: 0 16px; height: 44px; width: 220px; font-size: 14px; font-weight: 600; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .search-input-pill:focus { border-color: #0369a1; box-shadow: 0 4px 12px rgba(3, 105, 161, 0.1); }
         
+        .arrow { position: absolute; right: 12px; pointer-events: none; color: #64748b; }
+        
         .resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
-        .loading-container { display: flex; justify-content: center; padding: 24px; color: #0369a1; }
+        .loading-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; color: #0369a1; gap: 16px; font-weight: 600; font-size: 16px; }
         .animate-spin { animation: spin 1s linear infinite; }
         
-        .pagination-bar-sticky { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100; margin-left: 36px; /* offset for compact sidebar */ }
+        .pagination-bar-sticky { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 100; margin-left: 36px; /* offset for compact sidebar */ }
         .pagination-content { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); padding: 6px; border-radius: 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
         .pagi-btn-circle { width: 44px; height: 44px; border-radius: 22px; border: none; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
         .pagi-btn-circle.active { background: #0369a1; color: #fff; }
