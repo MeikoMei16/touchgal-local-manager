@@ -17,6 +17,15 @@ dist-ssr
 out/
 .gemini/
 .agents/
+.agent/
+.pnpm-store/
+
+# SQLite
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Editor directories and files
 .vscode/*

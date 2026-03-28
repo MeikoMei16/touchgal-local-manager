@@ -212,11 +212,11 @@ CREATE TABLE collection_items (
 
 ## Implementation Roadmap
 
-| Phase | Scope | Priority | Effort |
+| Phase | Scope | Status | Effort |
 |:---|:---|:---|:---|
-| Phase 1 | SQLite metadata mirror + delta sync | 🔴 Critical | 2 weeks |
-| Phase 2 | Smart file linking + launcher | 🔴 Critical | 1 week |
-| Phase 3 | Download orchestration engine | 🟡 High | 2 weeks |
+| Phase 1 | SQLite metadata mirror + delta sync | ✅ Completed | 2 weeks |
+| Phase 2 | Smart file linking + launcher | ✅ Completed | 1 week |
+| Phase 3 | Download orchestration engine | ✅ Completed | 2 weeks |
 | Phase 4 | Play-time tracking + analytics dashboard | 🟡 High | 1 week |
 | Phase 5 | Relational knowledge graph + "find similar" | 🟢 Medium | 1 week |
 | Phase 6 | Cross-DB federation (VNDB / Bangumi) | 🟢 Medium | 2 weeks |
