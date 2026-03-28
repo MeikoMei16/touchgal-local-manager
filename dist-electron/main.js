@@ -1,58 +1,100 @@
-import { BrowserWindow as e, app as t, ipcMain as n } from "electron";
-import r from "node:path";
-import i from "node:fs";
-import { fileURLToPath as a } from "node:url";
-import o from "axios";
+import { BrowserWindow, app, ipcMain } from "electron";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import axios from "axios";
 //#region electron/main.ts
-var s = a(import.meta.url), c = r.dirname(s);
-process.env.DIST = r.join(c, "../dist"), process.env.VITE_PUBLIC = t.isPackaged ? process.env.DIST : r.join(process.env.DIST, "../public");
-var l, u = o.create({
+var __filename = fileURLToPath(import.meta.url);
+var __dirname = path.dirname(__filename);
+process.env.DIST = path.join(__dirname, "../dist");
+process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, "../public");
+var win;
+var API_CLIENT = axios.create({
 	baseURL: "https://www.touchgal.top/api",
 	headers: {
 		"Content-Type": "application/json",
 		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 		Referer: "https://www.touchgal.top/",
-		Origin: "https://www.touchgal.top"
+		Origin: "https://www.touchgal.top",
+		"Cookie": "kun-patch-setting-store|state|data|kunNsfwEnable=all"
 	},
-	timeout: 15e3
-}), d = (e) => Array.isArray(e) ? e.filter(Boolean) : typeof e == "string" && e.trim() ? [e] : [], f = (e) => Array.isArray(e.tags) && e.tags.length > 0 ? e.tags.filter(Boolean) : Array.isArray(e.tag) ? e.tag.map((e) => e?.tag?.name ?? e?.name).filter((e) => !!e) : [], p = (e) => {
-	let t = e._count ?? {}, n = d(e.platform), r = d(e.language), i = typeof e.company == "string" ? e.company : Array.isArray(e.company) ? e.company.map((e) => e?.name).filter(Boolean).join(", ") : null;
+	timeout: 3e4
+});
+var asArray = (value) => {
+	if (Array.isArray(value)) return value.filter(Boolean);
+	if (typeof value === "string" && value.trim()) return [value];
+	return [];
+};
+var extractTags = (resource) => {
+	if (Array.isArray(resource.tags) && resource.tags.length > 0) return resource.tags.filter(Boolean);
+	if (!Array.isArray(resource.tag)) return [];
+	return resource.tag.map((item) => item?.tag?.name ?? item?.name).filter((tag) => Boolean(tag));
+};
+var normalizeResource = (resource) => {
+	const counts = resource._count ?? {};
+	const platforms = asArray(resource.platform);
+	const languages = asArray(resource.language);
+	const company = typeof resource.company === "string" ? resource.company : Array.isArray(resource.company) ? resource.company.map((item) => item?.name).filter(Boolean).join(", ") : null;
 	return {
-		id: e.id ?? 0,
-		uniqueId: e.uniqueId ?? e.unique_id ?? "",
-		name: e.name ?? "Unknown title",
-		banner: e.banner ?? null,
-		platform: n.join(", "),
-		language: r.join(", "),
-		releasedDate: e.releasedDate ?? e.released ?? null,
-		averageRating: e.averageRating ?? e.rating_stat?.avg_overall ?? 0,
-		tags: f(e),
-		alias: e.alias ?? [],
-		favoriteCount: t.favorite_folder ?? 0,
-		resourceCount: t.resource ?? 0,
-		commentCount: t.comment ?? 0,
-		introduction: e.introduction ?? null,
-		company: i,
-		vndbId: e.vndbId ?? e.vndb_id ?? null,
-		bangumiId: e.bangumiId ?? e.bangumi_id ?? null,
-		steamId: e.steamId == null ? e.steam_id == null ? null : String(e.steam_id) : String(e.steamId),
-		contentLimit: e.contentLimit ?? null
+		id: resource.id ?? 0,
+		uniqueId: resource.uniqueId ?? resource.unique_id ?? "",
+		name: resource.name ?? "Unknown title",
+		banner: resource.banner ?? null,
+		platform: platforms.join(", "),
+		language: languages.join(", "),
+		releasedDate: resource.releasedDate ?? resource.released ?? null,
+		averageRating: resource.averageRating ?? resource.rating_stat?.avg_overall ?? 0,
+		tags: extractTags(resource),
+		alias: resource.alias ?? [],
+		favoriteCount: counts.favorite_folder ?? 0,
+		resourceCount: counts.resource ?? 0,
+		commentCount: counts.comment ?? 0,
+		introduction: resource.introduction ?? null,
+		company,
+		vndbId: resource.vndbId ?? resource.vndb_id ?? null,
+		bangumiId: resource.bangumiId ?? resource.bangumi_id ?? null,
+		steamId: resource.steamId != null ? String(resource.steamId) : resource.steam_id != null ? String(resource.steam_id) : null,
+		contentLimit: resource.contentLimit ?? null,
+		ratingSummary: resource.ratingSummary ?? {
+			average: 0,
+			count: 0,
+			histogram: Array.from({ length: 10 }, (_, i) => ({
+				score: i + 1,
+				count: 0
+			})),
+			recommend: {
+				strong_no: 0,
+				no: 0,
+				neutral: 0,
+				yes: 0,
+				strong_yes: 0
+			}
+		},
+		screenshots: resource.fullScreenshotUrls ?? [],
+		pvUrl: resource.pvVideoUrl ?? null
 	};
-}, m = (e) => e.map((e) => ({
-	id: e.id ?? 0,
-	name: e.name ?? "Unnamed resource",
-	size: e.size ?? null,
-	url: e.url ?? e.content ?? null
-})), h = (e) => ({
-	list: (e.galgames ?? []).map(p),
-	total: e.total ?? 0
-}), g = (e, t, n) => ({
+};
+var normalizeDownloads = (downloads) => downloads.map((download) => ({
+	id: download.id ?? 0,
+	name: download.name ?? "Unnamed resource",
+	size: download.size ?? null,
+	url: download.url ?? download.content ?? null,
+	storage: download.storage ?? null,
+	code: download.code ?? null,
+	password: download.password ?? null,
+	platform: asArray(download.platform)
+}));
+var normalizeFeedResponse = (payload) => ({
+	list: (payload.galgames ?? []).map(normalizeResource),
+	total: payload.total ?? 0
+});
+var buildSearchBody = (keyword, page, limit) => ({
 	queryString: JSON.stringify([{
 		type: "keyword",
-		name: e
+		name: keyword
 	}]),
-	limit: n,
-	page: t,
+	limit,
+	page,
 	selectedType: "all",
 	selectedLanguage: "all",
 	selectedPlatform: "all",
@@ -61,108 +103,155 @@ var l, u = o.create({
 	selectedYears: ["all"],
 	selectedMonths: ["all"],
 	searchOption: {
-		searchInIntroduction: !0,
-		searchInAlias: !0,
-		searchInTag: !0
+		searchInIntroduction: true,
+		searchInAlias: true,
+		searchInTag: true
 	}
-}), _ = (e) => {
-	if (typeof e == "string") throw Error(e);
-	if (Array.isArray(e)) {
-		let t = e[0];
-		throw t && typeof t == "object" && "message" in t ? Error(String(t.message)) : Error("TouchGal returned a validation error");
+});
+var ensureValidResponse = (payload) => {
+	if (typeof payload === "string") {
+		console.error("[API] Error payload (string):", payload);
+		throw new Error(payload);
 	}
-	return e;
-}, v = (e) => {
-	let t = [];
-	return e.forEach((e) => {
-		i.existsSync(e) && i.readdirSync(e, { withFileTypes: !0 }).forEach((n) => {
-			if (!n.isDirectory()) return;
-			let a = r.join(e, n.name), o = r.join(a, ".tg_id");
-			if (i.existsSync(o)) {
-				let e = i.readFileSync(o, "utf8").trim();
-				t.push({
-					path: a,
-					folderName: n.name,
-					tg_id: e
-				});
-			} else t.push({
-				path: a,
-				folderName: n.name,
-				tg_id: null
-			});
-		});
-	}), t;
+	if (Array.isArray(payload)) {
+		const first = payload[0];
+		if (first && typeof first === "object" && "code" in first && "path" in first) {
+			console.error("[API] Validation errors (Zod):", JSON.stringify(payload, null, 2));
+			throw new Error(String(first.message || "TouchGal returned a validation error"));
+		}
+	}
+	return payload;
 };
-function y() {
-	l = new e({
-		icon: r.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+var scanForGalgameFolders = async (rootPaths) => {
+	const results = [];
+	const scanTasks = rootPaths.map(async (rootPath) => {
+		try {
+			if (!fs.existsSync(rootPath)) return;
+			const dirTasks = (await fs.promises.readdir(rootPath, { withFileTypes: true })).map(async (dir) => {
+				if (!dir.isDirectory()) return;
+				const fullPath = path.join(rootPath, dir.name);
+				const tgIdPath = path.join(fullPath, ".tg_id");
+				let tg_id = null;
+				try {
+					if (fs.existsSync(tgIdPath)) tg_id = (await fs.promises.readFile(tgIdPath, "utf8")).trim();
+				} catch (e) {}
+				results.push({
+					path: fullPath,
+					folderName: dir.name,
+					tg_id
+				});
+			});
+			await Promise.all(dirTasks);
+		} catch (e) {}
+	});
+	await Promise.all(scanTasks);
+	return results;
+};
+function createWindow() {
+	win = new BrowserWindow({
+		icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
 		width: 1200,
 		height: 800,
 		titleBarStyle: "hiddenInset",
-		autoHideMenuBar: !0,
-		webPreferences: { preload: r.join(c, "preload.mjs") }
-	}), l.webContents.on("did-finish-load", () => {
-		l?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-	}), process.env.VITE_DEV_SERVER_URL ? (l.loadURL(process.env.VITE_DEV_SERVER_URL), l.webContents.openDevTools()) : l.loadFile(r.join(process.env.DIST || "", "index.html"));
+		autoHideMenuBar: true,
+		webPreferences: { preload: path.join(__dirname, "preload.mjs") }
+	});
+	win.webContents.on("did-finish-load", () => {
+		win?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+	});
+	if (process.env.VITE_DEV_SERVER_URL) {
+		win.loadURL(process.env.VITE_DEV_SERVER_URL);
+		win.webContents.openDevTools();
+	} else win.loadFile(path.join(process.env.DIST || "", "index.html"));
 }
-t.on("window-all-closed", () => {
-	process.platform !== "darwin" && (t.quit(), l = null);
-}), t.on("activate", () => {
-	e.getAllWindows().length === 0 && y();
-}), n.handle("scan-local-library", (e, t) => v(t)), n.handle("tag-folder", (e, t, n) => {
-	let a = r.join(t, ".tg_id");
+app.on("window-all-closed", () => {
+	if (process.platform !== "darwin") {
+		app.quit();
+		win = null;
+	}
+});
+app.on("activate", () => {
+	if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+ipcMain.handle("scan-local-library", async (_event, paths) => {
+	return await scanForGalgameFolders(paths);
+});
+ipcMain.handle("tag-folder", (_event, folderPath, id) => {
+	const tgIdPath = path.join(folderPath, ".tg_id");
 	try {
-		return i.writeFileSync(a, n, "utf8"), { success: !0 };
-	} catch (e) {
+		fs.writeFileSync(tgIdPath, id, "utf8");
+		return { success: true };
+	} catch (error) {
 		return {
-			success: !1,
-			error: e
+			success: false,
+			error
 		};
 	}
-}), n.handle("tg-fetch-resources", async (e, t, n, r) => h(_((await u.get("/galgame", { params: {
-	page: t,
-	limit: n,
-	selectedType: r.selectedType ?? "all",
-	selectedLanguage: r.selectedLanguage ?? "all",
-	selectedPlatform: r.selectedPlatform ?? "all",
-	sortField: r.sortField ?? "resource_update_time",
-	sortOrder: r.sortOrder ?? "desc",
-	yearString: r.yearString ?? ["all"],
-	monthString: r.monthString ?? ["all"],
-	minRatingCount: r.minRatingCount ?? 0,
-	...r
-} })).data))), n.handle("tg-search-resources", async (e, t, n, r, i) => {
-	let a = {
-		...g(t, n, r),
-		...i
+});
+ipcMain.handle("tg-fetch-resources", async (_event, page, limit, query) => {
+	return normalizeFeedResponse(ensureValidResponse((await API_CLIENT.get("/galgame", { params: {
+		page,
+		limit,
+		selectedType: query.selectedType ?? "all",
+		selectedLanguage: query.selectedLanguage ?? "all",
+		selectedPlatform: query.selectedPlatform ?? "all",
+		sortField: query.sortField ?? "resource_update_time",
+		sortOrder: query.sortOrder ?? "desc",
+		yearString: query.yearString ?? ["all"],
+		monthString: query.monthString ?? ["all"],
+		minRatingCount: query.minRatingCount ?? 0,
+		...query
+	} })).data));
+});
+ipcMain.handle("tg-search-resources", async (_event, keyword, page, limit, options) => {
+	const body = {
+		...buildSearchBody(keyword, page, limit),
+		...options
 	};
-	return h(_((await u.post("/search", a)).data));
-}), n.handle("tg-get-patch-detail", async (e, t) => {
-	console.log(`[IPC] Fetching detail for: ${t}`);
-	try {
-		let e = p(_((await u.get("/patch", { params: { uniqueId: t } })).data)), n = m(_((await u.get("/patch/resource", { params: { patchId: e.id } })).data));
-		return {
-			...e,
-			downloads: n
-		};
-	} catch (e) {
-		throw console.error(`[IPC] Error in tg-get-patch-detail for ${t}:`, e), e;
+	return normalizeFeedResponse(ensureValidResponse((await API_CLIENT.post("/search", body)).data));
+});
+ipcMain.handle("tg-get-patch-detail", async (_event, uniqueId) => {
+	console.log(`[IPC] Fetching detail for: ${uniqueId}`);
+	if (!uniqueId || uniqueId.length !== 8) {
+		console.error(`[IPC] Invalid uniqueId: ${uniqueId}`);
+		throw new Error("Invalid resource ID (must be 8 characters)");
 	}
-}), n.handle("tg-get-patch-introduction", async (e, t) => {
-	let n = _((await u.get("/patch/introduction", { params: { uniqueId: t } })).data);
+	try {
+		const [detailResponse, introResponse] = await Promise.all([API_CLIENT.get("/patch", { params: { uniqueId } }), API_CLIENT.get("/patch/introduction", { params: { uniqueId } })]);
+		const detail = normalizeResource(ensureValidResponse(detailResponse.data));
+		const downloads = normalizeDownloads(ensureValidResponse((await API_CLIENT.get("/patch/resource", { params: { patchId: detail.id } })).data));
+		return {
+			...detail,
+			...ensureValidResponse(introResponse.data),
+			downloads
+		};
+	} catch (error) {
+		console.error(`[IPC] Error in tg-get-patch-detail for ${uniqueId}:`, error);
+		throw error;
+	}
+});
+ipcMain.handle("tg-get-patch-introduction", async (_event, uniqueId) => {
+	const payload = ensureValidResponse((await API_CLIENT.get("/patch/introduction", { params: { uniqueId } })).data);
 	return {
-		introduction: n.introduction ?? null,
-		releasedDate: n.released ?? null,
-		alias: n.alias ?? [],
-		tags: (n.tag ?? []).map((e) => e?.name).filter((e) => !!e),
-		company: (n.company ?? []).map((e) => e?.name).filter(Boolean).join(", ") || null,
-		vndbId: n.vndbId ?? null,
-		bangumiId: n.bangumiId ?? null,
-		steamId: n.steamId == null ? null : String(n.steamId)
+		introduction: payload.introduction ?? null,
+		releasedDate: payload.released ?? null,
+		alias: payload.alias ?? [],
+		tags: (payload.tag ?? []).map((item) => item?.name).filter((tag) => Boolean(tag)),
+		company: (payload.company ?? []).map((item) => item?.name).filter(Boolean).join(", ") || null,
+		vndbId: payload.vndbId ?? null,
+		bangumiId: payload.bangumiId ?? null,
+		steamId: payload.steamId != null ? String(payload.steamId) : null
 	};
-}), n.handle("tg-fetch-captcha", async () => _((await u.get("/auth/captcha")).data)), n.handle("tg-login", async (e, t, n, r) => _((await u.post("/auth/login", {
-	name: t,
-	password: n,
-	captcha: r
-})).data)), t.whenReady().then(y);
+});
+ipcMain.handle("tg-fetch-captcha", async () => {
+	return ensureValidResponse((await API_CLIENT.get("/auth/captcha")).data);
+});
+ipcMain.handle("tg-login", async (_event, username, password, captcha) => {
+	return ensureValidResponse((await API_CLIENT.post("/auth/login", {
+		name: username,
+		password,
+		captcha
+	})).data);
+});
+app.whenReady().then(createWindow);
 //#endregion

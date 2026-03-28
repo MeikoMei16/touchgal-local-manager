@@ -1,1 +1,13 @@
-let e=require(`electron/renderer`);e.contextBridge.exposeInMainWorld(`api`,{scanLocalLibrary:t=>e.ipcRenderer.invoke(`scan-local-library`,t),tagFolder:(t,n)=>e.ipcRenderer.invoke(`tag-folder`,t,n),fetchResources:(t,n,r)=>e.ipcRenderer.invoke(`tg-fetch-resources`,t,n,r),searchResources:(t,n,r,i)=>e.ipcRenderer.invoke(`tg-search-resources`,t,n,r,i),getPatchDetail:t=>e.ipcRenderer.invoke(`tg-get-patch-detail`,t),getPatchIntroduction:t=>e.ipcRenderer.invoke(`tg-get-patch-introduction`,t),fetchCaptcha:()=>e.ipcRenderer.invoke(`tg-fetch-captcha`),login:(t,n,r)=>e.ipcRenderer.invoke(`tg-login`,t,n,r)});
+let electron_renderer = require("electron/renderer");
+//#region electron/preload.ts
+electron_renderer.contextBridge.exposeInMainWorld("api", {
+	scanLocalLibrary: (paths) => electron_renderer.ipcRenderer.invoke("scan-local-library", paths),
+	tagFolder: (folderPath, id) => electron_renderer.ipcRenderer.invoke("tag-folder", folderPath, id),
+	fetchResources: (page, limit, query) => electron_renderer.ipcRenderer.invoke("tg-fetch-resources", page, limit, query),
+	searchResources: (keyword, page, limit, options) => electron_renderer.ipcRenderer.invoke("tg-search-resources", keyword, page, limit, options),
+	getPatchDetail: (uniqueId) => electron_renderer.ipcRenderer.invoke("tg-get-patch-detail", uniqueId),
+	getPatchIntroduction: (uniqueId) => electron_renderer.ipcRenderer.invoke("tg-get-patch-introduction", uniqueId),
+	fetchCaptcha: () => electron_renderer.ipcRenderer.invoke("tg-fetch-captcha"),
+	login: (username, password, captcha) => electron_renderer.ipcRenderer.invoke("tg-login", username, password, captcha)
+});
+//#endregion
