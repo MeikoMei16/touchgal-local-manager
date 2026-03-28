@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process'
 import axios from 'axios'
 import { initDb, getDb, upsertGame } from './db'
 import { cleanFolderName, discoverExecutables } from './utils'
+import { downloadManager } from './downloader'
 
 const API_CLIENT = axios.create({
   baseURL: 'https://www.touchgal.top/api',
@@ -409,6 +410,24 @@ ipcMain.handle('tg-launch-game', async (_event, folderPath: string, exeName: str
   } catch (error) {
     return { success: false, error: String(error) }
   }
+})
+
+// Phase 3: Download Orchestration
+ipcMain.handle('tg-parse-links', (_event, content: string) => {
+  return downloadManager.parseLink(content)
+})
+
+ipcMain.handle('tg-add-to-queue', (_event, gameId: number, storageUrl: string) => {
+  try {
+    const id = downloadManager.addTask(gameId, storageUrl)
+    return { success: true, id }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('tg-get-download-queue', () => {
+  return downloadManager.getQueue()
 })
 
 ipcMain.handle('tg-fetch-captcha', async () => {
