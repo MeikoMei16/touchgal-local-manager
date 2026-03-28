@@ -1,27 +1,74 @@
 # Decision & Thinking Log
 
-This document persists the architectural reasoning and "rules" for the TouchGal Local Manager (Electron Rebuild) project.
+This document persists the architectural reasoning and "rules" for the TouchGal Local Manager project.
 
-## 🧠 Core Architectural Decisions
+## Core Architectural Decisions
 
 ### 1. IPC Relay for Network Access
-- **Problem**: CORS (Cross-Origin Resource Sharing) restrictions in the Electron Renderer prevented direct access to the `touchgal.top` API, causing persistent "Network Error".
-- **Solution**: Moved all API logic (`axios`) to the **Main Process** (Node.js). The Renderer now communicates via an IPC tunnel (`window.api`).
-- **Status**: Implemented. Currently debugging "White Screen" (Renderer side crash).
+- **Problem**: CORS restrictions in the Electron Renderer prevent direct access to the `touchgal.top` API.
+- **Solution**: All API logic (`axios`) lives in the **Main Process**. The Renderer communicates via IPC tunnel (`window.api`).
+- **Rule**: Never call the TouchGal API directly from the renderer.
 
-### 2. 3717 (Android) Architecture Alignment
+### 2. MVVM Architecture
 - **Pattern**: MVVM + Repository.
-- **Data Layer**: `TouchGalClient` acts as the repository, abstracting the source (Remote API vs. Local File vs. Local Cache).
-- **Zustand**: Used as the "ViewModel" state store.
-
-## 🛠️ Environment-Specific Rules (Electron Fixes)
-
-> [!IMPORTANT]
-> The current development environment (cloud) has specific limitations for Electron.
-
-1. **Manual Binary Download**: If `pnpm install` fails to setup Electron, download the `v30.0.1` zip manually and expand it to `node_modules\.pnpm\electron@30.5.1\node_modules\electron\dist`.
-2. **ESM Path Fix**: `electron/main.ts` MUST include the `fileURLToPath` polyfill for `__dirname` and `__filename` because the project uses ES Modules.
-3. **path.txt**: Always ensure `node_modules\...\electron\path.txt` points to `electron.exe`.
+- **Data Layer**: `TouchGalClient` (`src/renderer/src/data/`) acts as the repository, proxying all calls through `window.api`.
+- **ViewModel**: Zustand store (`src/renderer/src/store/useTouchGalStore.ts`).
 
 ---
-*Last update: 2026-03-27*
+
+## Build Toolchain
+
+### electron-vite (current)
+The project uses **electron-vite** as the build system. This replaces the old `vite-plugin-electron` setup.
+
+**Why the switch:**
+- `vite-plugin-electron@0.29` had an ESM dynamic `import()` resolution bug under pnpm's isolated node_modules.
+- `electron-vite` is the official, actively maintained build tool for Electron + Vite; it handles main/preload/renderer as three separate Vite environments.
+
+**Locked versions:**
+| Package | Version | Note |
+|---|---|---|
+| `vite` | `^7.x` | electron-vite@5 supports up to vite@7; vite@8 not yet supported |
+| `electron-vite` | `^5.0.0` | |
+| `@vitejs/plugin-react` | `^5.x` | v6 requires vite@8 |
+| `typescript` | `^5.8.x` | typescript-eslint@8 requires TS < 6 |
+
+### Directory Structure
+```
+src/
+  main/         → Electron main process (index.ts)
+  preload/      → Electron preload script (index.ts)
+  renderer/
+    index.html  → Renderer entry HTML
+    src/        → React application
+      App.tsx, main.tsx, index.css
+      components/
+      store/
+      data/
+      types/
+      hooks/
+      assets/
+electron.vite.config.ts   → Build config for all three environments
+electron-builder.json5    → Packaging config
+```
+
+### 3. Preload Script Constraint
+- **Rule**: In projects with `"type": "module"`, the Preload script **must** be bundled as CommonJS with a `.cjs` extension.
+- **Why**: Electron's `contextBridge` and `ipcRenderer` bindings are often bundled using `require()` by `electron-vite`. Native ESM (`.js`) does not support `require()`, leading to runtime errors.
+
+
+---
+
+## Build Commands
+
+| Command | Platform | Output |
+|---|---|---|
+| `pnpm dev` | Any | Dev mode with hot reload |
+| `pnpm build:win` | Windows | `release/<version>/*.exe` (NSIS) |
+| `pnpm build:linux` | Linux | `release/<version>/` (AppImage + rpm + deb) |
+
+> Cross-compilation not supported. Build on the target platform.
+
+---
+
+*Last update: 2026-03-28*
