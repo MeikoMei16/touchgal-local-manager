@@ -2,16 +2,37 @@ import React, { useEffect, useState } from 'react';
 import { useTouchGalStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
-import { Loader2, Search, ChevronLeft, ChevronRight, ArrowDown, Settings } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, ArrowDown, Settings, User } from 'lucide-react';
 
 export const Home: React.FC = () => {
-  const { resources, totalResources, currentPage, isLoading, error, fetchResources, searchResources, selectResource } = useTouchGalStore();
+  const { resources, totalResources, currentPage, isLoading, error, fetchResources, searchResources, selectResource, user, logout, setIsLoginOpen } = useTouchGalStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [lastQuery, setLastQuery] = useState<any>({});
   const [showFilters, setShowFilters] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
 
-  const totalPages = Math.ceil(totalResources / 12);
+  const totalPages = Math.ceil(totalResources / 24);
+  const [jumpPage, setJumpPage] = useState(String(currentPage));
+
+  useEffect(() => {
+    setJumpPage(String(currentPage));
+    const scrollArea = document.querySelector('.scroll-area') as HTMLElement;
+    if (scrollArea) {
+      scrollArea.scrollTo({ top: 0, behavior: 'auto' });
+      scrollArea.focus();
+    }
+  }, [currentPage]);
+
+  const handleJumpPage = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const page = parseInt(jumpPage);
+      if (!isNaN(page) && page >= 1 && page <= totalPages) {
+        goToPage(page);
+      } else {
+        setJumpPage(String(currentPage));
+      }
+    }
+  };
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -52,7 +73,6 @@ export const Home: React.FC = () => {
     } else {
       fetchResources(page, lastQuery);
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (error) {
@@ -100,6 +120,18 @@ export const Home: React.FC = () => {
             <Settings size={18} />
             <span>高级筛选</span>
           </button>
+
+          {user ? (
+            <button className="icon-pill blue" onClick={logout}>
+              <User size={18} />
+              <span>{user.name || '已登录'}</span>
+            </button>
+          ) : (
+            <button className="icon-pill" onClick={() => setIsLoginOpen(true)}>
+              <User size={18} />
+              <span>登录</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -139,7 +171,15 @@ export const Home: React.FC = () => {
           </button>
           
           <div className="page-indicator-pill">
-            {currentPage} / {totalPages || 1}
+            <input 
+              type="text" 
+              className="page-input" 
+              value={jumpPage} 
+              onChange={(e) => setJumpPage(e.target.value)}
+              onKeyDown={handleJumpPage}
+              onBlur={() => setJumpPage(String(currentPage))}
+            />
+            <span className="total-pages">/ {totalPages || 1}</span>
           </div>
 
           <button 
@@ -153,7 +193,7 @@ export const Home: React.FC = () => {
       </div>
 
       <style>{`
-        .home-container { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 20px; padding-bottom: 60px; background-color: #f8fafc; }
+        .home-container { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 16px; padding-bottom: 60px; background-color: #f8fafc; }
         
         .top-action-bar { display: flex; justify-content: space-between; align-items: center; }
         .pill-group, .action-group { display: flex; align-items: center; gap: 12px; }
@@ -176,12 +216,15 @@ export const Home: React.FC = () => {
         .loading-container { display: flex; justify-content: center; padding: 24px; color: #0369a1; }
         .animate-spin { animation: spin 1s linear infinite; }
         
-        .pagination-bar-sticky { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 100; margin-left: 40px; /* offset for sidebar */ }
+        .pagination-bar-sticky { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100; margin-left: 36px; /* offset for compact sidebar */ }
         .pagination-content { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); padding: 6px; border-radius: 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
         .pagi-btn-circle { width: 44px; height: 44px; border-radius: 22px; border: none; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
         .pagi-btn-circle.active { background: #0369a1; color: #fff; }
         .pagi-btn-circle:disabled { opacity: 0.3; cursor: not-allowed; }
-        .page-indicator-pill { background: #fff; border: 1.5px solid #e2e8f0; padding: 6px 28px; border-radius: 20px; font-weight: 800; font-size: 15px; color: #0369a1; }
+        .page-indicator-pill { background: #fff; border: 1.5px solid #e2e8f0; padding: 4px 16px; border-radius: 20px; font-weight: 800; font-size: 15px; color: #0369a1; display: flex; align-items: center; gap: 8px; }
+        .page-input { width: 36px; border: none; background: #f1f5f9; border-radius: 6px; padding: 2px 4px; text-align: center; font-weight: 800; font-size: 15px; color: #0369a1; outline: none; }
+        .page-input:focus { background: #e0f2fe; box-shadow: 0 0 0 1.5px #0369a1; }
+        .total-pages { color: #64748b; font-size: 14px; }
         
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>

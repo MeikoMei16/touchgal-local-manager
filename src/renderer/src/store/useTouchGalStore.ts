@@ -11,6 +11,7 @@ interface TouchGalState {
   selectedResource: TouchGalDetail | null;
   user: any | null;
   captchaUrl: string | null;
+  isLoginOpen: boolean;
 
   fetchResources: (page?: number, query?: Record<string, unknown>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: Record<string, any>) => Promise<void>;
@@ -19,6 +20,7 @@ interface TouchGalState {
   fetchCaptcha: () => Promise<void>;
   login: (username: string, password: string, captcha: string) => Promise<void>;
   logout: () => void;
+  setIsLoginOpen: (isOpen: boolean) => void;
 }
 
 export const useTouchGalStore = create<TouchGalState>((set) => ({
@@ -30,13 +32,14 @@ export const useTouchGalStore = create<TouchGalState>((set) => ({
   selectedResource: null,
   user: null,
   captchaUrl: null,
+  isLoginOpen: false,
 
   fetchResources: async (page = 1, query = {}) => {
     set({ isLoading: true, error: null });
     try {
       const data = await TouchGalClient.fetchGalgameResources(page, 24, query);
-      set((state) => ({
-        resources: page > 1 ? [...state.resources, ...data.list] : data.list,
+      set((_state) => ({
+        resources: data.list,
         totalResources: data.total,
         currentPage: page,
         isLoading: false
@@ -104,5 +107,6 @@ export const useTouchGalStore = create<TouchGalState>((set) => ({
     }
   },
 
-  logout: () => set({ user: null })
+  logout: () => set({ user: null }),
+  setIsLoginOpen: (isOpen: boolean) => set({ isLoginOpen: isOpen })
 }));
