@@ -44,5 +44,21 @@ export const TouchGalClient = {
 
   searchTags: async (keyword: string) => {
     return await window.api.searchTags(keyword);
+  },
+
+  getUserStatus: async (id: number) => {
+    return await window.api.getUserStatus(id);
+  },
+
+  getUserComments: async (uid: number, pageNum: number, limitNum: number) => {
+    return await window.api.getUserComments(uid, pageNum, limitNum);
+  },
+
+  getUserRatings: async (uid: number, pageNum: number, limitNum: number) => {
+    return await window.api.getUserRatings(uid, pageNum, limitNum);
+  },
+
+  getUserResources: async (uid: number, pageNum: number, limitNum: number) => {
+    return await window.api.getUserResources(uid, pageNum, limitNum);
   }
 };

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron' 
 
 contextBridge.exposeInMainWorld('api', {
   // Local File System
@@ -24,4 +24,11 @@ contextBridge.exposeInMainWorld('api', {
 
   searchTags: (keyword: string) =>
     ipcRenderer.invoke('tg-search-tags', keyword),
+
+  getUserStatus: (id: number) => ipcRenderer.invoke('tg-get-user-status', id),
+  getUserStatusSelf: () => ipcRenderer.invoke('tg-get-user-status-self'),
+  getUserComments: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-comments', uid, page, limit),
+  getUserRatings: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-ratings', uid, page, limit),
+  getUserResources: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-resources', uid, page, limit),
+  getFavoriteFolders: (uid: number) => ipcRenderer.invoke('tg-get-favorite-folders', uid),
 })

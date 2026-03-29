@@ -14,6 +14,10 @@ interface TouchGalState {
   captchaChallenge: { images: any[], sessionId: string } | null;
   isLoginOpen: boolean;
   selectedTags: string[];
+  userProfile: any | null;
+  userComments: any[];
+  userRatings: any[];
+  userCollections: any[];
 
   fetchResources: (page?: number, query?: Record<string, unknown>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: Record<string, any>) => Promise<void>;
@@ -24,6 +28,8 @@ interface TouchGalState {
   login: (username: string, password: string, captcha: string) => Promise<void>;
   logout: () => void;
   setIsLoginOpen: (isOpen: boolean) => void;
+  fetchUserProfile: () => Promise<void>;
+  fetchUserActivity: (type: 'comments' | 'ratings' | 'collections', page?: number) => Promise<void>;
   addTagFilter: (tag: string) => void;
   removeTagFilter: (tag: string) => void;
   clearTags: () => void;
@@ -71,6 +77,10 @@ export const useTouchGalStore = create<TouchGalState>()(
     captchaChallenge: null,
     isLoginOpen: false,
     selectedTags: [],
+    userProfile: null,
+    userComments: [],
+    userRatings: [],
+    userCollections: [],
 
     fetchResources: async (page = 1, query = {}) => {
       set({ isLoading: true, error: null });
@@ -183,5 +193,57 @@ export const useTouchGalStore = create<TouchGalState>()(
   removeTagFilter: (tag: string) => set((state: TouchGalState) => ({
     selectedTags: state.selectedTags.filter((t: string) => t !== tag)
   })),
-  clearTags: () => set({ selectedTags: [] })
+  clearTags: () => set({ selectedTags: [] }),
+
+  fetchUserProfile: async () => {
+    set({ isLoading: true });
+    try {
+      // First, get the current authenticated user state (includes real UID)
+      const selfStatus = await window.api.getUserStatusSelf();
+      if (selfStatus && typeof selfStatus === 'object') {
+        // Sync user state with real UID if needed
+        const currentUid = selfStatus.uid || selfStatus.id;
+        set((state: any) => ({ 
+          user: { ...state.user, id: currentUid, uid: currentUid },
+          userProfile: selfStatus,
+          isLoading: false 
+        }));
+        
+        // Now fetch the detailed stats using the confirmed UID
+        const profileDetail = await window.api.getUserStatus(currentUid);
+        set({ userProfile: profileDetail, isLoading: false });
+      }
+    } catch (err: any) {
+      set({ error: err.message, isLoading: false });
+    }
+  },
+
+  fetchUserActivity: async (type, page = 1) => {
+    const currentState = get();
+    // Use uid or id, ensuring we don't pass NaN
+    const uid = currentState.userProfile?.id || currentState.user?.uid || currentState.user?.id;
+    
+    if (!uid || isNaN(Number(uid))) {
+      console.warn('[Store] Cannot fetch activity: UID is invalid', uid);
+      return;
+    }
+    
+    set({ isLoading: true });
+    try {
+      let data;
+      const numericUid = Number(uid);
+      if (type === 'comments') {
+        data = await window.api.getUserComments(numericUid, page, 20);
+        set({ userComments: data.comments || [], isLoading: false });
+      } else if (type === 'ratings') {
+        data = await window.api.getUserRatings(numericUid, page, 20);
+        set({ userRatings: data.ratings || [], isLoading: false });
+      } else if (type === 'collections') {
+        data = await window.api.getFavoriteFolders(numericUid);
+        set({ userCollections: data || [], isLoading: false });
+      }
+    } catch (err: any) {
+      set({ error: err.message, isLoading: false });
+    }
+  }
 })));

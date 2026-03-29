@@ -99,3 +99,42 @@ export const PatchIntroductionSchema = z.object({
   bangumiId: z.number().nullable().default(null),
   steamId: z.string().nullable().default(null),
 }).passthrough();
+
+export const UserProfileSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  avatar: z.string().nullable(),
+  bio: z.string().nullable(),
+  moemoepoint: z.number().default(0),
+  follower: z.number().default(0),
+  following: z.number().default(0),
+  _count: z.object({
+    patch_comment: z.number().default(0),
+    patch_rating: z.number().default(0),
+    patch_resource: z.number().default(0),
+    patch_favorite: z.number().default(0),
+  }).passthrough(),
+}).passthrough();
+
+export const UserActivityCommentSchema = z.object({
+  id: z.number(),
+  content: z.string(),
+  createdAt: z.string(),
+  patchName: z.string(),
+}).passthrough();
+
+export const UserActivityRatingSchema = z.object({
+  id: z.number(),
+  overall: z.number(),
+  recommend: z.string(),
+  shortSummary: z.string(),
+  playStatus: z.string(),
+  patchName: z.string(),
+}).passthrough();
+
+export const UserActivityResponseSchema = z.object({
+  total: z.number().default(0),
+  comments: z.array(UserActivityCommentSchema).optional(),
+  ratings: z.array(UserActivityRatingSchema).optional(),
+  resources: z.array(TouchGalResourceSchema).optional(),
+}).passthrough();

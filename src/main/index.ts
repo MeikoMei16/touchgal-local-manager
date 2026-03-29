@@ -597,3 +597,33 @@ handleWithLog('tg-search-tags', async (_event, keyword: string) => {
   const response = await API_CLIENT.get('/tag', { params: { name: keyword, limit: 20 } })
   return ensureValidResponse(response.data)
 })
+
+handleWithLog('tg-get-user-status', async (_event, id: number) => {
+  const response = await API_CLIENT.get('/user/status/info', { params: { id } })
+  return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-get-user-status-self', async () => {
+  const response = await API_CLIENT.get('/user/status')
+  return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, limit: number) => {
+  const response = await API_CLIENT.get('/user/profile/comment', { params: { uid, page, limit } })
+  return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-get-user-ratings', async (_event, uid: number, page: number, limit: number) => {
+  const response = await API_CLIENT.get('/user/profile/rating', { params: { uid, page, limit } })
+  return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number, limit: number) => {
+  const response = await API_CLIENT.get('/user/profile/resource', { params: { uid, page, limit } })
+  return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-get-favorite-folders', async (_event, uid: number) => {
+  const response = await API_CLIENT.get('/user/profile/favorite/folder', { params: { uid } })
+  return ensureValidResponse(response.data)
+})

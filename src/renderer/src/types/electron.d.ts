@@ -18,6 +18,12 @@ export interface ElectronAPI {
   verifyCaptcha: (sessionId: string, selectedIds: string[]) => Promise<any>;
   login: (username: string, password: string, captcha: string) => Promise<any>;
   searchTags: (keyword: string) => Promise<any>;
+  getUserStatus: (id: number) => Promise<any>;
+  getUserStatusSelf: () => Promise<any>;
+  getUserComments: (uid: number, page: number, limit: number) => Promise<any>;
+  getUserRatings: (uid: number, page: number, limit: number) => Promise<any>;
+  getUserResources: (uid: number, page: number, limit: number) => Promise<any>;
+  getFavoriteFolders: (uid: number) => Promise<any>;
 }
 
 declare global {

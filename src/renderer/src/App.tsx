@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Home as HomeIcon, Search, Library as LibraryIcon, User, Settings, Heart as HeartIcon } from 'lucide-react';
+import { Home as HomeIcon, Search, Library as LibraryIcon, Settings, Heart as HeartIcon } from 'lucide-react';
 import { Home } from './components/Home';
 import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
 import { LoginModal } from './components/LoginModal';
+import ProfileView from './components/ProfileView';
+import SidebarProfile from './components/SidebarProfile';
 import { useTouchGalStore } from './store/useTouchGalStore';
 
 const App: React.FC = () => {
@@ -15,7 +17,6 @@ const App: React.FC = () => {
     { id: 'search', icon: <Search size={24} />, label: 'Search' },
     { id: 'library', icon: <LibraryIcon size={24} />, label: 'Library' },
     { id: 'favorites', icon: <HeartIcon size={24} />, label: 'Favorites' },
-    { id: 'profile', icon: <User size={24} />, label: 'Profile' },
   ];
 
   return (
@@ -41,6 +42,10 @@ const App: React.FC = () => {
         </div>
 
         <div className="nav-footer">
+          <SidebarProfile 
+            active={activeTab === 'profile'} 
+            onClick={() => setActiveTab('profile')} 
+          />
           <div className="nav-item">
             <div className="icon-wrapper">
               <Settings size={24} />
@@ -63,7 +68,7 @@ const App: React.FC = () => {
           {activeTab === 'search' && <Home />}
           {activeTab === 'library' && <Library />}
           {activeTab === 'favorites' && <Home />}
-          {activeTab === 'profile' && <div className="placeholder">Profile view coming soon...</div>}
+          {activeTab === 'profile' && <ProfileView />}
         </section>
       </main>
 
