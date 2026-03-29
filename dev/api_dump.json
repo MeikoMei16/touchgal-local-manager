@@ -1,0 +1,179 @@
+{
+  "galgames": [
+    {
+      "id": 13830,
+      "uniqueId": "74aed2b4",
+      "name": "誰ソ彼のシェイプシフター",
+      "banner": "https://cloud.touchgaloss.com/patch/13830/banner/banner.avif",
+      "view": 411,
+      "download": 31,
+      "type": [
+        "pc",
+        "row",
+        "chinese",
+        "patch"
+      ],
+      "language": [
+        "ja",
+        "zh-Hans"
+      ],
+      "platform": [
+        "windows"
+      ],
+      "tags": [
+        "大学生主人公",
+        "主人公露过正脸",
+        "男性主人公"
+      ],
+      "created": "2026-03-28T19:15:19.351Z",
+      "_count": {
+        "favorite_folder": 3,
+        "resource": 2,
+        "comment": 0
+      },
+      "averageRating": 0
+    },
+    {
+      "id": 13829,
+      "uniqueId": "88c8fed2",
+      "name": "リルカは幾重に夜を彩る",
+      "banner": "https://cloud.touchgaloss.com/patch/13829/banner/banner.avif",
+      "view": 423,
+      "download": 50,
+      "type": [
+        "pc",
+        "row",
+        "chinese",
+        "patch"
+      ],
+      "language": [
+        "ja",
+        "zh-Hans"
+      ],
+      "platform": [
+        "windows"
+      ],
+      "tags": [
+        "多重人格的女主角",
+        "冒险游戏（ADV）",
+        "男性主人公"
+      ],
+      "created": "2026-03-28T19:08:31.421Z",
+      "_count": {
+        "favorite_folder": 9,
+        "resource": 2,
+        "comment": 0
+      },
+      "averageRating": 8
+    },
+    {
+      "id": 10356,
+      "uniqueId": "532f5205",
+      "name": "苍之彼方的四重奏：交予世界的答卷",
+      "banner": "https://cloud.touchgaloss.com/patch/10356/banner/banner.avif",
+      "view": 72238,
+      "download": 5771,
+      "type": [
+        "pc",
+        "chinese",
+        "mobile",
+        "app",
+        "emulator"
+      ],
+      "language": [
+        "zh-Hans"
+      ],
+      "platform": [
+        "windows",
+        "android",
+        "ios"
+      ],
+      "tags": [
+        "燃",
+        "王道",
+        "纯爱"
+      ],
+      "created": "2025-05-02T01:15:43.561Z",
+      "_count": {
+        "favorite_folder": 578,
+        "resource": 8,
+        "comment": 48
+      },
+      "averageRating": 9.8
+    },
+    {
+      "id": 982,
+      "uniqueId": "dc17cfff",
+      "name": "晴霁之后定是菜花盛开的好天气",
+      "banner": "https://cloud.touchgaloss.com/patch/982/banner/banner.avif",
+      "view": 36744,
+      "download": 5784,
+      "type": [
+        "mobile",
+        "emulator",
+        "chinese",
+        "pc",
+        "patch",
+        "app"
+      ],
+      "language": [
+        "zh-Hans"
+      ],
+      "platform": [
+        "android",
+        "windows",
+        "ios"
+      ],
+      "tags": [
+        "萝莉",
+        "致郁",
+        "幼驯染"
+      ],
+      "created": "2023-05-17T11:54:27.000Z",
+      "_count": {
+        "favorite_folder": 676,
+        "resource": 6,
+        "comment": 28
+      },
+      "averageRating": 7.1
+    },
+    {
+      "id": 1014,
+      "uniqueId": "843c36b7",
+      "name": "架向星空之桥",
+      "banner": "https://cloud.touchgaloss.com/patch/1014/banner/banner.avif",
+      "view": 39952,
+      "download": 5812,
+      "type": [
+        "mobile",
+        "emulator",
+        "chinese",
+        "pc",
+        "patch",
+        "other",
+        "app"
+      ],
+      "language": [
+        "zh-Hans"
+      ],
+      "platform": [
+        "android",
+        "windows",
+        "ios"
+      ],
+      "tags": [
+        "R18",
+        "纯爱",
+        "黄油"
+      ],
+      "created": "2023-01-14T06:11:19.000Z",
+      "_count": {
+        "favorite_folder": 588,
+        "resource": 4,
+        "comment": 6
+      },
+      "averageRating": 8.6
+    }
+  ],
+  "total": 4102
+}

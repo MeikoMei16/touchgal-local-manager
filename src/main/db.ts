@@ -162,6 +162,8 @@ export const upsertGame = (game: {
   averageRating?: number
   favoriteCount?: number
   resourceCount?: number
+  viewCount?: number
+  downloadCount?: number
   alias?: string[]
 }) => {
   const db = getDb()
@@ -172,6 +174,7 @@ export const upsertGame = (game: {
       name = excluded.name,
       banner_url = excluded.banner_url,
       avg_rating = excluded.avg_rating,
+      view_count = excluded.view_count,
       download_count = excluded.download_count,
       local_updated_at = CURRENT_TIMESTAMP
   `)
@@ -182,8 +185,8 @@ export const upsertGame = (game: {
     game.name,
     game.banner ?? null,
     game.averageRating ?? 0,
-    game.favoriteCount ?? 0,
-    game.resourceCount ?? 0
+    game.viewCount ?? 0,
+    game.downloadCount ?? 0
   )
 
   // Sync Aliases

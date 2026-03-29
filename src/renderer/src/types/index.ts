@@ -12,6 +12,8 @@ export interface TouchGalResource {
   favoriteCount: number;
   resourceCount: number;
   commentCount: number;
+  viewCount: number;
+  downloadCount: number;
   ratingSummary: {
     average: number;
     count: number;

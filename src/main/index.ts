@@ -49,6 +49,8 @@ interface RawResource {
   steamId?: string | number | null
   steam_id?: string | number | null
   introduction?: string | null
+  download?: number
+  view?: number
   _count?: RawCount | null
   contentLimit?: string | null
   ratingSummary?: {
@@ -91,45 +93,45 @@ const extractTags = (resource: RawResource): string[] => {
     .filter((tag): tag is string => Boolean(tag))
 }
 
-const normalizeResource = (resource: RawResource) => {
-  const counts = resource._count ?? {}
-  const platforms = asArray(resource.platform)
-  const languages = asArray(resource.language)
+const normalizeResource = (resource: any) => {
+  const raw = resource as any
+  const counts = raw._count ?? {}
+  
+  // Highly Aggressive Stats Mapping for Home/List/Search
+  const viewCount = raw.view ?? raw.view_count ?? raw.visit ?? raw.views ?? 0
+  const downloadCount = raw.download ?? raw.download_count ?? raw.downloads ?? 0
+  const favoriteCount = counts.favorite_folder ?? raw.favorite_count ?? 0
+  const commentCount = counts.comment ?? raw.comment_count ?? 0
+  const resourceCount = counts.resource ?? raw.resource_count ?? 0
+
   const company =
-    typeof resource.company === 'string'
-      ? resource.company
-      : Array.isArray(resource.company)
-        ? resource.company.map((item) => item?.name).filter(Boolean).join(', ')
+    typeof raw.company === 'string'
+      ? raw.company
+      : Array.isArray(raw.company)
+        ? raw.company.map((item: any) => item?.name).filter(Boolean).join(', ')
         : null
 
+  // Format date safely
+  let releasedDate = raw.releasedDate ?? raw.released ?? null
+  if (raw.created && !releasedDate) {
+    releasedDate = new Date(raw.created).toLocaleDateString()
+  }
+
   return {
-    id: resource.id ?? 0,
-    uniqueId: resource.uniqueId ?? resource.unique_id ?? '',
-    name: resource.name ?? 'Unknown title',
-    banner: resource.banner ?? null,
-    platform: platforms.join(', '),
-    language: languages.join(', '),
-    releasedDate: resource.releasedDate ?? resource.released ?? null,
-    averageRating: resource.averageRating ?? resource.rating_stat?.avg_overall ?? 0,
-    tags: extractTags(resource),
-    alias: resource.alias ?? [],
-    favoriteCount: counts.favorite_folder ?? 0,
-    resourceCount: counts.resource ?? 0,
-    commentCount: counts.comment ?? 0,
-    introduction: resource.introduction ?? null,
+    ...raw, // FULL PASSTHROUGH for rendering robustness
+    id: raw.id ?? 0,
+    uniqueId: raw.uniqueId ?? raw.unique_id ?? '',
+    name: raw.name ?? 'Unknown title',
+    banner: raw.banner ?? null,
+    averageRating: raw.averageRating ?? raw.ratingSummary?.average ?? raw.rating_stat?.avg_overall ?? 0,
+    tags: extractTags(raw),
+    viewCount,
+    downloadCount,
+    favoriteCount,
+    commentCount,
+    resourceCount,
+    releasedDate,
     company,
-    vndbId: resource.vndbId ?? resource.vndb_id ?? null,
-    bangumiId: resource.bangumiId ?? resource.bangumi_id ?? null,
-    steamId: resource.steamId != null ? String(resource.steamId) : resource.steam_id != null ? String(resource.steam_id) : null,
-    contentLimit: resource.contentLimit ?? null,
-    ratingSummary: resource.ratingSummary ?? {
-      average: 0,
-      count: 0,
-      histogram: Array.from({ length: 10 }, (_, i) => ({ score: i + 1, count: 0 })),
-      recommend: { strong_no: 0, no: 0, neutral: 0, yes: 0, strong_yes: 0 }
-    },
-    screenshots: resource.fullScreenshotUrls ?? [],
-    pvUrl: resource.pvVideoUrl ?? null,
   }
 }
 
@@ -281,7 +283,29 @@ ipcMain.handle('tag-folder', (_event, folderPath: string, id: string) => {
   }
 })
 
-ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number, query: Record<string, unknown>) => {
+ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number, query: any) => {
+  // Advanced Year Logic Translation
+  let yearArray = ['all'];
+  if (query.yearValue && query.yearOperator) {
+    const year = parseInt(query.yearValue);
+    const op = query.yearOperator;
+    const currentYear = new Date().getFullYear();
+    
+    if (op === '=') {
+      yearArray = [String(year)];
+    } else if (op === '>=') {
+      yearArray = Array.from({ length: (currentYear + 2) - year }, (_, i) => String(year + i));
+    } else if (op === '<=') {
+      const startYear = 1995;
+      yearArray = Array.from({ length: year - startYear + 1 }, (_, i) => String(startYear + i));
+    } else if (op === '>') {
+      yearArray = Array.from({ length: (currentYear + 2) - (year + 1) }, (_, i) => String(year + 1 + i));
+    } else if (op === '<') {
+      const startYear = 1995;
+      yearArray = Array.from({ length: year - startYear }, (_, i) => String(startYear + i));
+    }
+  }
+
   const response = await API_CLIENT.get('/galgame', {
     params: {
       page,
@@ -291,10 +315,11 @@ ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number,
       selectedPlatform: query.selectedPlatform ?? 'all',
       sortField: query.sortField ?? 'resource_update_time',
       sortOrder: query.sortOrder ?? 'desc',
-      yearString: query.yearString ?? ['all'],
-      monthString: query.monthString ?? ['all'],
+      yearString: JSON.stringify(yearArray),
+      monthString: JSON.stringify(['all']),
       minRatingCount: query.minRatingCount ?? 0,
-      ...query,
+      minAverageRating: query.minRatingScore ?? 0,
+      minCommentCount: query.minCommentCount ?? 0
     },
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))

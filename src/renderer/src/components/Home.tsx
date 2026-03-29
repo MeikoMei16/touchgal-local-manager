@@ -3,14 +3,12 @@ import { useTouchGalStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import { SortDropdown } from './SortDropdown.tsx';
-import { Loader2, Search, ChevronLeft, ChevronRight, Settings, User, SortAsc, SortDesc } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Settings, User, SortAsc, SortDesc } from 'lucide-react';
 
 export const Home: React.FC = () => {
-  const { resources, totalResources, currentPage, isLoading, error, fetchResources, searchResources, selectResource, user, logout, setIsLoginOpen } = useTouchGalStore();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { resources, totalResources, currentPage, isLoading, error, fetchResources, selectResource, user, logout, setIsLoginOpen } = useTouchGalStore();
   const [lastQuery, setLastQuery] = useState<any>({});
   const [showFilters, setShowFilters] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [sortField, setSortField] = useState('resource_update_time');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -38,25 +36,13 @@ export const Home: React.FC = () => {
   };
 
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      fetchResources(1, { ...lastQuery, sortField, sortOrder });
-    }
-  }, [fetchResources, searchQuery, lastQuery, sortField, sortOrder]);
-
-  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim() !== '') {
-      searchResources(searchQuery, 1, { ...lastQuery, sortField, sortOrder });
-    }
-  };
+    fetchResources(1, { ...lastQuery, sortField, sortOrder });
+  }, [fetchResources, lastQuery, sortField, sortOrder]);
 
   const handleFilterChange = (filters: any) => {
     const newQuery = { ...lastQuery, ...filters };
     setLastQuery(newQuery);
-    if (searchQuery.trim() !== '') {
-      searchResources(searchQuery, 1, { ...newQuery, sortField, sortOrder });
-    } else {
-      fetchResources(1, { ...newQuery, sortField, sortOrder });
-    }
+    fetchResources(1, { ...newQuery, sortField, sortOrder });
   };
 
   const sortOptions = [
@@ -71,22 +57,12 @@ export const Home: React.FC = () => {
   const updateSort = (field: string, order: string) => {
     setSortField(field);
     setSortOrder(order);
-    const query = { ...lastQuery, sortField: field, sortOrder: order };
-    if (searchQuery.trim() !== '') {
-      searchResources(searchQuery, 1, query);
-    } else {
-      fetchResources(1, query);
-    }
+    fetchResources(1, { ...lastQuery, sortField: field, sortOrder: order });
   };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
-    const query = { ...lastQuery, sortField, sortOrder };
-    if (searchQuery.trim() !== '') {
-      searchResources(searchQuery, page, query);
-    } else {
-      fetchResources(page, query);
-    }
+    fetchResources(page, { ...lastQuery, sortField, sortOrder });
   };
 
   if (error) {
@@ -120,20 +96,6 @@ export const Home: React.FC = () => {
         </div>
         
         <div className="action-group">
-          {showSearch && (
-            <input 
-              type="text" 
-              className="search-input-pill" 
-              placeholder="搜索资源..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearch}
-              autoFocus
-            />
-          )}
-          <button className={`icon-pill-circle ${showSearch ? 'active' : ''}`} onClick={() => setShowSearch(!showSearch)}>
-            <Search size={20} />
-          </button>
           <button className={`icon-pill high-screen ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
             <Settings size={18} />
             <span>高级筛选</span>
@@ -213,7 +175,7 @@ export const Home: React.FC = () => {
       <style>{`
         .home-container { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 16px; padding-bottom: 60px; background-color: #f8fafc; }
         
-        .top-action-bar { display: flex; justify-content: space-between; align-items: center; margin: 0 auto 0 auto; width: 100%; max-width: 1100px; padding: 0 12px; }
+        .top-action-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 4px; margin-bottom: 8px; }
         .pill-group { display: flex; align-items: center; gap: 6px; }
         .action-group { display: flex; align-items: center; gap: 6px; }
 
@@ -224,13 +186,6 @@ export const Home: React.FC = () => {
         .icon-pill { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 32px; border: none; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; background: #e2e8f0; color: #1e293b; }
         .icon-pill.blue { background: #e0f2fe; color: #0369a1; }
         .icon-pill.high-screen.active { background: #bae6fd; border: 1.5px solid #0369a1; }
-        .icon-pill-circle.active { background: #bae6fd; border: 1.5px solid #0369a1; }
-        .icon-pill-circle { width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0369a1; border: none; cursor: pointer; transition: all 0.2s; }
-        
-        .search-input-pill { background: #fff; border: 1.5px solid #cbd5e1; border-radius: 22px; padding: 0 16px; height: 44px; width: 220px; font-size: 14px; font-weight: 600; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .search-input-pill:focus { border-color: #0369a1; box-shadow: 0 4px 12px rgba(3, 105, 161, 0.1); }
-        
-        .arrow { position: absolute; right: 12px; pointer-events: none; color: #64748b; }
         
         .resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
         .loading-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; color: #0369a1; gap: 16px; font-weight: 600; font-size: 16px; }

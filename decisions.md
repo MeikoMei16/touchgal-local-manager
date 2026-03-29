@@ -69,6 +69,12 @@ electron-builder.json5    → Packaging config
 
 > Cross-compilation not supported. Build on the target platform.
 
+### 4. API Separation (Discovery)
+- **Observation**: The "Advanced Filter" logic is split between two distinct API behaviors:
+    - **No Keyword**: Hits `GET /api/galgame`. Filters are passed as URL query parameters.
+    - **With Keyword**: Hits `POST /api/search`. Filters are passed in the JSON request body.
+- **Implication**: UI changes to filters must ensure compatible data structures are sent to both endpoints, or unified into a single search-based flow if advanced logic (like ranges) is required.
+
 ---
 
-*Last update: 2026-03-28*
+*Last update: 2026-03-29*
