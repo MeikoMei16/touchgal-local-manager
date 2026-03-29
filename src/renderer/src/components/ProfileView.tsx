@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTouchGalStore } from '../store/useTouchGalStore';
-import { MessageSquare, Star, Package, Heart, Coins, Users } from 'lucide-react';
+import { MessageSquare, Star, Package, Heart, Coins, Users, User } from 'lucide-react';
 
 const ProfileView: React.FC = () => {
   const { 
@@ -29,10 +29,18 @@ const ProfileView: React.FC = () => {
   }, [user, activeTab, fetchUserActivity]);
 
   if (!user) {
+    const { setIsLoginOpen } = useTouchGalStore();
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-500">
         <Users size={64} className="mb-4 opacity-20" />
-        <p className="text-xl font-bold">Please log in to view your profile</p>
+        <p className="text-xl font-bold mb-6">Please log in to view your profile</p>
+        <button 
+          onClick={() => setIsLoginOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+        >
+          <User size={20} />
+          <span>Login Now</span>
+        </button>
       </div>
     );
   }

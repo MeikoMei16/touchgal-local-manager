@@ -27,11 +27,10 @@ export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!username || !password) return;
     
     // First, fetch captcha to see if it's a challenge or legacy
     await fetchCaptcha();
-    
-    // The fetchCaptcha call will update store.captchaChallenge or store.captchaUrl
   };
 
   // This effect handles jumping to challenge if it's returned

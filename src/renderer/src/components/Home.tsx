@@ -3,12 +3,13 @@ import { useTouchGalStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import { SortDropdown } from './SortDropdown.tsx';
-import { Loader2, ChevronLeft, ChevronRight, Settings, User, SortAsc, SortDesc, X } from 'lucide-react';
+import { UserMenu } from './UserMenu.tsx';
+import { Loader2, ChevronLeft, ChevronRight, Settings, SortAsc, SortDesc, X } from 'lucide-react';
 
 export const Home: React.FC = () => {
   const { 
     resources, totalResources, currentPage, isLoading, error, 
-    fetchResources, selectResource, user, logout, setIsLoginOpen,
+    fetchResources, selectResource,
     selectedTags, removeTagFilter, clearTags
   } = useTouchGalStore();
   const [lastQuery, setLastQuery] = useState<any>({});
@@ -104,18 +105,8 @@ export const Home: React.FC = () => {
             <Settings size={18} />
             <span>高级筛选</span>
           </button>
-
-          {user ? (
-            <button className="icon-pill blue" onClick={logout}>
-              <User size={18} />
-              <span>{user.name || '已登录'}</span>
-            </button>
-          ) : (
-            <button className="icon-pill" onClick={() => setIsLoginOpen(true)}>
-              <User size={18} />
-              <span>登录</span>
-            </button>
-          )}
+          
+          <UserMenu />
         </div>
       </div>
 
