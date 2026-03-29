@@ -1,21 +1,37 @@
-import React from 'react';
-import { ChevronDown, Calendar, Star, MessageSquare, Users, Laptop } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  ChevronDown, Calendar, Star, MessageSquare, Users, 
+  Laptop, Shield, ShieldCheck, AlertTriangle, Tag, X, Plus, Search
+} from 'lucide-react';
 
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
   isLoading?: boolean;
 }
 
-export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, isLoading }) => {
-  const [filters, setFilters] = React.useState({
-    selectedPlatform: 'all',
-    yearOperator: '>=',
-    yearValue: '2020',
-    minRatingCount: 10,
-    minRatingScore: 0,
-    minCommentCount: 0
-  });
+type NsfwMode = 'safe' | 'nsfw' | 'all';
+type Operator = '=' | '>=' | '<=' | '>' | '<';
 
+export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
+  // --- State ---
+  const [nsfwMode, setNsfwMode] = useState<NsfwMode>('safe');
+  const [platform, setPlatform] = useState('all');
+  const [isPlatformOpen, setIsPlatformOpen] = useState(false);
+  const [yearInput, setYearInput] = useState('');
+  const [activeOp, setActiveOp] = useState<Operator>('>=');
+  const [isOpMenuOpen, setIsOpMenuOpen] = useState(false);
+  const [yearConstraints, setYearConstraints] = useState<Array<{op: string, val: number}>>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
+  // Stats
+  const [minRatingCount, setMinRatingCount] = useState(10);
+  const [minRatingScore, setMinRatingScore] = useState(0);
+  const [minCommentCount, setMinCommentCount] = useState(0);
+
+  const platformRef = useRef<HTMLDivElement>(null);
+  const opMenuRef = useRef<HTMLDivElement>(null);
+
+  // --- Constants ---
   const platforms = [
     { label: '全部平台', value: 'all' },
     { label: 'Windows', value: 'windows' },
@@ -26,207 +42,249 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, isLoading 
   ];
 
   const operators = [
-    { label: '等于 (=)', value: '=' },
-    { label: '晚于 (>=)', value: '>=' },
-    { label: '早于 (<=)', value: '<=' },
-    { label: '严格晚于 (>)', value: '>' },
-    { label: '严格早于 (<)', value: '<' }
+    { label: '精确等于 (=)', value: '=' },
+    { label: '不早于 (>=)', value: '>=' },
+    { label: '不晚于 (<=)', value: '<=' },
+    { label: '晚于 (>)', value: '>' },
+    { label: '早于 (<)', value: '<' }
   ];
 
-  const handleChange = (key: string, value: any) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-    onFilterChange(newFilters);
+  // --- Click Outside ---
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (platformRef.current && !platformRef.current.contains(event.target as Node)) setIsPlatformOpen(false);
+      if (opMenuRef.current && !opMenuRef.current.contains(event.target as Node)) setIsOpMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // --- Helpers ---
+  const emitChange = (overrides: any = {}) => {
+    onFilterChange({
+      nsfwMode: overrides.nsfwMode ?? nsfwMode,
+      selectedPlatform: overrides.selectedPlatform ?? platform,
+      yearConstraints: overrides.yearConstraints ?? yearConstraints,
+      minRatingCount: overrides.minRatingCount ?? minRatingCount,
+      minRatingScore: overrides.minRatingScore ?? minRatingScore,
+      minCommentCount: overrides.minCommentCount ?? minCommentCount,
+      selectedTags: overrides.selectedTags ?? selectedTags,
+      ...overrides
+    });
+  };
+
+  const handleYearEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && yearInput.trim()) {
+      const val = parseInt(yearInput.trim());
+      if (!isNaN(val)) {
+        const newConstraints = [...yearConstraints, { op: activeOp, val }];
+        setYearConstraints(newConstraints);
+        setYearInput('');
+        emitChange({ yearConstraints: newConstraints });
+      }
+    }
+  };
+
+  const removeYearConstraint = (index: number) => {
+    const newConstraints = yearConstraints.filter((_, i) => i !== index);
+    setYearConstraints(newConstraints);
+    emitChange({ yearConstraints: newConstraints });
+  };
+
+  const toggleNsfwMode = () => {
+    const modes: NsfwMode[] = ['safe', 'nsfw', 'all'];
+    const nextIdx = (modes.indexOf(nsfwMode) + 1) % modes.length;
+    const nextMode = modes[nextIdx];
+    setNsfwMode(nextMode);
+    emitChange({ nsfwMode: nextMode });
+  };
+
+  const getNsfwContent = () => {
+    switch (nsfwMode) {
+      case 'safe': return { icon: <ShieldCheck size={18} />, label: '仅限全年龄', class: 'bg-green-50 border-green-200 text-green-700' };
+      case 'nsfw': return { icon: <AlertTriangle size={18} />, label: '仅限 R18', class: 'bg-red-50 border-red-200 text-red-700' };
+      case 'all': return { icon: <Shield size={18} />, label: '混合内容', class: 'bg-slate-50 border-slate-200 text-slate-700' };
+    }
+  };
+
+  const removeTag = (tag: string) => {
+     const newTags = selectedTags.filter(t => t !== tag);
+     setSelectedTags(newTags);
+     emitChange({ selectedTags: newTags });
   };
 
   return (
-    <div className="advanced-filter-pane-modern">
-      <div className="filter-row-top">
-         {/* Platform */}
-         <div className="filter-pill-box">
-          <div className="pill-icon"><Laptop size={16} /></div>
-          <span className="pill-label">平台</span>
-          <select value={filters.selectedPlatform} onChange={(e) => handleChange('selectedPlatform', e.target.value)} disabled={isLoading}>
-             {platforms.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
-          <ChevronDown size={14} className="pill-arrow" />
-        </div>
+    <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-100/50 mb-8 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        
+        {/* Left Column: Core Filters */}
+        <div className="flex flex-col gap-8">
+          
+          {/* NSFW & Platform Row */}
+          <div className="flex items-center gap-4">
+            <button 
+              className={`flex items-center gap-3 h-12 px-6 rounded-full border-2 font-bold text-sm transition-all hover:-translate-y-0.5 ${getNsfwContent().class}`}
+              onClick={toggleNsfwMode}
+            >
+              {getNsfwContent().icon}
+              <span>{getNsfwContent().label}</span>
+            </button>
 
-        {/* Year Comparison */}
-        <div className="filter-pill-box year-box">
-          <div className="pill-icon"><Calendar size={16} /></div>
-          <span className="pill-label">发售年份</span>
-          <div className="pill-input-group">
-            <select value={filters.yearOperator} onChange={(e) => handleChange('yearOperator', e.target.value)} disabled={isLoading}>
-               {operators.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <input 
-              type="number" 
-              className="year-input" 
-              value={filters.yearValue} 
-              onChange={(e) => handleChange('yearValue', e.target.value)} 
-              disabled={isLoading}
-              min="1980"
-              max="2030"
-              placeholder="2024"
-            />
+            <div className="relative flex-1" ref={platformRef}>
+              <button 
+                className={`flex items-center justify-between w-full h-12 px-6 rounded-full border-2 border-slate-200 bg-white font-bold text-slate-600 transition-all hover:border-slate-400 ${platform !== 'all' ? 'border-blue-400 bg-blue-50 text-blue-700' : ''}`}
+                onClick={() => setIsPlatformOpen(!isPlatformOpen)}
+              >
+                <div className="flex items-center gap-3">
+                  <Laptop size={18} />
+                  <span>{platforms.find(p => p.value === platform)?.label}</span>
+                </div>
+                <ChevronDown size={16} className={`transition-transform duration-300 ${isPlatformOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isPlatformOpen && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-2 p-2 bg-white border border-slate-200 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-2">
+                  {platforms.map(p => (
+                    <div 
+                      key={p.value} 
+                      className={`px-4 py-2.5 rounded-xl cursor-pointer text-sm font-semibold transition-colors ${platform === p.value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                      onClick={() => { setPlatform(p.value); setIsPlatformOpen(false); emitChange({ selectedPlatform: p.value }); }}
+                    >
+                      {p.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Year Section */}
+          <div className="flex flex-col gap-3">
+             <div className="flex items-center gap-2 px-1">
+                <Calendar size={18} className="text-slate-400" />
+                <span className="text-sm font-extrabold text-slate-500 uppercase tracking-widest">发行年份筛选</span>
+             </div>
+             <div className="flex bg-slate-50 border-2 border-slate-200 rounded-full p-1 focus-within:border-blue-500 transition-all">
+                <div className="relative" ref={opMenuRef}>
+                   <button 
+                      className="flex items-center justify-center gap-2 h-10 min-w-[110px] bg-white border border-slate-200 rounded-full font-bold text-sm text-blue-700 shadow-sm hover:bg-white hover:border-blue-300 transition-all"
+                      onClick={() => setIsOpMenuOpen(!isOpMenuOpen)}
+                   >
+                      <span>{operators.find(o => o.value === activeOp)?.label}</span>
+                      <ChevronDown size={14} />
+                   </button>
+                   {isOpMenuOpen && (
+                      <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl p-1 z-50 min-w-[140px]">
+                        {operators.map(op => (
+                          <div 
+                            key={op.value} 
+                            className={`px-4 py-2 rounded-lg cursor-pointer font-bold text-xs transition-colors ${activeOp === op.value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => { setActiveOp(op.value as Operator); setIsOpMenuOpen(false); }}
+                          >
+                            {op.label}
+                          </div>
+                        ))}
+                      </div>
+                   )}
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="输入年份并按回车..." 
+                  className="flex-1 bg-transparent px-4 font-bold text-slate-700 placeholder:text-slate-400 outline-none"
+                  value={yearInput}
+                  onChange={e => setYearInput(e.target.value)}
+                  onKeyDown={handleYearEnter}
+                />
+             </div>
+              <div className="flex flex-wrap gap-2 min-h-[32px] px-1 mt-1">
+                {yearConstraints.length > 0 ? (
+                  yearConstraints.map((c, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 border border-blue-200 rounded-lg text-xs font-black text-blue-800 shadow-sm animate-in zoom-in-95">
+                      <span className="opacity-60">{operators.find(o => o.value === c.op)?.label.split(' ')[0]}</span>
+                      <span>{c.val}</span>
+                      <X size={14} className="cursor-pointer hover:text-red-600 ml-1" onClick={() => removeYearConstraint(i)} />
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs font-semibold text-slate-400 italic">尚未添加年份约束条件...</span>
+                )}
+             </div>
+          </div>
+
+          {/* Stats Section */}
+          <div className="grid grid-cols-3 gap-4 mt-2">
+            {[
+              { label: '最低评分人数', icon: <Users size={16} />, val: minRatingCount, set: setMinRatingCount },
+              { label: '最低资源评分', icon: <Star size={16} />, val: minRatingScore, set: setMinRatingScore, step: 0.1 },
+              { label: '最低评论数量', icon: <MessageSquare size={16} />, val: minCommentCount, set: setMinCommentCount }
+            ].map((stat, idx) => (
+              <div key={idx} className="relative group">
+                <div className="flex items-center justify-center gap-2 h-14 bg-slate-50 border-2 border-slate-200 rounded-3xl transition-all group-focus-within:border-blue-500 group-focus-within:bg-white">
+                  <span className="absolute -top-2.5 left-4 bg-white px-2 text-[10px] font-black text-slate-400 uppercase tracking-tighter group-focus-within:text-blue-600">{stat.label}</span>
+                  <div className="text-slate-400 group-focus-within:text-blue-500">{stat.icon}</div>
+                  <input 
+                    type="number"
+                    step={stat.step || 1}
+                    className="w-16 bg-transparent text-center font-black text-slate-700 outline-none"
+                    value={stat.val}
+                    onChange={e => stat.set(parseFloat(e.target.value) || 0)}
+                    onKeyDown={e => e.key === 'Enter' && emitChange()}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+
+        {/* Right Column: Tag Management Area (The 50% whitespace usage) */}
+        <div className="flex flex-col bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200 p-8 min-h-[320px] relative overflow-hidden">
+          
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-blue-600">
+                <Tag size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800">标签检索</h3>
+                <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">Advanced Tag Selection</p>
+              </div>
+            </div>
+            
+            <button className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95">
+               <Plus size={18} />
+               <span>添加标签</span>
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center items-center">
+             {selectedTags.length > 0 ? (
+                <div className="flex flex-wrap content-start gap-3 w-full">
+                   {selectedTags.map(tag => (
+                      <div key={tag} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                         <span className="text-sm font-bold text-slate-700">{tag}</span>
+                         <X size={16} className="text-slate-400 cursor-pointer hover:text-red-500" onClick={() => removeTag(tag)} />
+                      </div>
+                   ))}
+                </div>
+             ) : (
+                <div className="flex flex-col items-center gap-4 text-center opacity-40 group hover:opacity-100 transition-opacity">
+                   <div className="w-20 h-20 bg-white rounded-[32px] border border-slate-200 flex items-center justify-center text-slate-300 shadow-sm">
+                      <Search size={40} />
+                   </div>
+                   <div className="max-w-[240px]">
+                      <p className="text-sm font-extrabold text-slate-500">此区域用于管理您关注的标签内容</p>
+                      <p className="text-xs font-semibold text-slate-400 mt-1">目前暂未选择任何标签进行过滤...</p>
+                   </div>
+                </div>
+             )}
+          </div>
+          
+          {/* Subtle Background Pattern */}
+          <div className="absolute -bottom-8 -right-8 opacity-[0.03] select-none pointer-events-none">
+             <Tag size={200} />
+          </div>
+        </div>
+
       </div>
-
-      <div className="filter-row-bottom">
-        {/* Rating Count */}
-        <div className="filter-pill-box">
-          <div className="pill-icon"><Users size={16} /></div>
-          <span className="pill-label">评分人数 ≥</span>
-          <input 
-            type="number" 
-            value={filters.minRatingCount} 
-            onChange={(e) => handleChange('minRatingCount', parseInt(e.target.value) || 0)} 
-            disabled={isLoading}
-            placeholder="10"
-          />
-        </div>
-
-        {/* Rating Score */}
-        <div className="filter-pill-box">
-          <div className="pill-icon"><Star size={16} /></div>
-          <span className="pill-label">最低评分 ≥</span>
-          <input 
-            type="number" 
-            step="0.1"
-            min="0"
-            max="10"
-            value={filters.minRatingScore} 
-            onChange={(e) => handleChange('minRatingScore', parseFloat(e.target.value) || 0)} 
-            disabled={isLoading}
-            placeholder="0.0"
-          />
-        </div>
-
-        {/* Comment Count */}
-        <div className="filter-pill-box">
-          <div className="pill-icon"><MessageSquare size={16} /></div>
-          <span className="pill-label">最低评论 ≥</span>
-          <input 
-            type="number" 
-            value={filters.minCommentCount} 
-            onChange={(e) => handleChange('minCommentCount', parseInt(e.target.value) || 0)} 
-            disabled={isLoading}
-            placeholder="0"
-          />
-        </div>
-      </div>
-
-      <style>{`
-        .advanced-filter-pane-modern {
-          background: #ffffff;
-          padding: 24px;
-          border-radius: 32px;
-          border: 1.5px solid #e2e8f0;
-          margin-bottom: 24px;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .filter-row-top, .filter-row-bottom {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 12px;
-        }
-
-        .filter-pill-box {
-          flex: 1;
-          min-width: 180px;
-          position: relative;
-          background: #f8fafc;
-          border: 1.5px solid #e2e8f0;
-          border-radius: 20px;
-          height: 52px;
-          display: flex;
-          align-items: center;
-          padding: 0 16px 0 12px;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .filter-pill-box:focus-within {
-          border-color: #0369a1;
-          background: #fff;
-          box-shadow: 0 0 0 4px rgba(3, 105, 161, 0.1);
-        }
-
-        .pill-icon {
-          color: #64748b;
-          margin-right: 10px;
-          display: flex;
-          align-items: center;
-        }
-
-        .pill-label {
-          position: absolute;
-          top: -9px;
-          left: 14px;
-          background: #fff;
-          padding: 0 6px;
-          font-size: 11px;
-          font-weight: 800;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          pointer-events: none;
-        }
-
-        .filter-pill-box select, .filter-pill-box input {
-          width: 100%;
-          border: none;
-          background: transparent;
-          outline: none;
-          font-size: 14px;
-          font-weight: 700;
-          color: #1e293b;
-          appearance: none;
-          cursor: pointer;
-        }
-
-        .pill-input-group {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          gap: 8px;
-        }
-
-        .pill-input-group select {
-          flex: 0 0 90px;
-          color: #0369a1;
-        }
-
-        .year-input {
-          flex: 1;
-          border-left: 1px solid #e2e8f0 !important;
-          padding-left: 12px !important;
-        }
-
-        .year-box {
-          flex: 1.5;
-        }
-
-        .pill-arrow {
-          position: absolute;
-          right: 14px;
-          pointer-events: none;
-          color: #94a3b8;
-        }
-
-        input::-webkit-inner-spin-button {
-          display: none;
-        }
-
-        @media (max-width: 768px) {
-          .filter-pill-box { min-width: 100%; }
-        }
-      `}</style>
     </div>
   );
 };

@@ -1,34 +1,33 @@
-import { TouchGalFeedResponse, TouchGalResource, TouchGalDetail } from '../types';
+import { 
+  TouchGalFeedResponseSchema, 
+  TouchGalDetailSchema, 
+  PatchIntroductionSchema 
+} from '../schemas';
 
 /**
  * TouchGalClient - Renderer Side
  * Now redirects all calls to the Main Process via window.api
- * This completely bypasses CORS restrictions.
+ * This completely bypasses CORS restrictions and adds Zod validation.
  */
 export const TouchGalClient = {
   fetchGalgameResources: async (page = 1, limit = 24, query = {}) => {
-    return await window.api.fetchResources(page, limit, query) as TouchGalFeedResponse;
+    const raw = await window.api.fetchResources(page, limit, query);
+    return TouchGalFeedResponseSchema.parse(raw);
   },
 
   searchResources: async (keyword: string, page = 1, limit = 20, options?: Record<string, any>) => {
-    return await window.api.searchResources(keyword, page, limit, options) as { list: TouchGalResource[], total: number };
+    const raw = await window.api.searchResources(keyword, page, limit, options);
+    return TouchGalFeedResponseSchema.parse(raw);
   },
 
   getPatchDetail: async (uniqueId: string) => {
-    return await window.api.getPatchDetail(uniqueId) as TouchGalDetail;
+    const raw = await window.api.getPatchDetail(uniqueId);
+    return TouchGalDetailSchema.parse(raw);
   },
 
   getPatchIntroduction: async (uniqueId: string) => {
-    return await window.api.getPatchIntroduction(uniqueId) as {
-      introduction: string | null;
-      releasedDate: string | null;
-      alias: string[];
-      tags: string[];
-      company: string | null;
-      vndbId: string | null;
-      bangumiId: number | null;
-      steamId: string | null;
-    };
+    const raw = await window.api.getPatchIntroduction(uniqueId);
+    return PatchIntroductionSchema.parse(raw);
   },
 
   fetchCaptcha: async () => {

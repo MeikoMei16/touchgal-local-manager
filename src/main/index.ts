@@ -284,43 +284,67 @@ ipcMain.handle('tag-folder', (_event, folderPath: string, id: string) => {
 })
 
 ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number, query: any) => {
-  // Advanced Year Logic Translation
-  let yearArray = ['all'];
-  if (query.yearValue && query.yearOperator) {
-    const year = parseInt(query.yearValue);
-    const op = query.yearOperator;
+  // Advanced Year Logic Translation (Intersection of all constraints)
+  let yearArray: string[] = ['all'];
+  if (query.yearConstraints && query.yearConstraints.length > 0) {
     const currentYear = new Date().getFullYear();
+    const startYear = 1995;
+    const endYear = currentYear + 2;
     
-    if (op === '=') {
-      yearArray = [String(year)];
-    } else if (op === '>=') {
-      yearArray = Array.from({ length: (currentYear + 2) - year }, (_, i) => String(year + i));
-    } else if (op === '<=') {
-      const startYear = 1995;
-      yearArray = Array.from({ length: year - startYear + 1 }, (_, i) => String(startYear + i));
-    } else if (op === '>') {
-      yearArray = Array.from({ length: (currentYear + 2) - (year + 1) }, (_, i) => String(year + 1 + i));
-    } else if (op === '<') {
-      const startYear = 1995;
-      yearArray = Array.from({ length: year - startYear }, (_, i) => String(startYear + i));
+    // Generate full range
+    let years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+    
+    // Apply every constraint
+    for (const c of query.yearConstraints as Array<{op: string, val: number}>) {
+      if (c.op === '=') years = years.filter(y => y === c.val);
+      else if (c.op === '>=') years = years.filter(y => y >= c.val);
+      else if (c.op === '<=') years = years.filter(y => y <= c.val);
+      else if (c.op === '>') years = years.filter(y => y > c.val);
+      else if (c.op === '<') years = years.filter(y => y < c.val);
+    }
+    
+    yearArray = years.map(String);
+    if (yearArray.length === 0) yearArray = ['none']; // Ensure it doesn't default back to 'all'
+  }
+
+  // Check if this is an "Advanced Search" (any filter beyond basic sorting)
+  const isAdvanced = !!(
+    query.nsfwMode || 
+    query.selectedLanguage || 
+    query.selectedPlatform || 
+    (query.yearConstraints && query.yearConstraints.length > 0) ||
+    query.minRatingScore > 0 ||
+    query.minRatingCount > 0 ||
+    query.minCommentCount > 0
+  );
+
+  const apiParams: any = {
+    page,
+    limit,
+    selectedType: 'all',
+    selectedLanguage: query.selectedLanguage ?? 'all',
+    selectedPlatform: query.selectedPlatform ?? 'all',
+    // Always default to no-nsfw if not specified to satisfy user preference
+    selectedContentLimit: query.nsfwMode === 'nsfw' ? 'nsfw-only' : (query.nsfwMode === 'all' ? 'all' : 'no-nsfw'),
+    sortField: query.sortField ?? 'resource_update_time',
+    sortOrder: query.sortOrder ?? 'desc',
+    // Always include at least 0-value stats to ensure total count alignment (171 pages / 4102 items)
+    minRatingCount: query.minRatingCount ?? 0,
+    minAverageRating: query.minRatingScore ?? 0,
+    minCommentCount: query.minCommentCount ?? 0
+  };
+
+  if (isAdvanced) {
+    if (yearArray.length > 0 && !yearArray.includes('all') && !yearArray.includes('none')) {
+      apiParams.yearString = JSON.stringify(yearArray);
     }
   }
 
+  // --- API Request Debug ---
+  console.log(`[API] ${isAdvanced ? 'ADVANCED' : 'GENERAL'} Fetching /galgame:`, apiParams);
+  
   const response = await API_CLIENT.get('/galgame', {
-    params: {
-      page,
-      limit,
-      selectedType: query.selectedType ?? 'all',
-      selectedLanguage: query.selectedLanguage ?? 'all',
-      selectedPlatform: query.selectedPlatform ?? 'all',
-      sortField: query.sortField ?? 'resource_update_time',
-      sortOrder: query.sortOrder ?? 'desc',
-      yearString: JSON.stringify(yearArray),
-      monthString: JSON.stringify(['all']),
-      minRatingCount: query.minRatingCount ?? 0,
-      minAverageRating: query.minRatingScore ?? 0,
-      minCommentCount: query.minCommentCount ?? 0
-    },
+    params: apiParams,
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
   
