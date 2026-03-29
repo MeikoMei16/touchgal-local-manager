@@ -14,6 +14,11 @@ This document persists the architectural reasoning and "rules" for the TouchGal 
 - **Data Layer**: `TouchGalClient` (`src/renderer/src/data/`) acts as the repository, proxying all calls through `window.api`.
 - **ViewModel**: Zustand store (`src/renderer/src/store/useTouchGalStore.ts`).
 
+### 3. Tailwind CSS 4 + Material 3 Design System
+- **Decision**: Adopt Tailwind CSS 4 for all UI styling, utilizing the new `@theme` configuration for Material 3 design tokens.
+- **Goal**: Standardize the visual language, eliminate manual CSS-in-JS/inline styles, and improve developer experience.
+- **Rule**: All component-level styling should use utility classes. Manual CSS is reserved for complex global utilities (e.g., glassmorphism) in `index.css`.
+
 ---
 
 ## Build Toolchain
@@ -31,6 +36,8 @@ The project uses **electron-vite** as the build system. This replaces the old `v
 | `vite` | `^7.x` | electron-vite@5 supports up to vite@7; vite@8 not yet supported |
 | `electron-vite` | `^5.0.0` | |
 | `@vitejs/plugin-react` | `^5.x` | v6 requires vite@8 |
+| `tailwindcss` | `^4.x` | Adopted for utility-first styling |
+| `@tailwindcss/vite` | `^4.x` | Integrated via Vite plugin |
 | `typescript` | `^5.8.x` | typescript-eslint@8 requires TS < 6 |
 
 ### Directory Structure

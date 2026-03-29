@@ -17,6 +17,7 @@ Electron App
 ├── Preload (contextBridge)
 │   └── index.ts         — window.api 安全桥接，最小化 API 暴露
 └── Renderer (React 19 + Vite + Zustand + Tailwind 4)
+    ├── [Styling Guide](docs/styling.md) — Design system & Material 3 tokens
     ├── components/
     │   ├── Home.tsx         — 主页列表 + 分页
     │   ├── FilterBar.tsx    — 筛选面板 (平台/年份/NSFW/标签)
@@ -24,7 +25,8 @@ Electron App
     │   ├── DetailOverlay.tsx — 详情面板 (覆盖层)
     │   ├── Library.tsx      — 本地库管理
     │   ├── LoginModal.tsx   — 登录
-    │   └── SortDropdown.tsx — 排序
+    │   ├── CaptchaChallenge.tsx — 验证码校验
+    │   └── UserMenu.tsx     — 用户菜单与状态
     ├── store/useTouchGalStore.ts — Zustand 全局状态
     ├── data/TouchGalClient.ts   — window.api 强类型封装
     ├── schemas/index.ts         — Zod 响应验证
