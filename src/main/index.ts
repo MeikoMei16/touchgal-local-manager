@@ -15,7 +15,7 @@ const API_CLIENT = axios.create({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     Referer: 'https://www.touchgal.top/',
     Origin: 'https://www.touchgal.top',
-    'Cookie': 'kun-patch-setting-store|state|data|kunNsfwEnable=all'
+    'Cookie': 'kun-patch-setting-store|state|data|kunNsfwEnable=no-nsfw'
   },
   timeout: 30000,
 })
@@ -307,44 +307,27 @@ ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number,
     if (yearArray.length === 0) yearArray = ['none']; // Ensure it doesn't default back to 'all'
   }
 
-  // Check if this is an "Advanced Search" (any filter beyond basic sorting)
-  const isAdvanced = !!(
-    query.nsfwMode || 
-    query.selectedLanguage || 
-    query.selectedPlatform || 
-    (query.yearConstraints && query.yearConstraints.length > 0) ||
-    query.minRatingScore > 0 ||
-    query.minRatingCount > 0 ||
-    query.minCommentCount > 0
-  );
-
+  // --- API Request Handling ---
   const apiParams: any = {
     page,
     limit,
-    selectedType: 'all',
+    selectedType: query.selectedType ?? 'all',
     selectedLanguage: query.selectedLanguage ?? 'all',
     selectedPlatform: query.selectedPlatform ?? 'all',
-    // Always default to no-nsfw if not specified to satisfy user preference
-    selectedContentLimit: query.nsfwMode === 'nsfw' ? 'nsfw-only' : (query.nsfwMode === 'all' ? 'all' : 'no-nsfw'),
     sortField: query.sortField ?? 'resource_update_time',
     sortOrder: query.sortOrder ?? 'desc',
-    // Always include at least 0-value stats to ensure total count alignment (171 pages / 4102 items)
-    minRatingCount: query.minRatingCount ?? 0,
-    minAverageRating: query.minRatingScore ?? 0,
-    minCommentCount: query.minCommentCount ?? 0
+    yearString: (yearArray && yearArray.length > 0) ? JSON.stringify(yearArray) : (query.yearString ?? '["all"]'),
+    monthString: query.monthString ?? '["all"]',
+    minRatingCount: query.minRatingCount ?? 0
   };
 
-  if (isAdvanced) {
-    if (yearArray.length > 0 && !yearArray.includes('all') && !yearArray.includes('none')) {
-      apiParams.yearString = JSON.stringify(yearArray);
-    }
-  }
-
-  // --- API Request Debug ---
-  console.log(`[API] ${isAdvanced ? 'ADVANCED' : 'GENERAL'} Fetching /galgame:`, apiParams);
+  const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
   
   const response = await API_CLIENT.get('/galgame', {
     params: apiParams,
+    headers: {
+      'Cookie': `kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`
+    }
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
   
@@ -354,9 +337,14 @@ ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number,
   return normalized
 })
 
-ipcMain.handle('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, unknown>) => {
+ipcMain.handle('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
   const body = { ...buildSearchBody(keyword, page, limit), ...options }
-  const response = await API_CLIENT.post('/search', body)
+  const nsfwValue = options?.nsfwMode === 'nsfw' ? 'nsfw' : (options?.nsfwMode === 'all' ? 'all' : 'sfw');
+  const response = await API_CLIENT.post('/search', body, {
+    headers: {
+      'Cookie': `kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`
+    }
+  })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
   // Delta Sync: Upsert to local DB

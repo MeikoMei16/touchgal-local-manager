@@ -24,7 +24,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   
   // Stats
-  const [minRatingCount, setMinRatingCount] = useState(10);
+  const [minRatingCount, setMinRatingCount] = useState(0);
   const [minRatingScore, setMinRatingScore] = useState(0);
   const [minCommentCount, setMinCommentCount] = useState(0);
 
