@@ -152,6 +152,22 @@ const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: numb
   total: payload.total ?? 0,
 })
 
+const normalizeIntroduction = (payload: any) => ({
+  introduction: payload.introduction ?? null,
+  releasedDate: payload.released ?? null,
+  alias: payload.alias ?? [],
+  tags: (payload.tag ?? []).map((item: any) => item?.tag?.name ?? item?.name).filter((tag: any): tag is string => Boolean(tag)),
+  company:
+    typeof payload.company === 'string'
+      ? payload.company
+      : Array.isArray(payload.company)
+        ? payload.company.map((item: any) => item?.name).filter(Boolean).join(', ') || null
+        : null,
+  vndbId: payload.vndbId ?? null,
+  bangumiId: payload.bangumiId ?? null,
+  steamId: payload.steamId != null ? String(payload.steamId) : null,
+})
+
 const buildSearchBody = (keyword: string, page: number, limit: number) => ({
   queryString: JSON.stringify([{ type: 'keyword', name: keyword }]),
   limit,
@@ -370,31 +386,14 @@ ipcMain.handle('tg-get-patch-detail', async (_event, uniqueId: string) => {
     params: { patchId: detail.id },
   })
   const downloads = normalizeDownloads(ensureValidResponse<RawDownload[]>(downloadsResponse.data))
-  return { ...detail, ...ensureValidResponse(introResponse.data), downloads }
+  const intro = normalizeIntroduction(ensureValidResponse(introResponse.data))
+  
+  return { ...detail, ...intro, downloads }
 })
 
 ipcMain.handle('tg-get-patch-introduction', async (_event, uniqueId: string) => {
   const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
-  const payload = ensureValidResponse<{
-    introduction?: string | null
-    released?: string | null
-    alias?: string[]
-    tag?: Array<{ name?: string }>
-    company?: Array<{ name?: string }>
-    vndbId?: string | null
-    bangumiId?: number | null
-    steamId?: string | number | null
-  }>(response.data)
-  return {
-    introduction: payload.introduction ?? null,
-    releasedDate: payload.released ?? null,
-    alias: payload.alias ?? [],
-    tags: (payload.tag ?? []).map((item) => item?.name).filter((tag): tag is string => Boolean(tag)),
-    company: (payload.company ?? []).map((item) => item?.name).filter(Boolean).join(', ') || null,
-    vndbId: payload.vndbId ?? null,
-    bangumiId: payload.bangumiId ?? null,
-    steamId: payload.steamId != null ? String(payload.steamId) : null,
-  }
+  return normalizeIntroduction(ensureValidResponse(response.data))
 })
 
 ipcMain.handle('tg-match-folder', async (_event, folderName: string) => {

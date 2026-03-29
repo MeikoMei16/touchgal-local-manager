@@ -60,7 +60,10 @@ export const TouchGalResourceSchema = z.object({
 
 export const TouchGalDetailSchema = TouchGalResourceSchema.extend({
   introduction: z.string().nullable().default(null),
-  company: z.string().nullable().default(null),
+  company: z.union([z.string(), z.array(z.any())]).nullable().optional().transform(val => {
+    if (Array.isArray(val)) return val.map(i => i?.name || i).filter(Boolean).join(', ');
+    return val ?? null;
+  }),
   vndbId: z.string().nullable().default(null),
   bangumiId: z.number().nullable().default(null),
   steamId: z.string().nullable().default(null),
@@ -88,7 +91,10 @@ export const PatchIntroductionSchema = z.object({
   releasedDate: z.string().nullable().default(null),
   alias: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
-  company: z.string().nullable().default(null),
+  company: z.union([z.string(), z.array(z.any())]).nullable().optional().transform(val => {
+    if (Array.isArray(val)) return val.map(i => i?.name || i).filter(Boolean).join(', ');
+    return val ?? null;
+  }),
   vndbId: z.string().nullable().default(null),
   bangumiId: z.number().nullable().default(null),
   steamId: z.string().nullable().default(null),

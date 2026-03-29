@@ -1,1 +1,0 @@
-"[\n  {\n    \"code\": \"too_big\",\n    \"maximum\": 24,\n    \"type\": \"number\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"Number must be less than or equal to 24\",\n    \"path\": [\n      \"limit\"\n    ]\n  }\n]"
