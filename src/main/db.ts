@@ -13,7 +13,7 @@ export const initDb = () => {
     mkdirSync(userDataPath, { recursive: true })
   }
 
-  db = new Database(dbPath)
+  db = new Database(dbPath, { verbose: console.log })
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
 
@@ -28,7 +28,9 @@ export const initDb = () => {
         avg_rating REAL,
         view_count INTEGER DEFAULT 0,
         download_count INTEGER DEFAULT 0,
+        detail_json TEXT,
         cloud_updated_at DATETIME,
+        last_detailed_at DATETIME,
         local_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -145,6 +147,14 @@ export const initDb = () => {
     END;
   `)
 
+  // Ensure columns exist for existing DBs
+  try {
+    db.exec(`ALTER TABLE games ADD COLUMN detail_json TEXT;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE games ADD COLUMN last_detailed_at DATETIME;`)
+  } catch (e) { /* already exists */ }
+
   console.log('[DB] Database initialized at', dbPath)
 }
 
@@ -204,4 +214,21 @@ export const upsertGame = (game: {
       }
     }
   }
+}
+
+export const saveGameDetail = (uniqueId: string, detail: any) => {
+  const db = getDb()
+  const stmt = db.prepare(`
+    UPDATE games SET 
+      detail_json = ?, 
+      last_detailed_at = CURRENT_TIMESTAMP 
+    WHERE unique_id = ?
+  `)
+  stmt.run(JSON.stringify(detail), uniqueId)
+}
+
+export const getCachedDetail = (uniqueId: string) => {
+  const db = getDb()
+  const row = db.prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string | null } | undefined
+  return row?.detail_json ? JSON.parse(row.detail_json) : null
 }

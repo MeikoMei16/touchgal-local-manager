@@ -18,9 +18,10 @@ contextBridge.exposeInMainWorld('api', {
   getPatchIntroduction: (uniqueId: string) =>
     ipcRenderer.invoke('tg-get-patch-introduction', uniqueId),
 
-  fetchCaptcha: () =>
-    ipcRenderer.invoke('tg-fetch-captcha'),
+  fetchCaptcha: () => ipcRenderer.invoke('tg-fetch-captcha'),
+  verifyCaptcha: (sessionId: string, selectedIds: string[]) => ipcRenderer.invoke('tg-verify-captcha', sessionId, selectedIds),
+  login: (username: string, password: string, captcha: string) => ipcRenderer.invoke('tg-login', username, password, captcha),
 
-  login: (username: string, password: string, captcha: string) =>
-    ipcRenderer.invoke('tg-login', username, password, captcha),
+  searchTags: (keyword: string) =>
+    ipcRenderer.invoke('tg-search-tags', keyword),
 })

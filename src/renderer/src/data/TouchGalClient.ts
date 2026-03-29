@@ -34,7 +34,15 @@ export const TouchGalClient = {
     return await window.api.fetchCaptcha();
   },
 
+  verifyCaptcha: async (sessionId: string, selectedIds: string[]) => {
+    return await window.api.verifyCaptcha(sessionId, selectedIds);
+  },
+
   login: async (username: string, password: string, captcha: string) => {
     return await window.api.login(username, password, captcha);
+  },
+
+  searchTags: async (keyword: string) => {
+    return await window.api.searchTags(keyword);
   }
 };

@@ -4,9 +4,49 @@ import fs from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import axios from 'axios'
+import log from 'electron-log'
 import { initDb, getDb, upsertGame } from './db'
 import { cleanFolderName, discoverExecutables } from './utils'
 import { downloadManager } from './downloader'
+
+// Configure logging
+log.initialize({ spyRendererConsole: true })
+const logPath = join(app.getPath('userData'), 'logs/main.log')
+log.transports.file.resolvePathFn = () => logPath
+log.transports.file.level = 'debug'
+log.transports.console.level = 'debug'
+Object.assign(console, log.functions)
+log.info('Log initialized (Spying on Renderer) at:', logPath)
+
+// Persistence Helpers
+const cookiePath = join(app.getPath('userData'), 'session_cookies.txt')
+let currentCookie = ''
+try {
+  if (fs.existsSync(cookiePath)) {
+    currentCookie = fs.readFileSync(cookiePath, 'utf8')
+    log.info('Loaded cookies from disk')
+  }
+} catch (e) {
+  log.warn('Failed to load cookies')
+}
+
+const saveCookies = (cookies: string) => {
+  try {
+    fs.writeFileSync(cookiePath, cookies, 'utf8')
+  } catch (e) {
+    log.error('Failed to save cookies:', e)
+  }
+}
+
+// Capture all uncaught errors
+process.on('uncaughtException', (err) => {
+  log.error('Uncaught Exception:', err)
+})
+process.on('unhandledRejection', (reason, promise) => {
+  log.error('Unhandled Rejection at:', promise, 'reason:', reason)
+})
+
+log.info('App starting...')
 
 const API_CLIENT = axios.create({
   baseURL: 'https://www.touchgal.top/api',
@@ -14,11 +54,33 @@ const API_CLIENT = axios.create({
     'Content-Type': 'application/json',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     Referer: 'https://www.touchgal.top/',
-    Origin: 'https://www.touchgal.top',
-    'Cookie': 'kun-patch-setting-store|state|data|kunNsfwEnable=no-nsfw'
+    Origin: 'https://www.touchgal.top'
   },
   timeout: 30000,
 })
+
+// Cookie Interceptors
+API_CLIENT.interceptors.request.use((config) => {
+  if (currentCookie) {
+    config.headers['Cookie'] = currentCookie;
+  }
+  log.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, { 
+    params: config.params,
+    headers: config.headers 
+  });
+  return config;
+});
+
+API_CLIENT.interceptors.response.use((response) => {
+  const setCookies = response.headers['set-cookie'] as string[] | undefined;
+  if (setCookies) {
+    const newCookies = setCookies.map(c => c.split(';')[0]).join('; ');
+    currentCookie = currentCookie ? `${currentCookie}; ${newCookies}` : newCookies;
+    saveCookies(currentCookie);
+    log.info('[API] Cookies updated and saved');
+  }
+  return response;
+});
 
 interface RawCount {
   favorite_folder?: number
@@ -132,6 +194,7 @@ const normalizeResource = (resource: any) => {
     resourceCount,
     releasedDate,
     company,
+    pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? null,
   }
 }
 
@@ -147,10 +210,14 @@ const normalizeDownloads = (downloads: RawDownload[]) =>
     platform: asArray(download.platform),
   }))
 
-const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: number }) => ({
-  list: (payload.galgames ?? []).map(normalizeResource),
-  total: payload.total ?? 0,
-})
+const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: number }) => {
+  const list = (payload.galgames ?? []).map(normalizeResource)
+  log.info(`[API] Normalized ${list.length} games. Total: ${payload.total}`)
+  return {
+    list,
+    total: payload.total ?? 0,
+  }
+}
 
 const normalizeIntroduction = (payload: any) => ({
   introduction: payload.introduction ?? null,
@@ -267,9 +334,22 @@ app.on('window-all-closed', () => {
   }
 })
 
-// IPC Handlers
+// IPC Handlers with Logging
+const handleWithLog = (channel: string, listener: (...args: any[]) => any) => {
+  ipcMain.handle(channel, async (event, ...args) => {
+    log.debug(`[IPC Request] ${channel}`, args)
+    try {
+      const result = await listener(event, ...args)
+      log.debug(`[IPC Response] ${channel}`, { success: true })
+      return result
+    } catch (error) {
+      log.error(`[IPC Error] ${channel}`, error)
+      throw error
+    }
+  })
+}
 
-ipcMain.handle('scan-local-library', async (_event, paths: string[]) => {
+handleWithLog('scan-local-library', async (_event, paths: string[]) => {
   const folders = await scanForGalgameFolders(paths)
   const db = getDb()
   
@@ -289,7 +369,7 @@ ipcMain.handle('scan-local-library', async (_event, paths: string[]) => {
   return folders
 })
 
-ipcMain.handle('tag-folder', (_event, folderPath: string, id: string) => {
+handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {
   const tgIdPath = path.join(folderPath, '.tg_id')
   try {
     fs.writeFileSync(tgIdPath, id, 'utf8')
@@ -299,7 +379,7 @@ ipcMain.handle('tag-folder', (_event, folderPath: string, id: string) => {
   }
 })
 
-ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number, query: any) => {
+handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, query: any) => {
   // Advanced Year Logic Translation (Intersection of all constraints)
   let yearArray: string[] = ['all'];
   if (query.yearConstraints && query.yearConstraints.length > 0) {
@@ -334,16 +414,16 @@ ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number,
     sortOrder: query.sortOrder ?? 'desc',
     yearString: (yearArray && yearArray.length > 0) ? JSON.stringify(yearArray) : (query.yearString ?? '["all"]'),
     monthString: query.monthString ?? '["all"]',
+    tagString: query.selectedTags && query.selectedTags.length > 0 ? JSON.stringify(query.selectedTags) : '["all"]',
     minRatingCount: query.minRatingCount ?? 0
   };
 
   const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
+  const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
   
   const response = await API_CLIENT.get('/galgame', {
     params: apiParams,
-    headers: {
-      'Cookie': `kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`
-    }
+    headers: { 'Cookie': cookieString }
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
   
@@ -353,13 +433,13 @@ ipcMain.handle('tg-fetch-resources', async (_event, page: number, limit: number,
   return normalized
 })
 
-ipcMain.handle('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
+handleWithLog('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
   const body = { ...buildSearchBody(keyword, page, limit), ...options }
   const nsfwValue = options?.nsfwMode === 'nsfw' ? 'nsfw' : (options?.nsfwMode === 'all' ? 'all' : 'sfw');
+  const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+
   const response = await API_CLIENT.post('/search', body, {
-    headers: {
-      'Cookie': `kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`
-    }
+    headers: { 'Cookie': cookieString }
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
@@ -369,34 +449,58 @@ ipcMain.handle('tg-search-resources', async (_event, keyword: string, page: numb
   return normalized
 })
 
-ipcMain.handle('tg-get-patch-detail', async (_event, uniqueId: string) => {
+handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
   if (!uniqueId || uniqueId.length !== 8) {
     throw new Error('Invalid resource ID (must be 8 characters)')
   }
-  const [detailResponse, introResponse] = await Promise.all([
-    API_CLIENT.get('/patch', { params: { uniqueId } }),
-    API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
-  ])
-  const detail = normalizeResource(ensureValidResponse<RawResource>(detailResponse.data))
-  
-  // Delta Sync: Upsert detail to local DB
-  upsertGame(detail)
-  
-  const downloadsResponse = await API_CLIENT.get('/patch/resource', {
-    params: { patchId: detail.id },
-  })
-  const downloads = normalizeDownloads(ensureValidResponse<RawDownload[]>(downloadsResponse.data))
-  const intro = normalizeIntroduction(ensureValidResponse(introResponse.data))
-  
-  return { ...detail, ...intro, downloads }
+
+  try {
+    const [detailResponse, introResponse] = await Promise.all([
+      API_CLIENT.get('/patch', { params: { uniqueId } }),
+      API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
+    ])
+    
+    const detail = normalizeResource(ensureValidResponse(detailResponse.data))
+    const intro = normalizeIntroduction(ensureValidResponse(introResponse.data))
+    
+    let downloads: any[] = []
+    try {
+      const dlResponse = await API_CLIENT.get('/patch/download', { params: { uniqueId } })
+      downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
+    } catch (e) {
+      log.warn('Failed to fetch downloads for', uniqueId)
+    }
+
+    const fullDetail = { ...detail, ...intro, downloads }
+    
+    // Save to cache
+    getDb().prepare('UPDATE games SET detail_json = ?, last_detailed_at = CURRENT_TIMESTAMP WHERE unique_id = ?')
+      .run(JSON.stringify(fullDetail), uniqueId)
+
+    return fullDetail
+  } catch (error) {
+    log.warn(`[API] Failed to fetch detail for ${uniqueId}, checking cache...`)
+    const cached = getDb().prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string } | undefined
+    if (cached?.detail_json) {
+      log.info(`[Cache] Returning cached detail for ${uniqueId}`)
+      return JSON.parse(cached.detail_json)
+    }
+    throw error
+  }
 })
 
-ipcMain.handle('tg-get-patch-introduction', async (_event, uniqueId: string) => {
-  const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
-  return normalizeIntroduction(ensureValidResponse(response.data))
+handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
+  try {
+    const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
+    return normalizeIntroduction(ensureValidResponse(response.data))
+  } catch (error) {
+    const cached = getDb().prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string } | undefined
+    if (cached?.detail_json) return JSON.parse(cached.detail_json)
+    throw error
+  }
 })
 
-ipcMain.handle('tg-match-folder', async (_event, folderName: string) => {
+handleWithLog('tg-match-folder', async (_event, folderName: string) => {
   const cleaned = cleanFolderName(folderName)
   const db = getDb()
   
@@ -411,7 +515,7 @@ ipcMain.handle('tg-match-folder', async (_event, folderName: string) => {
   return results
 })
 
-ipcMain.handle('tg-link-folder', async (_event, folderPath: string, uniqueId: string) => {
+handleWithLog('tg-link-folder', async (_event, folderPath: string, uniqueId: string) => {
   const db = getDb()
   try {
     const game = db.prepare('SELECT id FROM games WHERE unique_id = ?').get(uniqueId) as { id: number } | undefined
@@ -429,11 +533,11 @@ ipcMain.handle('tg-link-folder', async (_event, folderPath: string, uniqueId: st
   }
 })
 
-ipcMain.handle('tg-get-executables', async (_event, folderPath: string) => {
+handleWithLog('tg-get-executables', async (_event, folderPath: string) => {
   return await discoverExecutables(folderPath)
 })
 
-ipcMain.handle('tg-launch-game', async (_event, folderPath: string, exeName: string) => {
+handleWithLog('tg-launch-game', async (_event, folderPath: string, exeName: string) => {
   const fullPath = path.join(folderPath, exeName)
   try {
     const child = spawn(fullPath, [], {
@@ -449,11 +553,11 @@ ipcMain.handle('tg-launch-game', async (_event, folderPath: string, exeName: str
 })
 
 // Phase 3: Download Orchestration
-ipcMain.handle('tg-parse-links', (_event, content: string) => {
+handleWithLog('tg-parse-links', (_event, content: string) => {
   return downloadManager.parseLink(content)
 })
 
-ipcMain.handle('tg-add-to-queue', (_event, gameId: number, storageUrl: string) => {
+handleWithLog('tg-add-to-queue', (_event, gameId: number, storageUrl: string) => {
   try {
     const id = downloadManager.addTask(gameId, storageUrl)
     return { success: true, id }
@@ -462,16 +566,34 @@ ipcMain.handle('tg-add-to-queue', (_event, gameId: number, storageUrl: string) =
   }
 })
 
-ipcMain.handle('tg-get-download-queue', () => {
+handleWithLog('tg-get-download-queue', () => {
   return downloadManager.getQueue()
 })
 
-ipcMain.handle('tg-fetch-captcha', async () => {
+handleWithLog('tg-fetch-captcha', async () => {
   const response = await API_CLIENT.get('/auth/captcha')
   return ensureValidResponse(response.data)
 })
 
-ipcMain.handle('tg-login', async (_event, username: string, password: string, captcha: string) => {
+handleWithLog('tg-verify-captcha', async (_event, sessionId: string, selectedIds: string[]) => {
+  log.info(`[Captcha] Verifying session ${sessionId} with IDs:`, selectedIds)
+  try {
+    const response = await API_CLIENT.post('/auth/captcha', { sessionId, selectedIds })
+    const data = ensureValidResponse(response.data)
+    log.info(`[Captcha] Success, received code:`, data.code)
+    return data
+  } catch (error: any) {
+    log.error(`[Captcha] Verification failed:`, error.response?.data || error.message)
+    throw error
+  }
+})
+
+handleWithLog('tg-login', async (_event, username: string, password: string, captcha: string) => {
   const response = await API_CLIENT.post('/auth/login', { name: username, password, captcha })
+  return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-search-tags', async (_event, keyword: string) => {
+  const response = await API_CLIENT.get('/tag', { params: { name: keyword, limit: 20 } })
   return ensureValidResponse(response.data)
 })
