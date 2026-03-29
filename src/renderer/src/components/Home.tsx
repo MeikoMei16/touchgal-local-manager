@@ -3,10 +3,14 @@ import { useTouchGalStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import { SortDropdown } from './SortDropdown.tsx';
-import { Loader2, ChevronLeft, ChevronRight, Settings, User, SortAsc, SortDesc } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Settings, User, SortAsc, SortDesc, X } from 'lucide-react';
 
 export const Home: React.FC = () => {
-  const { resources, totalResources, currentPage, isLoading, error, fetchResources, selectResource, user, logout, setIsLoginOpen } = useTouchGalStore();
+  const { 
+    resources, totalResources, currentPage, isLoading, error, 
+    fetchResources, selectResource, user, logout, setIsLoginOpen,
+    selectedTags, removeTagFilter, clearTags
+  } = useTouchGalStore();
   const [lastQuery, setLastQuery] = useState<any>({});
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState('resource_update_time');
@@ -115,6 +119,25 @@ export const Home: React.FC = () => {
         </div>
       </div>
 
+      {selectedTags.length > 0 && (
+        <div className="active-tags-row">
+          <div className="tag-chips-container">
+            {selectedTags.map(tag => (
+              <div key={tag} className="tag-chip-active">
+                <span>{tag}</span>
+                <button 
+                  onClick={() => removeTagFilter(tag)}
+                  className="remove-tag-btn"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button onClick={clearTags} className="clear-all-tags">清空标签</button>
+        </div>
+      )}
+
       {showFilters && (
         <FilterBar 
           onFilterChange={handleFilterChange} 
@@ -202,6 +225,12 @@ export const Home: React.FC = () => {
         .total-pages { color: #64748b; font-size: 14px; }
         
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .active-tags-row { display: flex; align-items: center; gap: 12px; padding: 4px 8px; margin-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
+        .tag-chips-container { display: flex; gap: 8px; }
+        .tag-chip-active { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #e0f2fe; border: 1.5px solid #0369a1; border-radius: 20px; font-weight: 700; font-size: 13px; color: #0369a1; }
+        .remove-tag-btn { background: transparent; border: none; color: #0369a1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .clear-all-tags { font-size: 13px; color: #64748b; font-weight: 700; background: none; border: none; cursor: pointer; text-decoration: underline; white-space: nowrap; }
       `}</style>
     </div>
   );

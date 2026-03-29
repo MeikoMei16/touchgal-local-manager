@@ -15,7 +15,9 @@ export interface ElectronAPI {
   getPatchDetail: (uniqueId: string) => Promise<any>;
   getPatchIntroduction: (uniqueId: string) => Promise<any>;
   fetchCaptcha: () => Promise<any>;
+  verifyCaptcha: (sessionId: string, selectedIds: string[]) => Promise<any>;
   login: (username: string, password: string, captcha: string) => Promise<any>;
+  searchTags: (keyword: string) => Promise<any>;
 }
 
 declare global {

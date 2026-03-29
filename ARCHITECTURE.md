@@ -10,9 +10,10 @@
 Electron App
 ├── Main Process (Node.js)
 │   ├── index.ts         — IPC Hub + API Proxy (绕过 CORS) + 数据标准化
-│   ├── db.ts            — SQLite (better-sqlite3) + FTS5 全文搜索 + Delta Sync
+│   ├── db.ts            — SQLite (better-sqlite3) + FTS5 全文搜索 + Detail 缓存
 │   ├── downloader.ts    — 下载任务队列管理器 (单例)
-│   └── utils.ts         — 文件夹名清洗、可执行文件探测
+│   ├── utils.ts         — 文件夹名清洗、可执行文件探测
+│   └── logs/            — 本地日志存储 (~/.config/touchgal-local-manager/logs/)
 ├── Preload (contextBridge)
 │   └── index.ts         — window.api 安全桥接，最小化 API 暴露
 └── Renderer (React 19 + Vite + Zustand + Tailwind 4)
@@ -622,14 +623,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 ---
 
-## 九、关键技术决策记录
+## 十、关键技术决策记录
 
-1. **Cloudreve 直链用 PUT**: `PUT /api/v3/share/download/{shareId}` 是 Cloudreve 的令牌生成接口，必须用 PUT 而非 GET。直链有效期 1 小时，每次下载前必须实时获取。
+1. **双向可见性日志 (Unified Visibility)**: 集成 `electron-log` v5，主进程通过 `log.initialize()` 劫持渲染进程日志。日志文件保存于用户数据目录，支持 90 天循环。
 
-2. **下载进度用 `webContents.send`**: 由于下载是持续推送，不能用 `ipcMain.handle`（请求-响应模式），必须用主动推送事件。
+2. **智能详情缓存 (Detail Caching)**: `games` 表新增 `detail_json` 列。详情页加载时优先尝试 API，成功后更新本地 JSON；API 失败（如登录失效）时回退到本地缓存。这保证了“登录可见内容”在掉线后依然能访问。
 
-3. **分卷解压只传第一个文件**: Bandizip 的 `x` 命令会自动查找同目录下的其余分卷文件，无需手动指定所有分卷。
+3. **Cookie 持久化**: 主进程通过 Axios 拦截器捕获 `Set-Cookie` 并保存至 `session_cookies.txt`。其有效期与服务端同步，但在本地无期保存以实现“长期免登”。
 
-4. **标签过滤用服务端 API**: `/api/galgame` 支持 `tagString` 参数，优先服务端过滤而非本地过滤，避免拉取全量数据。
+4. **Cloudreve 直链用 PUT**: `PUT /api/v3/share/download/{shareId}` 是 Cloudreve 的令牌生成接口，必须用 PUT 而非 GET。直链有效期 1 小时，每次下载前必须实时获取。
 
-5. **解压后游戏匹配用 FTS5**: 本地 SQLite FTS5 索引已建立，模糊匹配解压后的文件夹名比依赖在线 API 更快更可靠。
+5. **下载进度用 `webContents.send`**: 由于下载是持续推送，不能用 `ipcMain.handle`（请求-响应模式），必须用主动推送事件。
+
+6. **分卷解压只传第一个文件**: Bandizip 的 `x` 命令会自动查找同目录下的其余分卷文件，无需手动指定所有分卷。
+
+7. **标签过滤用服务端 API**: `/api/galgame` 支持 `tagString` 参数，优先服务端过滤而非本地过滤，避免拉取全量数据。
+
+8. **解压后游戏匹配用 FTS5**: 本地 SQLite FTS5 索引已建立，模糊匹配解压后的文件夹名比依赖在线 API 更快更可靠。

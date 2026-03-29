@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTouchGalStore } from '../store/useTouchGalStore';
 import { X, Globe, Bookmark } from 'lucide-react';
+import { BlurredSection } from './BlurredSection';
 
 const ImageViewer: React.FC<{ url: string; onDismiss: () => void }> = ({ url, onDismiss }) => (
   <div className="image-viewer-overlay" onClick={onDismiss}>
@@ -12,12 +13,18 @@ const ImageViewer: React.FC<{ url: string; onDismiss: () => void }> = ({ url, on
 );
 
 export const DetailOverlay: React.FC = () => {
-  const { selectedResource, clearSelected } = useTouchGalStore();
+  const { selectedResource, clearSelected, user, addTagFilter } = useTouchGalStore();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   if (!selectedResource) return null;
 
   const { ratingSummary } = selectedResource;
+  const isLoggedIn = !!user;
+
+  const handleTagClick = (tag: string) => {
+    addTagFilter(tag);
+    clearSelected();
+  };
 
   return (
     <div className="detail-overlay" onClick={clearSelected}>
@@ -46,7 +53,7 @@ export const DetailOverlay: React.FC = () => {
             {/* Screenshots */}
             {selectedResource.screenshots && selectedResource.screenshots.length > 0 && (
               <section className="detail-section">
-                <h2 className="detail-section-title">Screenshots</h2>
+                <h2 className="detail-section-title">Screenshots / 游戏截图</h2>
                 <div className="horizontal-gallery">
                   {selectedResource.screenshots.map((url, i) => (
                     <div key={i} className="gallery-item-box" onClick={() => setSelectedImage(url)}>
@@ -83,93 +90,97 @@ export const DetailOverlay: React.FC = () => {
             </section>
 
             {/* Login Required Info */}
-            <section className="detail-section">
-               <h2 className="detail-section-title">登录后信息</h2>
-               <div className="info-grid-list">
-                  <div className="info-item-row">
-                     <span className="label">发布者</span>
-                     <span className="value">Palentum</span>
-                  </div>
-                  <div className="info-item-row">
-                     <span className="label">云端收藏</span>
-                     <span className="value">未收藏</span>
-                  </div>
-                  <div className="info-item-row">
-                     <span className="label">内容限制</span>
-                     <span className="value">{selectedResource.contentLimit || 'sfw'}</span>
-                  </div>
-               </div>
-            </section>
-
-            {/* Rating Stats - The big blue boxes */}
-            {ratingSummary && (
-              <section className="detail-section rating-stats-container">
-                <div className="dual-score-grid">
-                  <div className="score-main-box">
-                    <div className="score-val">{ratingSummary.average.toFixed(1)}</div>
-                    <div className="score-sub">综合评分</div>
-                  </div>
-                  <div className="score-main-box">
-                    <div className="score-val">{ratingSummary.count}</div>
-                    <div className="score-sub">评价人数</div>
-                  </div>
-                </div>
-                
-                <div className="stat-chips-row">
-                  <div className="stat-pills">收藏 {selectedResource.favoriteCount || 398}</div>
-                  <div className="stat-pills">满分 10 分</div>
-                </div>
-
-                {/* Recommend Bar */}
-                <div className="recommend-area">
-                  <h3 className="sub-section-header">推荐倾向</h3>
-                  <div className="multi-color-bar">
-                    {Object.entries(ratingSummary.recommend).map(([key, val]) => {
-                      const colors = { strong_yes: '#10b981', yes: '#34d399', neutral: '#94a3b8', no: '#facc15', strong_no: '#ef4444' };
-                      const color = (colors as any)[key] || '#cbd5e1';
-                      const percentage = (val / (ratingSummary.count || 1)) * 100;
-                      return val > 0 ? (
-                        <div key={key} className="bar-segment" style={{ width: `${percentage}%`, backgroundColor: color }} />
-                      ) : null;
-                    })}
-                  </div>
-                  <div className="recommend-chips">
-                     {Object.entries(ratingSummary.recommend).map(([key, val]) => {
-                        const colors = { strong_yes: '#10b981', yes: '#22c55e', neutral: '#64748b', no: '#f59e0b', strong_no: '#ef4444' };
-                        const dotColor = (colors as any)[key] || '#94a3b8';
-                        const labels = { strong_yes: '强推', yes: '推荐', neutral: '一般', no: '不推', strong_no: '强力不推' };
-                        if (val === 0) return null;
-                        return (
-                          <div key={key} className="rec-pill">
-                            <span className="dot" style={{ backgroundColor: dotColor }} />
-                            <span>{(labels as any)[key]} {val}</span>
-                          </div>
-                        );
-                     })}
-                  </div>
-                </div>
-
-                {/* Histogram */}
-                <div className="histogram-area">
-                  <h3 className="sub-section-header">分数分布</h3>
-                  <div className="hist-grid">
-                    {ratingSummary.histogram.map((h) => {
-                      const max = Math.max(...ratingSummary.histogram.map(i => i.count), 1);
-                      const height = (h.count / max) * 100;
-                      return (
-                        <div key={h.score} className="hist-column">
-                          <span className="hist-count-top">{h.count || 0}</span>
-                          <div className="hist-bar-track">
-                             <div className="hist-bar-fill" style={{ height: `${height}%` }} />
-                          </div>
-                          <span className="hist-score-bottom">{h.score}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+            <BlurredSection isLoggedIn={isLoggedIn} title="详细发布信息">
+              <section className="detail-section">
+                <h2 className="detail-section-title">登录后信息</h2>
+                <div className="info-grid-list">
+                    <div className="info-item-row">
+                      <span className="label">发布者</span>
+                      <span className="value">Palentum</span>
+                    </div>
+                    <div className="info-item-row">
+                      <span className="label">云端收藏</span>
+                      <span className="value">未收藏</span>
+                    </div>
+                    <div className="info-item-row">
+                      <span className="label">内容限制</span>
+                      <span className="value">{selectedResource.contentLimit || 'sfw'}</span>
+                    </div>
                 </div>
               </section>
-            )}
+            </BlurredSection>
+
+            {/* Rating Stats - The big blue boxes */}
+            <BlurredSection isLoggedIn={isLoggedIn} title="评分详情">
+              {ratingSummary && (
+                <section className="detail-section rating-stats-container">
+                  <div className="dual-score-grid">
+                    <div className="score-main-box">
+                      <div className="score-val">{ratingSummary.average.toFixed(1)}</div>
+                      <div className="score-sub">综合评分</div>
+                    </div>
+                    <div className="score-main-box">
+                      <div className="score-val">{ratingSummary.count}</div>
+                      <div className="score-sub">评价人数</div>
+                    </div>
+                  </div>
+                  
+                  <div className="stat-chips-row">
+                    <div className="stat-pills">收藏 {selectedResource.favoriteCount || 0}</div>
+                    <div className="stat-pills">满分 10 分</div>
+                  </div>
+
+                  {/* Recommend Bar */}
+                  <div className="recommend-area">
+                    <h3 className="sub-section-header">推荐倾向</h3>
+                    <div className="multi-color-bar">
+                      {Object.entries(ratingSummary.recommend).map(([key, val]) => {
+                        const colors = { strong_yes: '#10b981', yes: '#34d399', neutral: '#94a3b8', no: '#facc15', strong_no: '#ef4444' };
+                        const color = (colors as any)[key] || '#cbd5e1';
+                        const percentage = (val / (ratingSummary.count || 1)) * 100;
+                        return val > 0 ? (
+                          <div key={key} className="bar-segment" style={{ width: `${percentage}%`, backgroundColor: color }} />
+                        ) : null;
+                      })}
+                    </div>
+                    <div className="recommend-chips">
+                       {Object.entries(ratingSummary.recommend).map(([key, val]) => {
+                          const colors = { strong_yes: '#10b981', yes: '#22c55e', neutral: '#64748b', no: '#f59e0b', strong_no: '#ef4444' };
+                          const dotColor = (colors as any)[key] || '#94a3b8';
+                          const labels = { strong_yes: '强推', yes: '推荐', neutral: '一般', no: '不推', strong_no: '强力不推' };
+                          if (val === 0) return null;
+                          return (
+                            <div key={key} className="rec-pill">
+                              <span className="dot" style={{ backgroundColor: dotColor }} />
+                              <span>{(labels as any)[key]} {val}</span>
+                            </div>
+                          );
+                       })}
+                    </div>
+                  </div>
+
+                  {/* Histogram */}
+                  <div className="histogram-area">
+                    <h3 className="sub-section-header">分数分布</h3>
+                    <div className="hist-grid">
+                      {ratingSummary.histogram.map((h) => {
+                        const max = Math.max(...ratingSummary.histogram.map(i => i.count), 1);
+                        const height = (h.count / max) * 100;
+                        return (
+                          <div key={h.score} className="hist-column">
+                            <span className="hist-count-top">{h.count || 0}</span>
+                            <div className="hist-bar-track">
+                               <div className="hist-bar-fill" style={{ height: `${height}%` }} />
+                            </div>
+                            <span className="hist-score-bottom">{h.score}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
+              )}
+            </BlurredSection>
 
             {/* Extra Metadata */}
             <section className="detail-section meta-list-section">
@@ -190,7 +201,7 @@ export const DetailOverlay: React.FC = () => {
                   <span className="meta-value link">{selectedResource.bangumiId || 'N/A'}</span>
                </div>
                <div className="meta-row">
-                  <span className="meta-label">DLsite</span>
+                  <span className="meta-label">DLsite / Steam Code</span>
                   <span className="meta-value">{selectedResource.steamId ? `STEAM:${selectedResource.steamId}` : 'N/A'}</span>
                </div>
                
@@ -202,9 +213,17 @@ export const DetailOverlay: React.FC = () => {
                </div>
 
                <div className="tags-pill-area">
-                  <h3 className="alias-title">Tags / 游戏标签</h3>
+                  <h3 className="alias-title">Tags / 游戏标签 (点击过滤)</h3>
                   <div className="tag-grid-pills">
-                     {selectedResource.tags?.map(t => <div key={t} className="tag-pill-rect">{t}</div>)}
+                     {selectedResource.tags?.map(t => (
+                       <div 
+                         key={t} 
+                         className="tag-pill-rect cursor-pointer hover:bg-slate-200 transition-colors"
+                         onClick={() => handleTagClick(t)}
+                       >
+                         {t}
+                       </div>
+                     ))}
                   </div>
                </div>
             </section>

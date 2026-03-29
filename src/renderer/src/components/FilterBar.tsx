@@ -3,6 +3,7 @@ import {
   ChevronDown, Calendar, Star, MessageSquare, Users, 
   Laptop, Shield, ShieldCheck, AlertTriangle, Tag, X, Plus, Search
 } from 'lucide-react';
+import { useTouchGalStore } from '../store/useTouchGalStore';
 
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
@@ -13,6 +14,8 @@ type NsfwMode = 'safe' | 'nsfw' | 'all';
 type Operator = '=' | '>=' | '<=' | '>' | '<';
 
 export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
+  const { selectedTags, addTagFilter, removeTagFilter } = useTouchGalStore();
+
   // --- State ---
   const [nsfwMode, setNsfwMode] = useState<NsfwMode>('safe');
   const [platform, setPlatform] = useState('all');
@@ -21,7 +24,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   const [activeOp, setActiveOp] = useState<Operator>('>=');
   const [isOpMenuOpen, setIsOpMenuOpen] = useState(false);
   const [yearConstraints, setYearConstraints] = useState<Array<{op: string, val: number}>>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
+  const [tagSearchInput, setTagSearchInput] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [isSearchingTags, setIsSearchingTags] = useState(false);
   
   // Stats
   const [minRatingCount, setMinRatingCount] = useState(0);
@@ -107,10 +113,28 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     }
   };
 
-  const removeTag = (tag: string) => {
-     const newTags = selectedTags.filter(t => t !== tag);
-     setSelectedTags(newTags);
-     emitChange({ selectedTags: newTags });
+  useEffect(() => {
+    const search = async () => {
+      if (!tagSearchInput.trim()) {
+        setTagSuggestions([]);
+        return;
+      }
+      setIsSearchingTags(true);
+      try {
+        const results = await window.api.searchTags(tagSearchInput);
+        setTagSuggestions(results.map((t: any) => t.name));
+      } catch { /* ignore */ }
+      setIsSearchingTags(false);
+    };
+    const timer = setTimeout(search, 300);
+    return () => clearTimeout(timer);
+  }, [tagSearchInput]);
+
+  const handleAddTag = (tag: string) => {
+    addTagFilter(tag);
+    setTagSearchInput('');
+    setTagSuggestions([]);
+    emitChange({ selectedTags: selectedTags.includes(tag) ? selectedTags : [...selectedTags, tag] });
   };
 
   return (
@@ -236,7 +260,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
         </div>
 
         {/* Right Column: Tag Management Area (The 50% whitespace usage) */}
-        <div className="flex flex-col bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200 p-8 min-h-[320px] relative overflow-hidden">
+        <div className="flex flex-col bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200 p-8 min-h-[320px] relative overflow-hidden group">
           
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -249,38 +273,68 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
               </div>
             </div>
             
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95">
-               <Plus size={18} />
-               <span>添加标签</span>
-            </button>
+            <div className={`flex items-center gap-2 px-4 py-2.5 bg-white border-2 rounded-2xl transition-all shadow-sm ${tagSearchInput ? 'border-blue-400 ring-4 ring-blue-50 w-full' : 'border-slate-200 w-48 hover:border-slate-400'}`}>
+               <div className={isSearchingTags ? 'animate-spin' : ''}>
+                  <Search size={18} className="text-slate-400" />
+               </div>
+               <input 
+                 type="text" 
+                 placeholder="寻找并添加标签..." 
+                 className="bg-transparent border-none outline-none font-bold text-sm text-slate-700 placeholder:text-slate-400 w-full"
+                 value={tagSearchInput}
+                 onChange={e => setTagSearchInput(e.target.value)}
+                 onBlur={() => setTimeout(() => setTagSuggestions([]), 200)}
+               />
+               {tagSuggestions.length > 0 && (
+                  <div className="absolute top-20 left-8 right-8 z-[60] bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto animate-in slide-in-from-top-2">
+                     {tagSuggestions.map(tag => (
+                        <div 
+                          key={tag} 
+                          className="px-4 py-3 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between group/tip"
+                          onClick={() => handleAddTag(tag)}
+                        >
+                           <span className="font-bold text-slate-600 group-hover/tip:text-blue-700">{tag}</span>
+                           <Plus size={16} className="text-slate-300 group-hover/tip:text-blue-500" />
+                        </div>
+                     ))}
+                  </div>
+               )}
+            </div>
           </div>
 
-          <div className="flex-1 flex flex-col justify-center items-center">
+          <div className="flex-1 flex flex-col justify-start">
              {selectedTags.length > 0 ? (
                 <div className="flex flex-wrap content-start gap-3 w-full">
                    {selectedTags.map(tag => (
                       <div key={tag} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm animate-in fade-in slide-in-from-bottom-2">
                          <span className="text-sm font-bold text-slate-700">{tag}</span>
-                         <X size={16} className="text-slate-400 cursor-pointer hover:text-red-500" onClick={() => removeTag(tag)} />
+                         <X 
+                          size={16} 
+                          className="text-slate-400 cursor-pointer hover:text-red-500" 
+                          onClick={() => {
+                            removeTagFilter(tag);
+                            emitChange({ selectedTags: selectedTags.filter(t => t !== tag) });
+                          }} 
+                        />
                       </div>
                    ))}
                 </div>
              ) : (
-                <div className="flex flex-col items-center gap-4 text-center opacity-40 group hover:opacity-100 transition-opacity">
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center opacity-40 group-hover:opacity-100 transition-opacity">
                    <div className="w-20 h-20 bg-white rounded-[32px] border border-slate-200 flex items-center justify-center text-slate-300 shadow-sm">
-                      <Search size={40} />
+                      <Tag size={40} />
                    </div>
                    <div className="max-w-[240px]">
                       <p className="text-sm font-extrabold text-slate-500">此区域用于管理您关注的标签内容</p>
-                      <p className="text-xs font-semibold text-slate-400 mt-1">目前暂未选择任何标签进行过滤...</p>
+                      <p className="text-xs font-semibold text-slate-400 mt-1">输入上方搜索框开始添加过滤标签...</p>
                    </div>
                 </div>
              )}
           </div>
           
           {/* Subtle Background Pattern */}
-          <div className="absolute -bottom-8 -right-8 opacity-[0.03] select-none pointer-events-none">
-             <Tag size={200} />
+          <div className="absolute -bottom-10 -right-10 opacity-[0.03] select-none pointer-events-none group-hover:opacity-[0.06] transition-opacity">
+             <Tag size={240} />
           </div>
         </div>
 
