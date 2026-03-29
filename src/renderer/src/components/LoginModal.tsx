@@ -46,37 +46,41 @@ export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content login-modal" onClick={(e) => e.stopPropagation()}>
-        <header className="modal-header">
-          <h2>Login to TouchGal</h2>
-          <button className="close-btn" onClick={onClose}><X size={20} /></button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[2000] animate-in fade-in duration-300" onClick={onClose}>
+      <div className="bg-white w-full max-w-sm p-10 rounded-[32px] shadow-2xl relative animate-in zoom-in-95 ease-out-back duration-500" onClick={(e) => e.stopPropagation()}>
+        <header className="flex justify-between items-center mb-8">
+          <h2 className="m-0 text-2xl font-black text-slate-900 tracking-tight">Login to TouchGal</h2>
+          <button className="bg-slate-100 text-slate-500 border-none rounded-full w-10 h-10 flex items-center justify-center cursor-pointer transition-all hover:bg-slate-200 hover:text-slate-800" onClick={onClose}>
+            <X size={20} />
+          </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="input-field">
-            <User size={18} />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex items-center gap-3.5 p-4 bg-slate-50 border border-slate-100 rounded-2xl transition-all focus-within:bg-white focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/5 shadow-inner group">
+            <User size={18} className="text-slate-400 group-focus-within:text-primary transition-colors" />
             <input 
               type="text" 
               placeholder="Username or Email" 
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              className="border-none bg-transparent outline-none flex-1 font-bold text-slate-800 placeholder:text-slate-400"
               required
             />
           </div>
 
-          <div className="input-field">
-            <Lock size={18} />
+          <div className="flex items-center gap-3.5 p-4 bg-slate-50 border border-slate-100 rounded-2xl transition-all focus-within:bg-white focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/5 shadow-inner group">
+            <Lock size={18} className="text-slate-400 group-focus-within:text-primary transition-colors" />
             <input 
               type={showPassword ? "text" : "password"} 
               placeholder="Password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="border-none bg-transparent outline-none flex-1 font-bold text-slate-800 placeholder:text-slate-400"
               required
             />
             <button 
               type="button" 
-              className="eye-btn" 
+              className="bg-none border-none text-slate-400 cursor-pointer p-1 flex items-center justify-center transition-colors hover:text-slate-600" 
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -85,27 +89,30 @@ export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
           {/* Legacy Captcha Section (only if challenge is not active and we have a legacy URL) */}
           {!captchaChallenge && captchaUrl && (
-            <div className="captcha-section">
-              <div className="input-field captcha-input">
-                <ShieldCheck size={18} />
+            <div className="flex gap-3 items-stretch animate-in slide-in-from-top-4 duration-300">
+              <div className="flex-1 flex items-center gap-3.5 p-4 bg-slate-50 border border-slate-100 rounded-2xl transition-all focus-within:bg-white focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/5 shadow-inner group">
+                <ShieldCheck size={18} className="text-slate-400 group-focus-within:text-primary transition-colors" />
                 <input 
                   type="text" 
-                  placeholder="Verification Code" 
+                  placeholder="Code" 
                   value={captcha}
                   onChange={(e) => setCaptcha(e.target.value)}
+                  className="border-none bg-transparent outline-none flex-1 font-bold text-slate-800 placeholder:text-slate-400 min-w-0"
                   required
                 />
               </div>
-              <div className="captcha-image-container" onClick={fetchCaptcha}>
-                <img src={captchaUrl} alt="captcha" />
-                <div className="refresh-overlay"><RefreshCw size={14} /></div>
+              <div className="w-[110px] bg-slate-100 rounded-2xl overflow-hidden relative cursor-pointer border border-slate-200 flex items-center justify-center group shadow-xs" onClick={fetchCaptcha}>
+                <img src={captchaUrl} alt="captcha" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  <RefreshCw size={18} className="animate-spin-slow" />
+                </div>
               </div>
             </div>
           )}
 
-          {error && <p className="error-msg">{error}</p>}
+          {error && <p className="text-red-500 text-sm font-bold m-0 text-center animate-bounce">{error}</p>}
 
-          <button className="login-btn" type="submit" disabled={isLoading}>
+          <button className="mt-4 p-4.5 bg-primary text-on-primary border-none rounded-full font-black text-base cursor-pointer flex items-center justify-center gap-2 transition-all hover:bg-primary/95 hover:shadow-xl active:scale-[0.97] shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none" type="submit" disabled={isLoading}>
             {isLoading ? <Loader2 className="animate-spin" /> : (captchaUrl ? 'Login' : 'Next')}
           </button>
         </form>
@@ -117,31 +124,6 @@ export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           />
         )}
       </div>
-
-      <style>{`
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-        .modal-content { background: var(--md-sys-color-surface); width: 100%; max-width: 400px; padding: 32px; border-radius: var(--radius-xl); box-shadow: 0 12px 48px rgba(0,0,0,0.3); position: relative; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .modal-header h2 { margin: 0; font-size: 20px; }
-        .login-form { display: flex; flex-direction: column; gap: 16px; }
-        .input-field { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--md-sys-color-surface-variant); border-radius: var(--radius-md); border: 1px solid transparent; transition: all 0.2s; }
-        .input-field:focus-within { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-surface); }
-        .input-field input { border: none; background: transparent; outline: none; flex: 1; color: var(--md-sys-color-on-surface); }
-        .captcha-section { display: flex; gap: 12px; align-items: stretch; }
-        .captcha-input { flex: 1; }
-        .captcha-image-container { width: 100px; border-radius: var(--radius-md); overflow: hidden; position: relative; cursor: pointer; background: #eee; display: flex; align-items: center; justify-content: center; }
-        .captcha-image-container img { width: 100%; height: 100%; object-fit: cover; }
-        .refresh-overlay { position: absolute; top: 0; right: 0; padding: 2px; background: rgba(0,0,0,0.3); color: white; display: none; }
-        .captcha-image-container:hover .refresh-overlay { display: block; }
-        .login-btn { margin-top: 12px; padding: 14px; background: #0369a1; color: white; border: none; border-radius: 40px; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
-        .login-btn:hover { background: #075985; transform: translateY(-1px); }
-        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .eye-btn { background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; }
-        .eye-btn:hover { color: #64748b; }
-        .error-msg { color: #ef4444; font-size: 13px; margin: 0; font-weight: 600; text-align: center; }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
 };

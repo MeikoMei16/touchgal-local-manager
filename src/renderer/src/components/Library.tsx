@@ -21,18 +21,19 @@ export const Library: React.FC = () => {
   };
 
   return (
-    <div className="library-container">
-      <header className="library-header">
-        <div className="scan-input-group">
-          <Folder size={20} />
+    <div className="flex flex-col gap-6 p-2">
+      <header className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-4">
+          <Folder size={22} className="text-slate-400" />
           <input 
             type="text" 
             placeholder="Enter root path to scan (e.g. D:\Galgames)" 
             value={scanPath}
             onChange={(e) => setScanPath(e.target.value)}
+            className="flex-1 p-3.5 rounded-2xl border border-slate-200 bg-white text-slate-800 font-bold focus:ring-4 focus:ring-primary/10 border-none shadow-inner outline-none transition-all placeholder:text-slate-400"
           />
           <button 
-            className="primary-btn" 
+            className="px-8 py-3.5 bg-primary text-on-primary border-none rounded-2xl cursor-pointer font-black transition-all hover:bg-primary/95 hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-primary/20" 
             onClick={startScan}
             disabled={isScanning || !scanPath}
           >
@@ -41,60 +42,40 @@ export const Library: React.FC = () => {
         </div>
       </header>
 
-      <div className="folders-list">
+      <div className="flex flex-col gap-3">
         {localFolders.length === 0 && !isScanning && (
-          <div className="empty-state">
-            <Database size={48} />
-            <p>No local games found yet. Enter a path and click Scan.</p>
+          <div className="flex flex-col items-center justify-center p-20 text-slate-400 gap-4 opacity-70">
+            <Database size={64} strokeWidth={1.5} />
+            <p className="font-bold text-lg">No local games found yet. Enter a path and click Scan.</p>
           </div>
         )}
 
         {localFolders.map((folder, idx) => (
-          <div key={idx} className="folder-item">
-            <div className="folder-icon">
+          <div key={idx} className="flex items-center gap-4 p-5 bg-white border border-slate-100 rounded-2xl transition-all hover:border-primary/30 hover:shadow-md hover:translate-x-1 group shadow-xs">
+            <div className="w-12 h-12 flex items-center justify-center bg-slate-50 text-slate-400 rounded-2xl group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">
               <Folder size={24} />
             </div>
-            <div className="folder-info">
-              <span className="folder-name">{folder.folderName}</span>
-              <span className="folder-path">{folder.path}</span>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <span className="font-black text-slate-900 text-base">{folder.folderName}</span>
+              <span className="text-xs font-bold text-slate-400 truncate max-w-[400px]">{folder.path}</span>
             </div>
-            <div className="folder-status">
+            <div className="flex items-center">
               {folder.tg_id ? (
-                <div className="status-badge linked">
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-green-50 text-green-700 border border-green-100 rounded-full text-xs font-black shadow-xs">
                   <CheckCircle2 size={14} />
                   <span>Linked: {folder.tg_id}</span>
                 </div>
               ) : (
-                <div className="status-badge unlinked">
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-full text-xs font-black shadow-xs">
                   <AlertCircle size={14} />
                   <span>Missing ID</span>
                 </div>
               )}
             </div>
-            <button className="secondary-btn">Manage</button>
+            <button className="ml-4 px-5 py-2 bg-white border-2 border-slate-100 rounded-xl cursor-pointer font-bold text-sm text-slate-600 transition-all hover:border-primary hover:text-primary active:scale-95">Manage</button>
           </div>
         ))}
       </div>
-
-      <style>{`
-        .library-container { display: flex; flex-direction: column; gap: 24px; padding: 8px; }
-        .library-header { background-color: var(--md-sys-color-surface-variant); padding: 24px; border-radius: var(--radius-lg); }
-        .scan-input-group { display: flex; align-items: center; gap: 16px; }
-        .scan-input-group input { flex: 1; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--md-sys-color-outline); background: var(--md-sys-color-surface); font-family: var(--font-body); }
-        .primary-btn { padding: 12px 24px; background-color: var(--md-sys-color-primary); color: white; border: none; border-radius: var(--radius-xl); cursor: pointer; font-weight: 600; }
-        .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .folders-list { display: flex; flex-direction: column; gap: 12px; }
-        .folder-item { display: flex; align-items: center; gap: 16px; padding: 16px; background-color: var(--md-sys-color-surface); border: 1px solid var(--md-sys-color-surface-variant); border-radius: var(--radius-md); transition: all 0.2s ease; }
-        .folder-item:hover { background-color: var(--md-sys-color-secondary-container); transform: translateX(4px); }
-        .folder-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-        .folder-name { font-weight: 600; font-size: 15px; }
-        .folder-path { font-size: 12px; color: var(--md-sys-color-on-surface-variant); }
-        .status-badge { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-xl); font-size: 12px; font-weight: 500; }
-        .status-badge.linked { background-color: #dcfce7; color: #166534; }
-        .status-badge.unlinked { background-color: #fee2e2; color: #b91c1c; }
-        .secondary-btn { padding: 6px 12px; background: transparent; border: 1px solid var(--md-sys-color-outline); border-radius: var(--radius-md); cursor: pointer; font-size: 13px; }
-        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px; color: var(--md-sys-color-on-surface-variant); gap: 16px; opacity: 0.6; }
-      `}</style>
     </div>
   );
 };

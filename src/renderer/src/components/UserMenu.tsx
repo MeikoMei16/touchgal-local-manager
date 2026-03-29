@@ -21,72 +21,58 @@ export const UserMenu: React.FC = () => {
   if (!user) {
     return (
       <button 
-        className="icon-pill" 
-        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 18px', borderRadius: '40px', border: 'none', background: '#e2e8f0', color: '#1e293b', fontWeight: '700', fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s', height: '44px' }}
+        className="flex items-center gap-2 px-4.5 bg-slate-200 text-slate-900 border-none rounded-full font-black text-sm cursor-pointer transition-all h-11 hover:bg-slate-300 active:scale-95 shadow-sm"
         onClick={() => setIsLoginOpen(true)}
       >
         <User size={18} />
-        <span style={{ whiteSpace: 'nowrap' }}>登录</span>
+        <span className="whitespace-nowrap">登录</span>
       </button>
     );
   }
 
   return (
-    <div className="user-menu-pill-wrapper" ref={menuRef} style={{ position: 'relative' }}>
+    <div className="relative" ref={menuRef}>
       <button 
-        className={`user-info-pill-home ${isMenuOpen ? 'active' : ''}`}
+        className="flex items-center gap-3 pl-5 pr-1 py-1 bg-slate-200 border-none rounded-full transition-all h-11 cursor-pointer hover:bg-slate-300 active:bg-slate-300 active:shadow-inner group"
         onClick={() => setIsMenuOpen(!isMenuOpen)}
-        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '4px 4px 4px 20px', background: '#e2e8f0', border: 'none', borderRadius: '40px', transition: 'all 0.2s', height: '44px', cursor: 'pointer' }}
       >
-        <span className="username-home" style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</span>
+        <span className="font-black text-sm text-slate-800 max-w-[120px] truncate">{user.name}</span>
         
         <img 
           src={user.avatar || 'https://via.placeholder.com/32'} 
           alt={user.name} 
-          className="user-avatar-pill"
-          style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #fff' }}
+          className="w-[34px] h-[34px] rounded-full object-cover border-2 border-white shadow-sm"
         />
       </button>
 
       {isMenuOpen && (
-        <div className="dropdown-menu-home animate-in fade-in zoom-in-95 duration-200" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, minWidth: '200px', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '6px', zIndex: 1000, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <div className="absolute top-[calc(100%+8px)] right-0 min-w-[200px] bg-white rounded-2xl border border-slate-200 p-1.5 z-[1000] shadow-xl animate-in fade-in zoom-in-95 duration-200">
           <button 
-             className="menu-item-home"
+             className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-none bg-transparent text-slate-500 font-bold text-[13px] cursor-pointer transition-all text-left hover:bg-slate-100 hover:text-primary group/item"
              onClick={() => {
-                // Navigate to profile
                 const navEvent = new CustomEvent('nav-to-profile');
                 window.dispatchEvent(navEvent);
                 setIsMenuOpen(false);
              }}
-             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', border: 'none', background: 'transparent', color: '#475569', fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left' }}
           >
-            <UserCircle size={18} />
+            <UserCircle size={18} className="group-hover/item:scale-110 transition-transform" />
             <span>个人中心 (Profile)</span>
           </button>
           
-          <div className="menu-divider-home" style={{ height: '1px', background: '#f1f5f9', margin: '4px 6px' }} />
+          <div className="h-px bg-slate-100 mx-1.5 my-1" />
           
           <button 
-            className="menu-item-home logout"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-none bg-transparent text-slate-500 font-bold text-[13px] cursor-pointer transition-all text-left hover:bg-red-50 hover:text-red-500 group/logout"
             onClick={() => {
               logout();
               setIsMenuOpen(false);
             }}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', border: 'none', background: 'transparent', color: '#475569', fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left' }}
           >
-            <LogOut size={18} />
+            <LogOut size={18} className="group-hover/logout:translate-x-0.5 transition-transform" />
             <span>退出登录 (Logout)</span>
           </button>
         </div>
       )}
-
-      <style>{`
-        .user-info-pill-home:hover { background: #cbd5e1 !important; }
-        .user-info-pill-home.active { background: #cbd5e1 !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05) !important; }
-        
-        .menu-item-home:hover { background: #f1f5f9; color: #0ea5e9; }
-        .menu-item-home.logout:hover { background: #fef2f2 !important; color: #ef4444 !important; }
-      `}</style>
     </div>
   );
 };

@@ -26,46 +26,44 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="app-container">
-      <nav className="nav-rail">
-        <div className="app-logo">
-          <div className="logo-circle" />
+    <div className="flex h-screen bg-surface text-on-surface">
+      <nav className="w-20 bg-surface border-r border-surface-variant flex flex-col items-center pt-10 gap-3">
+        <div className="mb-8">
+          <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-[#0369a1] to-[#0ea5e9] shadow-lg shadow-primary/20" />
         </div>
         
-        <div className="nav-items-container">
+        <div className="flex-1 flex flex-col gap-4 w-full items-center">
           {navItems.map((item) => (
             <div 
               key={item.id}
-              className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
+              className={`flex flex-col items-center justify-center gap-1 cursor-pointer transition-all duration-200 group w-14 h-14 rounded-2xl ${activeTab === item.id ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container'}`}
               onClick={() => setActiveTab(item.id)}
             >
-              <div className="icon-wrapper">
+              <div className="flex items-center justify-center">
                 {item.icon}
               </div>
-              <span className="label">{item.label}</span>
+              <span className="text-[10px] font-medium">{item.label}</span>
             </div>
           ))}
         </div>
 
-        <div className="nav-footer">
-          <div className="nav-item">
-            <div className="icon-wrapper">
-              <Settings size={24} />
-            </div>
-            <span className="label">Settings</span>
+        <div className="mt-auto pt-5 border-t border-outline-variant w-full flex justify-center">
+          <div className="flex flex-col items-center justify-center gap-1 cursor-pointer text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container w-14 h-14 rounded-2xl transition-all">
+            <Settings size={22} />
+            <span className="text-[10px] font-medium">Settings</span>
           </div>
         </div>
       </nav>
 
-      <main className="main-content">
-        <header className="top-bar">
-          <h2 className="title">{navItems.find(i => i.id === activeTab)?.label}</h2>
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 px-6 flex items-center justify-between border-b border-outline-variant bg-white/80 backdrop-blur-md sticky top-0 z-10">
+          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">{navItems.find(i => i.id === activeTab)?.label}</h2>
           <div className="top-bar-actions">
             {/* UserMenu moved back to Home.tsx action bar */}
           </div>
         </header>
 
-        <section className="scroll-area" tabIndex={0}>
+        <section className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50/50 outline-hidden" tabIndex={0}>
           {activeTab === 'home' && <Home />}
           {activeTab === 'search' && <Home />}
           {activeTab === 'library' && <Library />}
@@ -76,29 +74,6 @@ const App: React.FC = () => {
 
       <DetailOverlay />
       {isLoginOpen && <LoginModal onClose={() => setIsLoginOpen(false)} />}
-
-      <style>{`
-        .app-container { display: flex; height: 100vh; background-color: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); }
-        .nav-rail { width: 72px; background-color: var(--md-sys-color-surface-container-low); display: flex; flex-direction: column; align-items: center; padding: 16px 0; border-right: 1px solid var(--md-sys-color-outline-variant); }
-        .app-logo { margin-bottom: 32px; }
-        .logo-circle { width: 48px; height: 48px; border-radius: 16px; background: linear-gradient(135deg, #0369a1, #0ea5e9); box-shadow: 0 4px 12px rgba(3, 105, 161, 0.2); }
-        
-        .nav-items-container { flex: 1; display: flex; flex-direction: column; gap: 16px; width: 100%; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--md-sys-color-on-surface-variant); transition: all 0.2s; width: 100%; }
-        .icon-wrapper { padding: 4px 20px; border-radius: 20px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
-        .nav-item:hover .icon-wrapper { background-color: var(--md-sys-color-surface-variant); }
-        .nav-item.active .icon-wrapper { background-color: #e0f2fe; color: #0369a1; }
-        .nav-item.active { color: var(--md-sys-color-on-surface); font-weight: 700; }
-        .nav-item .label { font-size: 11px; font-weight: 600; text-align: center; }
-        
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .top-bar { height: 56px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--md-sys-color-outline-variant); background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); }
-        .title { font-size: 18px; font-weight: 800; margin: 0; color: #1e293b; }
-        
-        .scroll-area { flex: 1; overflow-y: auto; padding: 0; background: #f8fafc; outline: none; }
-        .nav-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--md-sys-color-outline-variant); width: 100%; }
-        .placeholder { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 18px; color: #64748b; font-weight: 600; }
-      `}</style>
     </div>
   );
 };

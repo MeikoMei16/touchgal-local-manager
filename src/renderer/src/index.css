@@ -1,165 +1,80 @@
 @import "tailwindcss";
 
 @theme {
+  /* Material 3 Spectrum */
   --color-primary: #006493;
-  --color-primary-container: #cae6ff;
   --color-on-primary: #ffffff;
+  --color-primary-container: #cae6ff;
   --color-on-primary-container: #001e30;
-  
+
   --color-secondary: #50606e;
-  --color-secondary-container: #d3e5f5;
   --color-on-secondary: #ffffff;
+  --color-secondary-container: #d3e5f5;
   --color-on-secondary-container: #0c1d29;
-  
+
+  --color-tertiary: #65587b;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #ecdfffx;
+  --color-on-tertiary-container: #211634;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #410002;
+
   --color-surface: #fdfcff;
   --color-on-surface: #1a1c1e;
   --color-surface-variant: #dee3eb;
   --color-on-surface-variant: #42474e;
-  
-  --color-outline: #72777f;
-  
-  --radius-xl: 28px;
-}
+  --color-surface-container-low: #f7f3f8;
+  --color-surface-container: #f1edf2;
+  --color-surface-container-high: #ebe7ec;
 
-:root {
-  --md-sys-color-primary: #006493;
-  --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #cae6ff;
-  --md-sys-color-on-primary-container: #001e30;
-  --md-sys-color-secondary: #50606e;
-  --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #d3e5f5;
-  --md-sys-color-on-secondary-container: #0c1d29;
-  --md-sys-color-surface: #fdfcff;
-  --md-sys-color-on-surface: #1a1c1e;
-  --md-sys-color-surface-variant: #dee3eb;
-  --md-sys-color-on-surface-variant: #42474e;
-  --md-sys-color-outline: #72777f;
-  
+  --color-outline: #72777f;
+  --color-outline-variant: #c2c7cf;
+
+  /* Spacing and Radius */
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 28px;
-  
-  --font-main: 'Outfit', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --radius-2xl: 32px;
+
+  /* Typography */
+  --font-main: "Outfit", sans-serif;
+  --font-body: "Inter", sans-serif;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-body);
-  background-color: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden; /* Main window is non-scrollable, internal parts are */
+@layer base {
+  body {
+    @apply m-0 p-0 font-body bg-surface text-on-surface antialiased overflow-hidden select-none;
+  }
+
+  h1, h2, h3, h4, .title {
+    @apply font-main font-medium;
+  }
 }
 
-h1, h2, h3, h4, .title {
-  font-family: var(--font-main);
-  font-weight: 500;
+/* Glassmorphism Utility (Manual as it's a specific effect) */
+.glass {
+  @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-lg;
 }
 
-#root {
-  display: flex;
-  height: 100vh;
-  width: 100vw;
+.glass-dark {
+  @apply bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-2xl;
 }
 
-.app-container {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-/* Sidebar / Rail Navigation */
-.nav-rail {
-  width: 80px;
-  background-color: var(--md-sys-color-surface);
-  border-right: 1px solid var(--md-sys-color-surface-variant);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 40px;
-  gap: 12px;
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
 }
 
-.nav-item {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: var(--md-sys-color-on-surface-variant);
-  gap: 4px;
-}
-
-.nav-item:hover {
-  background-color: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-}
-
-.nav-item.active {
-  background-color: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-}
-
-.nav-item span {
-  font-size: 10px;
-  font-weight: 500;
-}
-
-/* Main Content Area */
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.top-bar {
-  height: 64px;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  -webkit-app-region: drag; /* For custom title bar */
-}
-
-.scroll-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 24px;
-}
-
-/* Glassmorphism Details Overlay */
-.detail-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(8px);
-  z-index: 1000;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-}
-
-.detail-sheet {
-  width: 100%;
-  max-width: 1200px;
-  height: 85vh;
-  background-color: var(--md-sys-color-surface);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  box-shadow: 0 -8px 32px rgba(0,0,0,0.2);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
 }

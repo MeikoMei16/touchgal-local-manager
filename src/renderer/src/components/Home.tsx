@@ -80,9 +80,9 @@ export const Home: React.FC = () => {
   }
 
   return (
-    <div className="home-container">
-      <div className="top-action-bar">
-        <div className="pill-group">
+    <div className="flex-1 flex flex-col gap-2 p-4 pb-16 bg-slate-50/50">
+      <div className="flex justify-between items-center w-full px-1 mb-2">
+        <div className="flex items-center gap-1.5">
           <SortDropdown 
             value={sortField} 
             options={sortOptions} 
@@ -91,7 +91,7 @@ export const Home: React.FC = () => {
           />
 
           <button 
-            className={`order-toggle-btn-header ${sortOrder === 'asc' ? 'asc' : 'desc'}`}
+            className={`flex items-center gap-1.5 px-4 h-11 rounded-full border-1.5 border-transparent font-bold text-[13.5px] cursor-pointer transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed ${sortOrder === 'asc' ? 'bg-primary-container text-on-primary-container' : ''}`}
             onClick={() => updateSort(sortField, sortOrder === 'desc' ? 'asc' : 'desc')}
             disabled={isLoading}
           >
@@ -100,8 +100,11 @@ export const Home: React.FC = () => {
           </button>
         </div>
         
-        <div className="action-group">
-          <button className={`icon-pill high-screen ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
+        <div className="flex items-center gap-1.5">
+          <button 
+            className={`flex items-center gap-2 px-5 py-3 rounded-[32px] border-none font-bold text-sm cursor-pointer transition-all bg-slate-200 text-slate-800 hover:bg-slate-300 ${showFilters ? 'bg-primary-container ring-2 ring-primary border-primary' : ''}`} 
+            onClick={() => setShowFilters(!showFilters)}
+          >
             <Settings size={18} />
             <span>高级筛选</span>
           </button>
@@ -111,21 +114,21 @@ export const Home: React.FC = () => {
       </div>
 
       {selectedTags.length > 0 && (
-        <div className="active-tags-row">
-          <div className="tag-chips-container">
+        <div className="flex items-center gap-3 px-2 py-1 mb-2 overflow-x-auto scrollbar-hide">
+          <div className="flex gap-2">
             {selectedTags.map(tag => (
-              <div key={tag} className="tag-chip-active">
+              <div key={tag} className="flex items-center gap-2 px-3.5 py-1.5 bg-primary-container border border-primary/20 rounded-full font-bold text-[13px] text-on-primary-container shadow-xs animate-in zoom-in-95">
                 <span>{tag}</span>
                 <button 
                   onClick={() => removeTagFilter(tag)}
-                  className="remove-tag-btn"
+                  className="bg-transparent border-none text-on-primary-container cursor-pointer flex items-center justify-center p-0 hover:text-error"
                 >
                   <X size={14} />
                 </button>
               </div>
             ))}
           </div>
-          <button onClick={clearTags} className="clear-all-tags">清空标签</button>
+          <button onClick={clearTags} className="text-[13px] color-on-surface-variant font-bold bg-none border-none cursor-pointer underline whitespace-nowrap hover:text-primary">清空标签</button>
         </div>
       )}
 
@@ -137,12 +140,12 @@ export const Home: React.FC = () => {
       )}
 
       {isLoading ? (
-        <div className="loading-container">
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-primary gap-4 font-bold text-lg">
           <Loader2 className="animate-spin" size={48} />
-          <span>正在寻找更多游戏...</span>
+          <span className="animate-pulse">正在寻找更多游戏...</span>
         </div>
       ) : (
-        <div className="resource-grid">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-8">
           {resources?.map((resource: any) => (
             <ResourceCard 
               key={resource.uniqueId} 
@@ -154,30 +157,30 @@ export const Home: React.FC = () => {
       )}
 
       {/* Pagination Bar */}
-      <div className="pagination-bar-sticky">
-        <div className="pagination-content">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 ml-10">
+        <div className="flex items-center gap-3 bg-white/90 backdrop-blur-xl p-1.5 rounded-full shadow-2xl border border-outline-variant">
           <button 
-            className="pagi-btn-circle" 
+            className="w-11 h-11 rounded-full border-none bg-surface-container text-on-surface-variant flex items-center justify-center cursor-pointer transition-all hover:bg-secondary-container disabled:opacity-30 disabled:cursor-not-allowed" 
             disabled={currentPage === 1 || isLoading}
             onClick={() => goToPage(currentPage - 1)}
           >
             <ChevronLeft size={24} />
           </button>
           
-          <div className="page-indicator-pill">
+          <div className="bg-white border-1.5 border-outline-variant px-4 py-1.5 rounded-full font-extrabold text-[15px] text-primary flex items-center gap-2 shadow-inner">
             <input 
               type="text" 
-              className="page-input" 
+              className="w-9 border-none bg-surface-container-low rounded-md py-0.5 text-center font-black text-[15px] text-primary outline-hidden focus:bg-primary-container focus:ring-1 focus:ring-primary" 
               value={jumpPage} 
               onChange={(e) => setJumpPage(e.target.value)}
               onKeyDown={handleJumpPage}
               onBlur={() => setJumpPage(String(currentPage))}
             />
-            <span className="total-pages">/ {totalPages || 1}</span>
+            <span className="text-on-surface-variant/60 text-sm">/ {totalPages || 1}</span>
           </div>
 
           <button 
-            className="pagi-btn-circle active" 
+            className={`w-11 h-11 rounded-full border-none flex items-center justify-center cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed ${currentPage === totalPages ? 'bg-surface-container text-on-surface-variant' : 'bg-primary text-on-primary shadow-lg hover:bg-primary/90'}`} 
             disabled={currentPage === totalPages || isLoading}
             onClick={() => goToPage(currentPage + 1)}
           >
@@ -185,44 +188,6 @@ export const Home: React.FC = () => {
           </button>
         </div>
       </div>
-
-      <style>{`
-        .home-container { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 16px; padding-bottom: 60px; background-color: #f8fafc; }
-        
-        .top-action-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 4px; margin-bottom: 8px; }
-        .pill-group { display: flex; align-items: center; gap: 6px; }
-        .action-group { display: flex; align-items: center; gap: 6px; }
-
-        .order-toggle-btn-header { display: flex; align-items: center; gap: 6px; padding: 0 14px; border-radius: 40px; border: 1.5px solid transparent; height: 44px; font-weight: 700; font-size: 13.5px; cursor: pointer; transition: all 0.2s; background: #f1f5f9; color: #475569; position: relative; }
-        .order-toggle-btn-header:hover { background: #e2e8f0; }
-        .order-toggle-btn-header.active { background: #f1f5f9; }
-
-        .icon-pill { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 32px; border: none; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; background: #e2e8f0; color: #1e293b; }
-        .icon-pill.blue { background: #e0f2fe; color: #0369a1; }
-        .icon-pill.high-screen.active { background: #bae6fd; border: 1.5px solid #0369a1; }
-        
-        .resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
-        .loading-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; color: #0369a1; gap: 16px; font-weight: 600; font-size: 16px; }
-        .animate-spin { animation: spin 1s linear infinite; }
-        
-        .pagination-bar-sticky { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 100; margin-left: 36px; /* offset for compact sidebar */ }
-        .pagination-content { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); padding: 6px; border-radius: 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
-        .pagi-btn-circle { width: 44px; height: 44px; border-radius: 22px; border: none; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
-        .pagi-btn-circle.active { background: #0369a1; color: #fff; }
-        .pagi-btn-circle:disabled { opacity: 0.3; cursor: not-allowed; }
-        .page-indicator-pill { background: #fff; border: 1.5px solid #e2e8f0; padding: 4px 16px; border-radius: 20px; font-weight: 800; font-size: 15px; color: #0369a1; display: flex; align-items: center; gap: 8px; }
-        .page-input { width: 36px; border: none; background: #f1f5f9; border-radius: 6px; padding: 2px 4px; text-align: center; font-weight: 800; font-size: 15px; color: #0369a1; outline: none; }
-        .page-input:focus { background: #e0f2fe; box-shadow: 0 0 0 1.5px #0369a1; }
-        .total-pages { color: #64748b; font-size: 14px; }
-        
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        .active-tags-row { display: flex; align-items: center; gap: 12px; padding: 4px 8px; margin-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
-        .tag-chips-container { display: flex; gap: 8px; }
-        .tag-chip-active { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #e0f2fe; border: 1.5px solid #0369a1; border-radius: 20px; font-weight: 700; font-size: 13px; color: #0369a1; }
-        .remove-tag-btn { background: transparent; border: none; color: #0369a1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
-        .clear-all-tags { font-size: 13px; color: #64748b; font-weight: 700; background: none; border: none; cursor: pointer; text-decoration: underline; white-space: nowrap; }
-      `}</style>
     </div>
   );
 };

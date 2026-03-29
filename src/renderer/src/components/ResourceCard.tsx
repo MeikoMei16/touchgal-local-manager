@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchGalResource } from '../types';
-import { Star, Download, Eye, Heart, MessageSquare } from 'lucide-react';
+import { Star, Download, Eye, Heart } from 'lucide-react';
 
 interface ResourceCardProps {
   resource: TouchGalResource;
@@ -24,209 +24,57 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
 
   return (
     <div 
-      className={`resource-card-m3 ${!isClickable ? 'disabled' : ''}`} 
+      className={`group w-full bg-white rounded-[24px] overflow-hidden cursor-pointer transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] border border-slate-200 flex flex-col h-full relative hover:not-disabled:-translate-y-1.5 hover:not-disabled:shadow-2xl hover:not-disabled:border-primary ${!isClickable ? 'opacity-60 cursor-not-allowed grayscale' : ''}`} 
       onClick={() => isClickable && onClick(resource.uniqueId)}
     >
-      <div className="card-media">
+      <div className="relative aspect-[1.618/1] overflow-hidden bg-slate-100">
         {resource.banner ? (
-          <img src={resource.banner} alt={resource.name} loading="lazy" />
+          <img 
+            src={resource.banner} 
+            alt={resource.name} 
+            loading="lazy" 
+            className="w-full h-full object-cover transition-transform duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105"
+          />
         ) : (
-          <div className="media-placeholder" />
+          <div className="w-full h-full bg-slate-200 animate-pulse" />
         )}
-        <div className="card-scrim-top">
-          <div className="badge-rating">
+        <div className="absolute top-0 inset-x-0 p-3 bg-linear-to-b from-black/30 to-transparent flex justify-end">
+          <div className="bg-white/90 text-amber-700 px-2.5 py-0.5 rounded-xl flex items-center gap-1 font-extrabold text-[13px] backdrop-blur-md shadow-sm">
             <Star size={12} fill="currentColor" stroke="none" />
             <span>{(resource.averageRating || 0).toFixed(1)}</span>
           </div>
         </div>
       </div>
 
-      <div className="card-body">
-        <h3 className="title-medium" title={resource.name}>{resource.name}</h3>
+      <div className="p-4 flex-1 flex flex-col gap-1.5">
+        <h3 className="m-0 text-base font-bold leading-relaxed text-slate-900 h-11 line-clamp-2 tracking-tight group-hover:text-primary transition-colors" title={resource.name}>{resource.name}</h3>
         
-        <div className="body-small release-date">{resource.releasedDate || '未知时间'}</div>
+        <div className="text-[11px] text-slate-400 font-bold mb-2 uppercase tracking-wider">{resource.releasedDate || '未知时间'}</div>
 
-        <div className="card-stats-row">
-          <div className="stat-pill" title="浏览数">
+        <div className="flex flex-nowrap justify-between gap-1.5 mb-4 w-full">
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="浏览数">
              <Eye size={12} />
              <span>{formatStat(resource.viewCount || (resource as any).view || 0)}</span>
           </div>
-          <div className="stat-pill" title="下载数">
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="下载数">
              <Download size={12} />
              <span>{formatStat(resource.downloadCount || (resource as any).download || 0)}</span>
           </div>
-          <div className="stat-pill" title="收藏数">
-             <Heart size={12} fill={resource.favoriteCount > 0 ? "currentColor" : "none"} />
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="收藏数">
+             <Heart size={12} fill={resource.favoriteCount > 0 ? "currentColor" : "none"} className={resource.favoriteCount > 0 ? "text-pink-500 animate-in zoom-in-125" : ""} />
              <span>{formatStat(resource.favoriteCount)}</span>
-          </div>
-          <div className="stat-pill" title="评论数">
-             <MessageSquare size={12} />
-             <span>{resource.commentCount}</span>
           </div>
         </div>
 
-        <div className="card-actions">
-           <button className="btn-tonal" onClick={(e) => { e.stopPropagation(); }}>
+        <div className="mt-auto pt-2">
+           <button 
+             className="w-full p-2.5 bg-slate-100 text-primary border-none rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 hover:bg-primary hover:text-white shadow-xs group-hover:shadow-md active:scale-95" 
+             onClick={(e) => { e.stopPropagation(); }}
+           >
              <span>立即收藏</span>
            </button>
         </div>
       </div>
-
-      <style>{`
-        .resource-card-m3 {
-          width: 100%;
-          background-color: #ffffff;
-          border-radius: 24px;
-          overflow: hidden;
-          cursor: pointer;
-          transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
-          border: 1px solid #e2e8f0;
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          position: relative;
-        }
-
-        .resource-card-m3:hover:not(.disabled) {
-          transform: translateY(-6px);
-          box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.12);
-          border-color: #0369a1;
-        }
-
-        .card-media {
-          position: relative;
-          aspect-ratio: 1.618 / 1; /* Golden ratio fallback */
-          overflow: hidden;
-          background-color: #f1f5f9;
-        }
-
-        .card-media img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .resource-card-m3:hover img {
-          transform: scale(1.05);
-        }
-
-        .card-scrim-top {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          padding: 12px;
-          background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
-          display: flex;
-          justify-content: flex-end;
-        }
-
-        .badge-rating {
-          background: rgba(255, 255, 255, 0.9);
-          color: #b45309;
-          padding: 2px 10px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-weight: 800;
-          font-size: 13px;
-          backdrop-filter: blur(8px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .card-body {
-          padding: 16px;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .title-medium {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 700;
-          line-height: 1.4;
-          color: #0f172a;
-          height: 44px;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          letter-spacing: -0.01em;
-        }
-
-        .release-date {
-          font-size: 12px;
-          color: #64748b;
-          font-weight: 600;
-          margin-bottom: 8px;
-        }
-
-        .card-stats-row {
-          display: flex;
-          flex-wrap: nowrap;
-          justify-content: space-between;
-          gap: 4px;
-          margin-bottom: 16px;
-          width: 100%;
-        }
-
-        .stat-pill {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 11px;
-          font-weight: 700;
-          color: #64748b;
-          background: #f8fafc;
-          padding: 4px 6px;
-          border-radius: 8px;
-          transition: all 0.2s;
-          flex: 1;
-          justify-content: center;
-          min-width: fit-content;
-          white-space: nowrap;
-        }
-
-        .stat-pill span {
-          display: inline-block;
-        }
-
-        .resource-card-m3:hover .stat-pill {
-          color: #334155;
-        }
-
-        .card-actions {
-          margin-top: auto;
-        }
-
-        .btn-tonal {
-          width: 100%;
-          padding: 10px;
-          background-color: #f1f5f9;
-          color: #0369a1;
-          border: none;
-          border-radius: 16px;
-          font-weight: 700;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .btn-tonal:hover {
-          background-color: #0369a1;
-          color: #ffffff;
-        }
-
-        .disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          filter: grayscale(1);
-        }
-      `}</style>
     </div>
   );
 };

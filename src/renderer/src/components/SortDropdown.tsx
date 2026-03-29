@@ -29,68 +29,37 @@ export const SortDropdown: React.FC<SortDropdownProps> = ({ value, options, onSe
   }, []);
 
   return (
-    <div className="custom-sort-container" ref={containerRef}>
+    <div className="relative group" ref={containerRef}>
       <button 
-        className="sort-trigger-pill"
+        className="flex items-center gap-2 px-4 rounded-full border-none h-11 bg-slate-100 cursor-pointer transition-all font-bold text-slate-500 min-w-[140px] justify-between text-[13.5px] hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed group"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
       >
-        <span className="current-label">{selectedOption.label}</span>
-        <ChevronDown size={16} className={`chevron ${isOpen ? 'open' : ''}`} />
+        <span className="truncate">{selectedOption.label}</span>
+        <ChevronDown size={16} className={`transition-transform duration-300 text-slate-400 group-hover:text-slate-600 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="sort-popover">
+        <div className="absolute top-[calc(100%+8px)] left-0 z-[1000] min-w-[180px] bg-white rounded-2xl shadow-2xl border border-slate-100 p-1.5 animate-in slide-in-from-top-2 fade-in duration-300">
           {options.map((option) => (
             <div 
               key={option.value}
-              className={`sort-option-item ${option.value === value ? 'active' : ''}`}
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer text-sm font-bold transition-all ${
+                option.value === value 
+                  ? 'bg-slate-100 text-slate-900 font-black' 
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+              }`}
               onClick={() => {
                 onSelect(option.value);
                 setIsOpen(false);
               }}
             >
               <span>{option.label}</span>
-              {option.value === value && <Check size={16} />}
+              {option.value === value && <Check size={16} className="text-primary" />}
             </div>
           ))}
         </div>
       )}
-
-      <style>{`
-        .custom-sort-container { position: relative; }
-        .sort-trigger-pill { 
-          display: flex; align-items: center; gap: 8px; 
-          padding: 0 16px; border-radius: 40px; border: none; 
-          height: 44px; background: #f1f5f9; cursor: pointer; transition: all 0.2s;
-          font-weight: 700; color: #475569; min-width: 130px; justify-content: space-between;
-          font-size: 13.5px;
-        }
-        .sort-trigger-pill:hover:not(:disabled) { background: #e2e8f0; }
-        .sort-trigger-pill:disabled { opacity: 0.6; cursor: not-allowed; }
-        .chevron { transition: transform 0.2s; color: #64748b; }
-        .chevron.open { transform: rotate(180deg); }
-
-        .sort-popover { 
-          position: absolute; top: calc(100% + 8px); left: 0; z-index: 1000; 
-          min-width: 180px; background: white; border-radius: 16px; 
-          box-shadow: 0 12px 32px rgba(0,0,0,0.12); border: 1px solid #f1f5f9; 
-          padding: 6px; animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        @keyframes popIn {
-          from { opacity: 0; transform: translateY(-8px) scale(0.98); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        .sort-option-item { 
-          display: flex; align-items: center; justify-content: space-between; 
-          padding: 10px 14px; border-radius: 10px; cursor: pointer; 
-          font-size: 14px; font-weight: 600; color: #475569; transition: all 0.15s;
-        }
-        .sort-option-item:hover { background: #f1f5f9; color: #1e293b; }
-        .sort-option-item.active { background: #f1f5f9; color: #1e293b; font-weight: 700; }
-      `}</style>
     </div>
   );
 };
