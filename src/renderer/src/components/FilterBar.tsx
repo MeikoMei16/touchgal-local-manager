@@ -69,7 +69,8 @@ type NsfwMode = 'safe' | 'nsfw' | 'all';
 type Operator = '=' | '>=' | '<=' | '>' | '<';
 
 export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }) => {
-  const { selectedTags, addTagFilter, removeTagFilter, advancedFilterDraft } = useUIStore();
+  const { addTagFilter, removeTagFilter, advancedFilterDraft } = useUIStore();
+  const selectedTags = advancedFilterDraft.selectedTags;
 
   // --- State ---
   const [nsfwMode, setNsfwMode] = useState<NsfwMode>('safe');

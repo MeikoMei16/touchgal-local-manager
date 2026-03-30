@@ -11,7 +11,7 @@ export const Home: React.FC = () => {
     resources, totalResources, currentPage, isLoading, error, 
     fetchResources, selectResource,
     removeTagFilter, clearTags, advancedFilterDraft,
-    homeMode, activeNsfwDomain, advancedBuildProgress, exitAdvancedMode,
+    homeMode, activeNsfwDomain, advancedBuildProgress, exitAdvancedMode, clearAdvancedSearch,
     updateAdvancedFilterDraft, setActiveNsfwDomain, enterAdvancedMode, applyAdvancedFilters,
     advancedDatasetsByDomain,
     lastHomeQuery, setLastHomeQuery
@@ -172,6 +172,11 @@ export const Home: React.FC = () => {
     if (homeMode !== 'normal') applyAdvancedFilters(1, field, order);
   };
 
+  const handleExitAdvancedMode = () => {
+    clearAdvancedSearch();
+    setShowFilters(false);
+  };
+
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
     if (homeMode === 'normal') {
@@ -241,7 +246,7 @@ export const Home: React.FC = () => {
           </div>
           <button
             className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
-            onClick={exitAdvancedMode}
+            onClick={handleExitAdvancedMode}
           >
             退出高级模式
           </button>

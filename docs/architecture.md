@@ -64,18 +64,46 @@ Current output:
 Owns:
 
 - application UI
-- local interaction state
+- homepage query state and result state
 - advanced-filter orchestration
 - detail overlay lifecycle
+
+Homepage state currently lives in [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts).
+
+Key frontend state split:
+
+- persisted homepage query: `lastHomeQuery`
+- advanced draft state: `advancedFilterDraft`
+- advanced datasets and progress: `advancedDatasetsByDomain`, `advancedBuildProgress`
+- current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
+
+Important note:
+
+- sorting for the homepage is store-owned, not component-local
+- tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
 
 ## Data Flow
 
 Normal homepage browsing:
 
-1. Renderer calls `TouchGalClient.fetchGalgameResources()`.
-2. Preload forwards to `tg-fetch-resources`.
-3. Main process relays to upstream TouchGal API and normalizes the response.
-4. Renderer store updates `resources`, `totalResources`, and pagination state.
+1. Renderer derives a normalized homepage query from store state.
+2. Renderer calls `TouchGalClient.fetchGalgameResources()`.
+3. Preload forwards to `tg-fetch-resources`.
+4. Main process relays to upstream TouchGal API and normalizes the response.
+5. Renderer store updates `resources`, `totalResources`, and pagination state.
+
+Advanced homepage browsing:
+
+1. Renderer keeps the active homepage query in `lastHomeQuery`.
+2. Entering advanced mode builds or reuses a domain-scoped local candidate dataset.
+3. Stage 2 and Stage 3 filtering are applied locally against that dataset.
+4. Local sorting and pagination update the same result view state used by normal mode.
+
+Exiting advanced search:
+
+1. Renderer clears advanced constraints and advanced-mode UI state.
+2. Homepage returns to `normal` mode.
+3. A fresh normal-mode fetch is triggered from the reset homepage query.
 
 Detail loading:
 

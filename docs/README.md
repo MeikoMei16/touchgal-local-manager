@@ -5,8 +5,8 @@ This repository keeps project documentation under `docs/` and lightweight agent 
 ## Core Docs
 
 - `architecture.md`: Current application architecture, runtime boundaries, and implementation status.
-- `advanced-filter.md`: Homepage advanced-filter pipeline and tag-filtering rules.
-- `decisions.md`: Stable architectural decisions and non-obvious constraints.
+- `advanced-filter.md`: Homepage advanced-filter pipeline, query model, and advanced-mode behavior.
+- `decisions.md`: Stable architectural decisions and non-obvious frontend/runtime constraints.
 - `styling.md`: Renderer UI tokens and styling conventions.
 
 ## API Notes

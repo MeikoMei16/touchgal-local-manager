@@ -51,6 +51,40 @@ Do not re-apply Stage 1 fields inside the local predicate.
 
 ## UI / Interaction
 
+### Homepage query state is store-owned
+
+Rule:
+
+- homepage sorting and upstream browse query fields belong to store state, not component-local state
+- `lastHomeQuery` is the canonical homepage query object
+
+Reason:
+
+- avoids split-brain state between React local state and persisted browse state
+- keeps normal-mode fetches and advanced-mode transitions consistent
+
+### Advanced tag state has one source of truth
+
+Rule:
+
+- advanced tag constraints are owned by `advancedFilterDraft.selectedTags`
+- do not maintain a second standalone renderer tag list for the same filters
+
+Reason:
+
+- prevents tag-chip UI, filter bar UI, and advanced-mode predicate logic from drifting apart
+
+### Exiting advanced search must clear constraints and refresh normal browse
+
+Rule:
+
+- the advanced-mode exit action must clear advanced constraints, reset advanced-mode UI state, and trigger a normal homepage refresh
+- preserving sort field and sort order is allowed; preserving advanced constraints is not
+
+Reason:
+
+- users expect “退出高级模式” to return to ordinary browsing immediately, not only flip an internal mode flag
+
 ### Tag suggestion dropdown uses `onMouseDown`
 
 Reason:

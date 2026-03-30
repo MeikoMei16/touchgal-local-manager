@@ -78,12 +78,25 @@ The main implementation lives in [`src/renderer/src/store/useTouchGalStore.ts`](
 
 Key state:
 
+- `lastHomeQuery`
 - `homeMode`
 - `activeNsfwDomain`
 - `advancedFilterDraft`
 - `advancedBuildSessionId`
 - `advancedBuildProgress`
 - `advancedDatasetsByDomain`
+
+Query model:
+
+- `lastHomeQuery` is the canonical homepage query state
+- normal-mode fetches derive their upstream request from that query
+- `sortField` and `sortOrder` are part of the store query, not component-local state
+
+Draft model:
+
+- `advancedFilterDraft` is the editable advanced-search draft
+- `advancedFilterDraft.selectedTags` is the single source of truth for advanced tag constraints
+- `selectedTags` are also mirrored into `lastHomeQuery` when the homepage query is committed
 
 Modes:
 
@@ -97,6 +110,7 @@ Modes:
 - Late results from stale sessions are ignored.
 - Datasets are isolated by domain.
 - Exiting advanced mode returns homepage behavior to normal API pagination.
+- Clearing advanced search resets advanced constraints while preserving the current top-level sort field and sort order.
 
 ## Current Behavior Notes
 
@@ -106,6 +120,7 @@ Modes:
 - Local sorting and pagination happen after predicate application in advanced mode.
 - Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
 - Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
+- The advanced-mode exit button is expected to clear advanced constraints and immediately refresh the homepage back into normal browse mode.
 
 ## Caching
 

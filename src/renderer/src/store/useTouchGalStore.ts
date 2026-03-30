@@ -401,7 +401,6 @@ interface UIState {
   advancedBuildSessionId: string | null;
   advancedBuildProgress: AdvancedBuildProgress;
   advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
-  selectedTags: string[];
   lastHomeQuery: HomeQueryState;
 
   fetchResources: (page?: number, query?: Partial<HomeQueryState>) => Promise<void>;
@@ -412,6 +411,7 @@ interface UIState {
   setActiveNsfwDomain: (domain: NsfwDomain) => void;
   enterAdvancedMode: (sortField: string, sortOrder: string) => Promise<void>;
   exitAdvancedMode: () => void;
+  clearAdvancedSearch: () => void;
   applyAdvancedFilters: (page: number, sortField: string, sortOrder: string) => void;
   addTagFilter: (tag: string) => void;
   removeTagFilter: (tag: string) => void;
@@ -442,7 +442,6 @@ export const useUIStore = create<UIState>()(
         nsfw: defaultAdvancedDatasetCache(),
         all: defaultAdvancedDatasetCache()
       },
-      selectedTags: [],
       lastHomeQuery: defaultHomeQuery(),
 
       fetchResources: async (page = 1, query = {}) => {
@@ -773,6 +772,24 @@ export const useUIStore = create<UIState>()(
         }
       },
       exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),
+      clearAdvancedSearch: () => {
+        const currentQuery = get().lastHomeQuery;
+        const resetQuery = {
+          ...defaultHomeQuery(),
+          sortField: currentQuery.sortField,
+          sortOrder: currentQuery.sortOrder
+        };
+
+        set({
+          homeMode: 'normal',
+          activeNsfwDomain: 'sfw',
+          advancedFilterDraft: defaultAdvancedFilterDraft(),
+          advancedBuildSessionId: null,
+          advancedBuildProgress: defaultBuildProgress(),
+          currentPage: 1,
+          lastHomeQuery: resetQuery
+        });
+      },
       applyAdvancedFilters: (page, sortField, sortOrder) => {
         const domain = get().activeNsfwDomain;
         const ds = get().advancedDatasetsByDomain[domain];
@@ -787,10 +804,17 @@ export const useUIStore = create<UIState>()(
           currentPage: safePage
         });
       },
-      addTagFilter: (tag) => { const next = get().selectedTags.includes(tag) ? get().selectedTags : [...get().selectedTags, tag]; set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },
-      removeTagFilter: (tag) => { const next = get().selectedTags.filter(t => t !== tag); set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },
-      clearTags: () => { const next: string[] = []; set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },
-      resetAdvancedFilterDraft: () => set({ advancedFilterDraft: defaultAdvancedFilterDraft(), selectedTags: [] }),
+      addTagFilter: (tag) => {
+        const currentTags = get().advancedFilterDraft.selectedTags;
+        const next = currentTags.includes(tag) ? currentTags : [...currentTags, tag];
+        set({ advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } });
+      },
+      removeTagFilter: (tag) => {
+        const next = get().advancedFilterDraft.selectedTags.filter(t => t !== tag);
+        set({ advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } });
+      },
+      clearTags: () => set({ advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: [] } }),
+      resetAdvancedFilterDraft: () => set({ advancedFilterDraft: defaultAdvancedFilterDraft() }),
       setLastHomeQuery: (query) => set({ lastHomeQuery: normalizeHomeQuery(query) })
     }),
     {
