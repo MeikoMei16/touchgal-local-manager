@@ -175,7 +175,40 @@ const normalizeResource = (resource: any) => {
   const uniqueId = raw.uniqueId ?? raw.unique_id ?? ''
   const name = raw.name ?? 'Unknown title'
   const banner = raw.banner ?? raw.banner_url ?? raw.bannerUrl ?? null
+  
+  // Rating Logic Optimization
   const averageRating = raw.averageRating ?? raw.ratingSummary?.average ?? raw.rating_stat?.avg_overall ?? 0
+  
+  // Histogram / Rating Summary Extraction
+  let ratingSummary = raw.ratingSummary ?? null
+  if (!ratingSummary && raw.rating_stat) {
+    const stat = raw.rating_stat
+    ratingSummary = {
+      average: stat.avg_overall ?? 0,
+      count: stat.count ?? 0,
+      histogram: [
+        { score: 1,  count: stat.o1  ?? 0 },
+        { score: 2,  count: stat.o2  ?? 0 },
+        { score: 3,  count: stat.o3  ?? 0 },
+        { score: 4,  count: stat.o4  ?? 0 },
+        { score: 5,  count: stat.o5  ?? 0 },
+        { score: 6,  count: stat.o6  ?? 0 },
+        { score: 7,  count: stat.o7  ?? 0 },
+        { score: 8,  count: stat.o8  ?? 0 },
+        { score: 9,  count: stat.o9  ?? 0 },
+        { score: 10, count: stat.o10 ?? 0 }
+      ],
+      recommend: {
+        strong_no:  stat.rec_strong_no  ?? 0,
+        no:         stat.rec_no         ?? 0,
+        neutral:    stat.rec_neutral    ?? 0,
+        yes:        stat.rec_yes        ?? 0,
+        strong_yes: stat.rec_strong_yes ?? 0
+      }
+    }
+  }
+
+  const ratingCount = raw.ratingCount ?? ratingSummary?.count ?? raw.rating_stat?.count ?? 0
 
   const company =
     typeof raw.company === 'string'
@@ -199,6 +232,8 @@ const normalizeResource = (resource: any) => {
     name,
     banner,
     averageRating,
+    ratingCount,
+    ratingSummary,
     tags: extractTags(raw),
     viewCount,
     downloadCount,
@@ -513,8 +548,8 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     log.info('[API] GET /galgame success, items:', response.data?.galgames?.length);
     const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-    // Delta Sync: Upsert to local DB
-    normalized.list.forEach(upsertGame)
+    // TODO: Background Delta Sync (Isolated from primary Network IO flow)
+    // normalized.list.forEach(upsertGame)
 
     return normalized
   } catch (err: any) {
@@ -533,8 +568,8 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-  // Delta Sync: Upsert to local DB
-  normalized.list.forEach(upsertGame)
+  // TODO: Background Delta Sync (Isolated from primary Network IO flow)
+  // normalized.list.forEach(upsertGame)
 
   return normalized
 })
