@@ -57,6 +57,7 @@ Rule:
 
 - homepage sorting and upstream browse query fields belong to store state, not component-local state
 - `lastHomeQuery` is the canonical homepage query object
+- homepage persistence for query/page restore uses renderer `localStorage`
 
 Reason:
 

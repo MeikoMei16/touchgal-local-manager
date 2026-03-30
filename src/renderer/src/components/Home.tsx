@@ -8,13 +8,14 @@ import { Loader2, ChevronLeft, ChevronRight, Settings, SortAsc, SortDesc, X } fr
 
 export const Home: React.FC = () => {
   const { 
+    hasHydratedUi,
     resources, totalResources, currentPage, isLoading, error, 
     fetchResources, selectResource,
     removeTagFilter, clearTags, advancedFilterDraft,
     homeMode, activeNsfwDomain, advancedBuildProgress, exitAdvancedMode, clearAdvancedSearch,
     updateAdvancedFilterDraft, setActiveNsfwDomain, enterAdvancedMode, applyAdvancedFilters,
     advancedDatasetsByDomain,
-    lastHomeQuery, setLastHomeQuery
+    lastHomeQuery, setLastHomeQuery, setCurrentPage
   } = useUIStore();
   const [showFilters, setShowFilters] = useState(false);
 
@@ -78,12 +79,14 @@ export const Home: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!hasHydratedUi) return;
     syncDraftFromQuery(lastHomeQuery);
     // DO NOT automatically trigger enterAdvancedMode on mount.
     // Let the user stay in Normal Mode (Network IO) unless they manually Apply/Submit.
-  }, [lastHomeQuery, setActiveNsfwDomain, updateAdvancedFilterDraft]);
+  }, [hasHydratedUi, lastHomeQuery, setActiveNsfwDomain, updateAdvancedFilterDraft]);
 
   useEffect(() => {
+    if (!hasHydratedUi) return;
     if (homeMode === 'normal') {
       const queryParams = { 
         ...lastHomeQuery, 
@@ -91,9 +94,9 @@ export const Home: React.FC = () => {
         sortOrder 
       };
       console.log('[Home] useEffect triggering fetchResources:', queryParams);
-      fetchResources(1, queryParams);
+      fetchResources(currentPage, queryParams);
     }
-  }, [fetchResources, homeMode, lastHomeQuery, sortField, sortOrder, activeNsfwDomain]);
+  }, [hasHydratedUi, fetchResources, homeMode, lastHomeQuery, currentPage, sortField, sortOrder, activeNsfwDomain]);
 
   const commitFilterDraft = (filters: Partial<HomeQueryState>) => {
     const newQuery = { ...lastHomeQuery, ...filters };
@@ -169,7 +172,7 @@ export const Home: React.FC = () => {
   const updateSort = (field: HomeQueryState['sortField'], order: HomeQueryState['sortOrder']) => {
     const nextQuery = { ...lastHomeQuery, sortField: field, sortOrder: order };
     setLastHomeQuery(nextQuery);
-    if (homeMode !== 'normal') applyAdvancedFilters(1, field, order);
+    if (homeMode !== 'normal') applyAdvancedFilters(currentPage, field, order);
   };
 
   const handleExitAdvancedMode = () => {
@@ -180,7 +183,7 @@ export const Home: React.FC = () => {
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
     if (homeMode === 'normal') {
-      fetchResources(page, lastHomeQuery);
+      setCurrentPage(page);
       return;
     }
     applyAdvancedFilters(page, sortField, sortOrder);
@@ -190,7 +193,7 @@ export const Home: React.FC = () => {
     return (
       <div className="error-container">
         <p>{error}</p>
-        <button onClick={() => fetchResources(1, lastHomeQuery)}>Retry</button>
+        <button onClick={() => fetchResources(currentPage, lastHomeQuery)}>Retry</button>
       </div>
     );
   }

@@ -91,6 +91,7 @@ Query model:
 - `lastHomeQuery` is the canonical homepage query state
 - normal-mode fetches derive their upstream request from that query
 - `sortField` and `sortOrder` are part of the store query, not component-local state
+- homepage query state and current page are persisted in renderer `localStorage`
 
 Draft model:
 

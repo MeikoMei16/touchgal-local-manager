@@ -109,6 +109,11 @@ const normalizeSortField = (value: unknown): HomeSortField => {
 
 const normalizeSortOrder = (value: unknown): HomeSortOrder => (value === 'asc' ? 'asc' : 'desc');
 
+const normalizePage = (value: unknown): number => {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+};
+
 const normalizeHomeQuery = (query: Partial<HomeQueryState> | null | undefined): HomeQueryState => ({
   ...defaultHomeQuery(),
   ...query,
@@ -386,6 +391,7 @@ export const useAuthStore = create<AuthState>()(
 
 // --- UI STORE ---
 interface UIState {
+  hasHydratedUi: boolean;
   resources: TouchGalResource[];
   totalResources: number;
   currentPage: number;
@@ -418,11 +424,14 @@ interface UIState {
   clearTags: () => void;
   resetAdvancedFilterDraft: () => void;
   setLastHomeQuery: (query: Partial<HomeQueryState>) => void;
+  setCurrentPage: (page: number) => void;
+  setHasHydratedUi: (hydrated: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
+      hasHydratedUi: false,
       resources: [],
       totalResources: 0,
       currentPage: 1,
@@ -815,17 +824,33 @@ export const useUIStore = create<UIState>()(
       },
       clearTags: () => set({ advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: [] } }),
       resetAdvancedFilterDraft: () => set({ advancedFilterDraft: defaultAdvancedFilterDraft() }),
-      setLastHomeQuery: (query) => set({ lastHomeQuery: normalizeHomeQuery(query) })
+      setLastHomeQuery: (query) => set({ lastHomeQuery: normalizeHomeQuery(query) }),
+      setCurrentPage: (page) => set({ currentPage: page }),
+      setHasHydratedUi: (hydrated) => set({ hasHydratedUi: hydrated })
     }),
     {
       name: 'touchgal-ui-storage',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        currentPage: state.currentPage,
+        lastHomeQuery: state.lastHomeQuery
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydratedUi(true);
+      },
       merge: (persistedState, currentState) => {
-        const typedPersisted = persistedState as { state?: Partial<UIState> } | undefined;
-        const persistedQuery = typedPersisted?.state?.lastHomeQuery;
+        const typedPersisted = persistedState as Record<string, unknown> | undefined;
+        const persistedSlice = (
+          typedPersisted && 'state' in typedPersisted
+            ? typedPersisted.state
+            : typedPersisted
+        ) as Partial<UIState> | undefined;
+        const persistedQuery = persistedSlice?.lastHomeQuery;
         return {
           ...currentState,
-          ...typedPersisted?.state,
+          ...persistedSlice,
+          hasHydratedUi: true,
+          currentPage: normalizePage(persistedSlice?.currentPage),
           lastHomeQuery: normalizeHomeQuery(persistedQuery)
         };
       }

@@ -77,6 +77,11 @@ Key frontend state split:
 - advanced datasets and progress: `advancedDatasetsByDomain`, `advancedBuildProgress`
 - current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
 
+Renderer persistence notes:
+
+- homepage UI state is persisted through Zustand in renderer `localStorage`
+- auth UI state is persisted separately from the encrypted token managed by the main process
+
 Important note:
 
 - sorting for the homepage is store-owned, not component-local

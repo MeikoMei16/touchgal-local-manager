@@ -22,14 +22,40 @@ log.info('Log initialized (Spying on Renderer) at:', logPath)
 const tokenPath = join(app.getPath('userData'), 'session_token.dat')
 let currentToken = ''
 
+const sanitizeToken = (token: string) => token.replace(/[\r\n\t]/g, '').trim()
+
+const normalizeTokenInput = (rawToken: string) => {
+  const sanitized = sanitizeToken(rawToken)
+  if (!sanitized) return ''
+
+  const cookieMatch = sanitized.match(/kun-galgame-patch-moe-token=([^;\s]+)/)
+  if (cookieMatch) return cookieMatch[1]
+
+  const bearerMatch = sanitized.match(/^Bearer\s+([^\s;]+)/i)
+  if (bearerMatch) return bearerMatch[1]
+
+  const firstSegment = sanitized.split(/[;\s]/)[0]
+  const tokenSafeSegment = firstSegment.replace(/[^A-Za-z0-9._-]/g, '')
+  return tokenSafeSegment
+}
+
+const buildAuthCookie = (token: string) => `kun-galgame-patch-moe-token=${token}`
+
+const buildRequestCookie = () => {
+  const cookies: string[] = []
+  if (currentToken) cookies.push(buildAuthCookie(currentToken))
+  return cookies.join('; ')
+}
+
 const saveToken = (token: string) => {
   try {
+    const sanitizedToken = normalizeTokenInput(token)
     if (safeStorage.isEncryptionAvailable()) {
-      const encrypted = safeStorage.encryptString(token)
+      const encrypted = safeStorage.encryptString(sanitizedToken)
       fs.writeFileSync(tokenPath, encrypted)
     } else {
       // Fallback to plain text if encryption is not available (not recommended)
-      fs.writeFileSync(tokenPath, token, 'utf8')
+      fs.writeFileSync(tokenPath, sanitizedToken, 'utf8')
       log.warn('Encryption not available, saving token as plain text')
     }
   } catch (e) {
@@ -42,10 +68,10 @@ const loadToken = () => {
     if (fs.existsSync(tokenPath)) {
       const buffer = fs.readFileSync(tokenPath)
       if (safeStorage.isEncryptionAvailable()) {
-        currentToken = safeStorage.decryptString(buffer)
+        currentToken = normalizeTokenInput(safeStorage.decryptString(buffer))
         log.info('Loaded encrypted token from disk')
       } else {
-        currentToken = buffer.toString('utf8')
+        currentToken = normalizeTokenInput(buffer.toString('utf8'))
         log.info('Loaded plain text token from disk (fallback)')
       }
     } else {
@@ -56,7 +82,7 @@ const loadToken = () => {
         // Try to extract token from old cookie string
         const match = oldCookies.match(/kun-galgame-patch-moe-token=([^;]+)/)
         if (match) {
-          currentToken = match[1]
+          currentToken = normalizeTokenInput(match[1])
           saveToken(currentToken)
           log.info('Migrated old cookie to encrypted token')
           fs.unlinkSync(oldCookiePath) // Clean up old file
@@ -100,7 +126,7 @@ API_CLIENT.interceptors.request.use((config) => {
     
     // 2. Compatibility Cookie Header (for backend middleware)
     const existingCookie = config.headers['Cookie'] as string | undefined;
-    const authCookie = `kun-galgame-patch-moe-token=${currentToken}`;
+    const authCookie = buildAuthCookie(currentToken);
     
     if (existingCookie) {
       if (!existingCookie.includes('kun-galgame-patch-moe-token')) {
@@ -125,7 +151,7 @@ API_CLIENT.interceptors.response.use((response) => {
     for (const cookieStr of setCookies) {
       const match = cookieStr.match(/kun-galgame-patch-moe-token=([^;]+)/);
       if (match) {
-        const newToken = match[1];
+        const newToken = normalizeTokenInput(match[1]);
         if (newToken !== currentToken) {
           currentToken = newToken;
           saveToken(currentToken);
@@ -552,14 +578,13 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     minRatingCount: query.minRatingCount ?? 0
   };
 
-  const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
-  const cookieString = `${currentToken ? currentToken + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+  const cookieString = buildRequestCookie();
 
   log.info('[API] GET /galgame params:', apiParams);
   try {
     const response = await API_CLIENT.get('/galgame', {
       params: apiParams,
-      headers: { 'Cookie': cookieString }
+      headers: cookieString ? { 'Cookie': cookieString } : undefined
     })
     log.info('[API] GET /galgame success, items:', response.data?.galgames?.length);
     const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
@@ -576,11 +601,10 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
 
 handleWithLog('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
   const body = { ...buildSearchBody(keyword, page, limit), ...options }
-  const nsfwValue = options?.nsfwMode === 'nsfw' ? 'nsfw' : (options?.nsfwMode === 'all' ? 'all' : 'sfw');
-  const cookieString = `${currentToken ? currentToken + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+  const cookieString = buildRequestCookie();
 
   const response = await API_CLIENT.post('/search', body, {
-    headers: { 'Cookie': cookieString }
+    headers: cookieString ? { 'Cookie': cookieString } : undefined
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
