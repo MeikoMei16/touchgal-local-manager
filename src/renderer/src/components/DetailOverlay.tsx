@@ -5,6 +5,7 @@ import { EvaluationSection } from './EvaluationSection';
 import { CommentSection } from './CommentSection';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { BlurredSection } from './BlurredSection';
+import { RatingHistogram } from './RatingHistogram';
 
 const ImageViewer: React.FC<{ url: string; onDismiss: () => void }> = ({ url, onDismiss }) => (
   <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center animate-in fade-in duration-200" onClick={onDismiss}>
@@ -19,108 +20,6 @@ const ImageViewer: React.FC<{ url: string; onDismiss: () => void }> = ({ url, on
     </div>
   </div>
 );
-
-// ─── Rating Histogram Component ──────────────────────────────────────────────
-type RatingSummary = {
-  average: number;
-  count: number;
-  histogram?: { score: number; count: number }[];
-  recommend?: {
-    strong_no: number; no: number; neutral: number; yes: number; strong_yes: number;
-  };
-};
-
-const RatingHistogram: React.FC<{ ratingSummary: RatingSummary }> = ({ ratingSummary }) => {
-  const sorted = [...(ratingSummary.histogram ?? [])].sort((a, b) => b.score - a.score);
-  const maxCount = Math.max(...sorted.map(h => h.count), 1);
-
-  const barColor = (score: number) => {
-    if (score >= 9) return 'bg-emerald-500';
-    if (score >= 7) return 'bg-blue-500';
-    if (score >= 5) return 'bg-amber-400';
-    if (score >= 3) return 'bg-orange-400';
-    return 'bg-rose-500';
-  };
-
-  const recBars = [
-    { key: 'strong_yes', label: '强烈推荐', color: 'bg-emerald-500' },
-    { key: 'yes',        label: '推荐',     color: 'bg-blue-400'    },
-    { key: 'neutral',    label: '一般',     color: 'bg-slate-300'   },
-    { key: 'no',         label: '不推荐',   color: 'bg-orange-400'  },
-    { key: 'strong_no',  label: '强烈反对', color: 'bg-rose-500'    },
-  ] as const;
-
-  const rec = ratingSummary.recommend;
-  const recTotal = rec ? Object.values(rec).reduce((s, v) => s + v, 0) || 1 : 1;
-
-  return (
-    <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 mb-6 flex flex-col gap-6">
-      <h2 className="text-2xl font-black text-slate-900 tracking-tight">评分统计</h2>
-
-      {/* Score + Count */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl flex flex-col items-center gap-1">
-          <div className="text-5xl font-black text-amber-600 leading-none">{ratingSummary.average.toFixed(1)}</div>
-          <div className="text-xs font-bold text-amber-600/60 uppercase tracking-widest">综合评分</div>
-        </div>
-        <div className="bg-slate-50 border border-slate-200 p-6 rounded-3xl flex flex-col items-center gap-1">
-          <div className="text-5xl font-black text-slate-700 leading-none">{ratingSummary.count.toLocaleString()}</div>
-          <div className="text-xs font-bold text-slate-500/60 uppercase tracking-widest">评价人数</div>
-        </div>
-      </div>
-
-      {/* Score Histogram */}
-      {sorted.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">评分分布</div>
-          <div className="flex flex-col gap-1.5">
-            {sorted.map(h => (
-              <div key={h.score} className="flex items-center gap-3">
-                <span className="w-5 text-right text-xs font-black text-slate-400 shrink-0">{h.score}</span>
-                <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${barColor(h.score)}`}
-                    style={{ width: `${(h.count / maxCount) * 100}%` }}
-                  />
-                </div>
-                <span className="w-10 text-xs font-bold text-slate-400 shrink-0 text-right">{h.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recommend breakdown */}
-      {rec && (
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">推荐倾向</div>
-          <div className="flex h-4 rounded-full overflow-hidden gap-px">
-            {recBars.map(b => {
-              const val = rec[b.key];
-              const pct = (val / recTotal) * 100;
-              return pct > 0 ? (
-                <div key={b.key} className={`${b.color} transition-all duration-700`} style={{ width: `${pct}%` }} title={`${b.label}: ${val}`} />
-              ) : null;
-            })}
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-            {recBars.map(b => {
-              const val = rec[b.key];
-              return val > 0 ? (
-                <span key={b.key} className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
-                  <span className={`inline-block w-2 h-2 rounded-full ${b.color}`} />
-                  {b.label} {val}
-                </span>
-              ) : null;
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 type TabType = 'info' | 'links' | 'board' | 'evaluation';
 
@@ -250,69 +149,79 @@ export const DetailOverlay: React.FC = () => {
               </div>
 
               {/* Info */}
-              <div className="md:col-span-2 p-6 md:p-10 flex flex-col gap-6">
-                <div className="flex flex-col gap-2">
-                  <h1 className="m-0 text-2xl md:text-3xl font-black text-slate-900 leading-tight tracking-tight">{selectedResource.name}</h1>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-sm font-black border border-amber-100">
-                      <Star size={16} fill="currentColor" />
-                      <span>{selectedResource.averageRating?.toFixed(1) ?? '–'}</span>
+              <div className="md:col-span-2 p-6 md:p-10 flex flex-col gap-5">
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+                  <div className="flex min-w-0 flex-col gap-5">
+                    <div className="flex flex-col gap-2">
+                      <h1 className="m-0 text-2xl md:text-3xl font-black text-slate-900 leading-tight tracking-tight">{selectedResource.name}</h1>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-sm font-black border border-amber-100">
+                          <Star size={16} fill="currentColor" />
+                          <span>{selectedResource.averageRating?.toFixed(1) ?? '–'}</span>
+                        </div>
+                        {ratingSummary && (
+                          <span className="text-slate-400 text-xs font-bold">
+                            {ratingSummary.count.toLocaleString()} 人评价
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {ratingSummary && (
-                      <span className="text-slate-400 text-xs font-bold">
-                        {ratingSummary.count.toLocaleString()} 人评价
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {selectedResource.tags?.slice(0, 8).map((t: string) => (
-                    <div key={t} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-full font-bold text-xs">
-                      {t}
+                    <div className="flex flex-wrap gap-3">
+                      {selectedResource.tags?.slice(0, 8).map((t: string) => (
+                        <div key={t} className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-full font-bold text-sm">
+                          {t}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                <div className="flex flex-wrap gap-3 mt-2">
-                  <button className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
-                    <Download size={18} />
-                    <span>下载</span>
-                  </button>
-                  <button className="bg-blue-50 text-blue-600 px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 border border-blue-100 hover:bg-blue-100 transition-all active:scale-95">
-                    <Star size={18} />
-                    <span>评分</span>
-                  </button>
-                  <div className="flex gap-2 ml-auto sm:ml-0">
-                    {[Heart, Share2, MessageSquare].map((Icon, i) => (
-                      <button key={i} className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 active:scale-95">
-                        <Icon size={20} />
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <button className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
+                        <Download size={18} />
+                        <span>下载</span>
                       </button>
-                    ))}
+                      <button className="bg-blue-50 text-blue-600 px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 border border-blue-100 hover:bg-blue-100 transition-all active:scale-95">
+                        <Star size={18} />
+                        <span>评分</span>
+                      </button>
+                      <div className="flex gap-2 ml-auto sm:ml-0">
+                        {[Heart, Share2, MessageSquare].map((Icon, i) => (
+                          <button key={i} className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 active:scale-95">
+                            <Icon size={20} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
+
+                  {ratingSummary && (
+                    <div className="xl:justify-self-end xl:w-[320px] xl:pt-1">
+                      <RatingHistogram ratingSummary={ratingSummary} compact />
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-auto pt-6 border-t border-slate-50 flex items-center justify-between">
+                <div className="pt-4 border-t border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
+                    <div className="w-11 h-11 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
                       <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedResource.company || 'P'}`} alt="User" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-black text-slate-800">{selectedResource.company || 'Palentum'}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{selectedResource.releasedDate || '未知发售'}</span>
+                      <span className="text-base font-black text-slate-800">{selectedResource.company || 'Palentum'}</span>
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{selectedResource.releasedDate || '未知发售'}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 text-slate-400">
-                    <div className="flex items-center gap-1 text-[11px] font-black">
-                      <Globe size={14} />
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-slate-400">
+                    <div className="flex items-center gap-1.5 text-[12px] font-black">
+                      <Globe size={16} />
                       <span>{selectedResource.viewCount?.toLocaleString() ?? '–'}</span>
                     </div>
-                    <div className="flex items-center gap-1 text-[11px] font-black">
-                      <Download size={14} />
+                    <div className="flex items-center gap-1.5 text-[12px] font-black">
+                      <Download size={16} />
                       <span>{selectedResource.downloadCount?.toLocaleString() ?? '–'}</span>
                     </div>
-                    <div className="flex items-center gap-1 text-[11px] font-black">
-                      <Heart size={14} fill="currentColor" />
+                    <div className="flex items-center gap-1.5 text-[12px] font-black">
+                      <Heart size={16} fill="currentColor" />
                       <span>{selectedResource.favoriteCount?.toLocaleString() ?? '–'}</span>
                     </div>
                   </div>
@@ -437,7 +346,6 @@ export const DetailOverlay: React.FC = () => {
 
               {activeTab === 'evaluation' && (
                 <div className="flex flex-col gap-6">
-                  {ratingSummary && <RatingHistogram ratingSummary={ratingSummary} />}
                   {sessionError === 'SESSION_EXPIRED' ? (
                     <SessionLockedState
                       icon={Star}
@@ -458,7 +366,6 @@ export const DetailOverlay: React.FC = () => {
           </div>
         </div>
       </div>
-
       {selectedImage && <ImageViewer url={selectedImage} onDismiss={() => setSelectedImage(null)} />}
     </div>
   );
