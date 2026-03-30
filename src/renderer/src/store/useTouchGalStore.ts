@@ -207,9 +207,10 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const user = await TouchGalClient.login(username, password, captcha);
-          set({ user, isLoading: false, sessionError: null });
+          set({ user, isLoading: false, sessionError: null, captchaUrl: null, captchaChallenge: null });
         } catch (err: any) {
-          set({ error: err.message, isLoading: false });
+          // Reset captcha to null first so the effect re-triggers in the modal
+          set({ error: err.message, isLoading: false, captchaUrl: null, captchaChallenge: null });
           await get().fetchCaptcha();
         }
       },
@@ -408,18 +409,26 @@ export const useUIStore = create<UIState>()(
           }));
           get().applyAdvancedFilters(1, sortField, sortOrder);
 
-          // Enrichment (Tags) - simplified for brevity but functionally equivalent
-          void runBounded(mergedCatalog, ADVANCED_TAG_CONCURRENCY, async (resource) => {
-            const intro = await TouchGalClient.getPatchIntroduction(resource.uniqueId);
-            if (get().advancedBuildSessionId !== sessionId) return;
-            set(s => {
-              const ds = s.advancedDatasetsByDomain[domain];
-              const next = ds.resources.map((item: AdvancedResourceRecord) => 
-                item.uniqueId === resource.uniqueId ? 
-                { ...item, fullTags: intro.tags || item.fullTags, releasedDate: intro.releasedDate || item.releasedDate, normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear, tagsHydrated: true } : item);
-              return { advancedDatasetsByDomain: { ...s.advancedDatasetsByDomain, [domain]: { ...ds, resources: next, hydratedTagIds: [...ds.hydratedTagIds, resource.uniqueId] } } };
+          // 下游标签富化：仅在用户实际选择了标签时才触发，避免无意义的全量 IO
+          const needsTagHydration = get().advancedFilterDraft.selectedTags.length > 0;
+          if (needsTagHydration) {
+            void runBounded(mergedCatalog, ADVANCED_TAG_CONCURRENCY, async (resource) => {
+              const intro = await TouchGalClient.getPatchIntroduction(resource.uniqueId);
+              if (get().advancedBuildSessionId !== sessionId) return;
+              set(s => {
+                const ds = s.advancedDatasetsByDomain[domain];
+                if (!ds) return {};
+                const next = ds.resources.map((item: AdvancedResourceRecord) =>
+                  item.uniqueId === resource.uniqueId
+                    ? { ...item, fullTags: intro.tags?.length ? intro.tags : item.fullTags, releasedDate: intro.releasedDate || item.releasedDate, normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear, tagsHydrated: true }
+                    : item
+                );
+                return { advancedDatasetsByDomain: { ...s.advancedDatasetsByDomain, [domain]: { ...ds, resources: next, hydratedTagIds: [...ds.hydratedTagIds, resource.uniqueId] } } };
+              });
+              // 每富化一批后立即重新应用过滤，让结果实时更新
+              get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
             });
-          });
+          }
         } catch (e: any) { set({ homeMode: 'normal', advancedBuildSessionId: null, error: e.message }); }
       },
       exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),

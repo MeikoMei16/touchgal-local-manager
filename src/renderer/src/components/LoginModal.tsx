@@ -28,13 +28,17 @@ export const LoginModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) return;
-    
+
     if (captchaUrl && captcha) {
+      // Legacy image captcha flow
       await login(username, password, captcha);
-    } else if (!captchaChallenge) {
+      setCaptcha('');
+    } else if (!captchaChallenge && !captchaUrl) {
+      // No captcha yet — fetch one (either challenge or legacy)
       await fetchCaptcha();
       setCaptcha('');
     }
+    // If captchaChallenge is set, the useEffect will open the challenge panel
   };
 
   // This effect handles jumping to challenge if it's returned
@@ -47,6 +51,8 @@ export const LoginModal: React.FC = () => {
   const handleChallengeSuccess = async (code: string) => {
     setIsChallengeOpen(false);
     await login(username, password, code);
+    // If login failed, captchaChallenge will be refreshed by the store.
+    // The useEffect below will re-open the challenge window automatically.
   };
 
   return (

@@ -1,7 +1,0 @@
-requests>=2.25.1
-tqdm>=4.62.3
-aiohttp
-aiofiles
-Pillow
-python-dateutil
-pillow-avif-plugin

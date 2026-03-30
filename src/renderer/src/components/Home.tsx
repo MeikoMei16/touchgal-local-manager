@@ -49,8 +49,14 @@ export const Home: React.FC = () => {
     return 'sfw';
   };
 
+  // 上游: nsfwMode / selectedPlatform → 直接走 API，无需 advanced mode
+  // 中游: yearConstraints / minRatingCount / minRatingScore / minCommentCount → 需要 advanced mode (全量拉取后本地过滤)
+  // 下游: selectedTags → 需要 advanced mode + 标签富化
   const requiresAdvancedMode = (filters: any) =>
     (filters.yearConstraints?.length ?? 0) > 0 ||
+    (filters.minRatingCount ?? 0) > 0 ||
+    (filters.minRatingScore ?? 0) > 0 ||
+    (filters.minCommentCount ?? 0) > 0 ||
     (filters.selectedTags?.length ?? 0) > 0;
 
   const syncDraftFromQuery = (query: any) => {
@@ -103,16 +109,20 @@ export const Home: React.FC = () => {
   const handleFilterChange = (filters: any) => {
     const { newQuery } = commitFilterDraft(filters);
 
+    // 上游筛选 (NSFW/Platform) 变化时，检测是否影响已构建的 advanced dataset
+    // 如果 domain 切换了，旧数据集已失效，必须退出 advanced mode 重走上游
+    const domainChanged = filters.nsfwMode !== undefined && mapDomain(filters.nsfwMode) !== activeNsfwDomain;
+    const platformChanged = filters.selectedPlatform !== undefined;
+
     if (!requiresAdvancedMode(newQuery)) {
-      if (homeMode !== 'normal') {
-        exitAdvancedMode();
-      }
-      // Explicitly trigger refresh in Normal Mode
-      console.log('[Home] handleFilterChange triggering fetchResources:', { ...newQuery, sortField, sortOrder });
+      // 纯上游筛选：直接 API 请求，无需 advanced mode
+      if (homeMode !== 'normal') exitAdvancedMode();
       fetchResources(1, { ...newQuery, sortField, sortOrder });
-    } else if (homeMode === 'advanced_ready') {
+    } else if (homeMode === 'advanced_ready' && !domainChanged && !platformChanged) {
+      // Advanced 已就绪且上游未变化：直接本地重过滤，零网络 IO
       applyAdvancedFilters(currentPage, sortField, sortOrder);
     }
+    // 其他情况 (advanced_building 中 / domain 变化)：等待用户点击「应用筛选」再重建
   };
 
   const handleAdvancedSubmit = async (filters: any) => {
