@@ -120,8 +120,9 @@ const applyAdvancedPredicate = (resources: AdvancedResourceRecord[], draft: Adva
     if (draft.minRatingScore > 0 && (resource.averageRating || 0) < draft.minRatingScore) return false;
     // Midstream: minimum comment count
     if (draft.minCommentCount > 0 && (resource.commentCount || (resource as any).comments || 0) < draft.minCommentCount) return false;
-    // Downstream: tag filter — only apply after hydration; un-hydrated cards stay visible until Stage 3 completes
-    if (draft.selectedTags.length > 0 && resource.tagsHydrated) {
+    // Downstream: strict tag filtering — cards must be hydrated before they can match.
+    if (draft.selectedTags.length > 0) {
+      if (!resource.tagsHydrated) return false;
       const tagSet = new Set(resource.fullTags);
       if (!draft.selectedTags.every(tag => tagSet.has(tag))) return false;
     }
@@ -440,17 +441,6 @@ export const useUIStore = create<UIState>()(
             existingDataset.resources.length > 0;
 
           if (canReuseCatalog) {
-            set({
-              homeMode: 'advanced_ready',
-              advancedBuildProgress: {
-                stage: 'ready',
-                completed: existingDataset.resources.length,
-                total: existingDataset.resources.length,
-                message: `复用已缓存目录，${existingDataset.resources.length} 个候选`
-              }
-            });
-            get().applyAdvancedFilters(1, sortField, sortOrder);
-
             if (draft.selectedTags.length > 0) {
               const pendingResources = existingDataset.resources.filter(
                 (resource) =>
@@ -459,15 +449,16 @@ export const useUIStore = create<UIState>()(
               );
 
               if (pendingResources.length > 0) {
-                set(s => ({
+                set({
+                  homeMode: 'advanced_building',
                   advancedBuildProgress: {
-                    ...s.advancedBuildProgress,
                     stage: 'enrichment',
                     completed: 0,
                     total: pendingResources.length,
                     message: `正在富化标签 (0/${pendingResources.length})...`
                   }
-                }));
+                });
+                get().applyAdvancedFilters(1, sortField, sortOrder);
 
                 let hydrated = 0;
                 await runBounded(pendingResources, ADVANCED_TAG_CONCURRENCY, async (resource) => {
@@ -540,7 +531,29 @@ export const useUIStore = create<UIState>()(
                   }
                 }));
                 get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
+              } else {
+                set({
+                  homeMode: 'advanced_ready',
+                  advancedBuildProgress: {
+                    stage: 'ready',
+                    completed: existingDataset.resources.length,
+                    total: existingDataset.resources.length,
+                    message: `复用已缓存目录，${existingDataset.resources.length} 个候选`
+                  }
+                });
+                get().applyAdvancedFilters(1, sortField, sortOrder);
               }
+            } else {
+              set({
+                homeMode: 'advanced_ready',
+                advancedBuildProgress: {
+                  stage: 'ready',
+                  completed: existingDataset.resources.length,
+                  total: existingDataset.resources.length,
+                  message: `复用已缓存目录，${existingDataset.resources.length} 个候选`
+                }
+              });
+              get().applyAdvancedFilters(1, sortField, sortOrder);
             }
 
             return;
@@ -599,27 +612,30 @@ export const useUIStore = create<UIState>()(
           if (get().advancedBuildSessionId !== sessionId) return;
 
           const finalCandidates = uniqueById(candidates);
-          set(s => ({
-            homeMode: 'advanced_ready',
-            advancedBuildProgress: { stage: 'ready', completed: finalCandidates.length, total: finalCandidates.length, message: `目录完成，${finalCandidates.length} 个候选` },
-            advancedDatasetsByDomain: {
-              ...s.advancedDatasetsByDomain,
-              [domain]: {
-                resources: finalCandidates,
-                total: finalCandidates.length,
-                hydratedTagIds: [],
-                failedTagIds: [],
-                lastBuiltAt: Date.now(),
-                upstreamKey
+          set(s => {
+            const hasTagFiltering = draft.selectedTags.length > 0;
+            return {
+              homeMode: hasTagFiltering ? 'advanced_building' : 'advanced_ready',
+              advancedBuildProgress: hasTagFiltering
+                ? { stage: 'enrichment', completed: 0, total: finalCandidates.length, message: `正在富化标签 (0/${finalCandidates.length})...` }
+                : { stage: 'ready', completed: finalCandidates.length, total: finalCandidates.length, message: `目录完成，${finalCandidates.length} 个候选` },
+              advancedDatasetsByDomain: {
+                ...s.advancedDatasetsByDomain,
+                [domain]: {
+                  resources: finalCandidates,
+                  total: finalCandidates.length,
+                  hydratedTagIds: [],
+                  failedTagIds: [],
+                  lastBuiltAt: Date.now(),
+                  upstreamKey
+                }
               }
-            }
-          }));
+            };
+          });
           get().applyAdvancedFilters(1, sortField, sortOrder);
 
           // ── Stage 3: enrich ONLY candidates, not full catalog ───────────────
           if (draft.selectedTags.length === 0) return;
-
-          set(s => ({ advancedBuildProgress: { ...s.advancedBuildProgress, stage: 'enrichment', completed: 0, total: finalCandidates.length, message: `正在富化标签 (0/${finalCandidates.length})...` } }));
           let hydrated = 0;
 
           await runBounded(finalCandidates, ADVANCED_TAG_CONCURRENCY, async (resource) => {
