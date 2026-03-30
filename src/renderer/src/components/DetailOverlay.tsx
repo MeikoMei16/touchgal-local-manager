@@ -25,7 +25,7 @@ type TabType = 'info' | 'links' | 'board' | 'evaluation';
 export const DetailOverlay: React.FC = () => {
   const { 
     selectedResource, clearSelected, user, addTagFilter, 
-    isDetailLoading, patchComments, patchRatings 
+    isDetailLoading, patchComments, patchRatings, sessionError, setIsLoginOpen
   } = useTouchGalStore();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('info');
@@ -64,6 +64,18 @@ export const DetailOverlay: React.FC = () => {
           <div className="absolute inset-0 bg-white/60 backdrop-blur-xs z-[100] flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
             <Loader2 className="animate-spin text-primary" size={48} />
             <span className="text-primary font-black animate-pulse">正在获取详细信息...</span>
+          </div>
+        )}
+
+        {sessionError === 'SESSION_EXPIRED' && (
+          <div className="absolute top-0 left-0 right-0 bg-rose-500 text-white py-2 px-4 z-[200] flex items-center justify-center gap-4 animate-in slide-in-from-top duration-300 shadow-lg">
+             <span className="font-bold text-sm">您的登录已失效，部分高级信息（评论、评分）可能无法加载。</span>
+             <button 
+               onClick={() => setIsLoginOpen(true)}
+               className="bg-white text-rose-500 px-4 py-1 rounded-full text-xs font-black hover:bg-rose-50 transition-all uppercase"
+             >
+               立即登录
+             </button>
           </div>
         )}
         
@@ -292,82 +304,69 @@ export const DetailOverlay: React.FC = () => {
 
                {activeTab === 'board' && (
                  <div className="flex flex-col gap-6">
-                    <CommentSection comments={patchComments} isLoading={isDetailLoading} />
+                    {sessionError === 'SESSION_EXPIRED' ? (
+                      <div className="bg-slate-50 rounded-[2rem] p-12 text-center flex flex-col items-center gap-4 border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-rose-500">
+                          <MessageSquare size={32} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-lg font-black text-slate-800">讨论内容暂不可见</h3>
+                          <p className="text-sm font-bold text-slate-400">登录后即可查看和参与社区讨论</p>
+                        </div>
+                        <button 
+                          onClick={() => setIsLoginOpen(true)}
+                          className="mt-2 bg-rose-500 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all active:scale-95"
+                        >
+                          立即登录
+                        </button>
+                      </div>
+                    ) : (
+                      <CommentSection comments={patchComments} isLoading={isDetailLoading} />
+                    )}
                  </div>
                )}
 
                {activeTab === 'evaluation' && (
                  <div className="flex flex-col gap-6">
-                    <BlurredSection isLoggedIn={isLoggedIn} title="评分详情">
-                       {ratingSummary && (
-                         <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 mb-6 flex flex-col gap-8">
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">评分统计</h2>
-                            <div className="grid grid-cols-2 gap-4">
-                               <div className="bg-blue-50/50 border border-blue-100 p-8 rounded-3xl flex flex-col items-center shadow-xs">
-                                 <div className="text-4xl font-black text-blue-700 leading-none mb-1">{ratingSummary.average.toFixed(1)}</div>
-                                 <div className="text-xs font-bold text-blue-700/60 uppercase tracking-widest">综合评分</div>
-                               </div>
-                               <div className="bg-slate-50 border border-slate-200 p-8 rounded-3xl flex flex-col items-center shadow-xs">
-                                 <div className="text-4xl font-black text-slate-700 leading-none mb-1">{ratingSummary.count}</div>
-                                 <div className="text-xs font-bold text-slate-700/60 uppercase tracking-widest">评价人数</div>
-                               </div>
-                            </div>
-
-                            {/* Recommend Bar */}
-                            <div className="flex flex-col gap-4">
-                              <h3 className="text-lg font-black text-slate-800">推荐倾向</h3>
-                              <div className="h-4 w-full rounded-full overflow-hidden flex bg-slate-100 shadow-inner border border-slate-200">
-                                {Object.entries(ratingSummary.recommend).map(([key, val]) => {
-                                  const colors = { strong_yes: '#10b981', yes: '#34d399', neutral: '#94a3b8', no: '#facc15', strong_no: '#ef4444' };
-                                  const color = (colors as any)[key] || '#cbd5e1';
-                                  const percentage = (val / (ratingSummary.count || 1)) * 100;
-                                  return val > 0 ? (
-                                    <div key={key} className="h-full transition-all duration-500" style={{ width: `${percentage}%`, backgroundColor: color }} />
-                                  ) : null;
-                                })}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                 {Object.entries(ratingSummary.recommend).map(([key, val]) => {
-                                    const colors = { strong_yes: '#10b981', yes: '#22c55e', neutral: '#64748b', no: '#f59e0b', strong_no: '#ef4444' };
-                                    const dotColor = (colors as any)[key] || '#94a3b8';
-                                    const labels = { strong_yes: '强推', yes: '推荐', neutral: '一般', no: '不推', strong_no: '强力不推' };
-                                    if (val === 0) return null;
-                                    return (
-                                      <div key={key} className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-full font-bold text-slate-600 text-xs bg-white shadow-xs">
-                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
-                                        <span>{(labels as any)[key]} {val}</span>
-                                      </div>
-                                    );
-                                 })}
-                              </div>
-                            </div>
-
-                            {/* Histogram */}
-                            <div className="flex flex-col gap-4">
-                              <h3 className="text-lg font-black text-slate-800">分数分布</h3>
-                              <div className="flex items-end justify-between h-[160px] px-2 bg-slate-50 rounded-3xl pt-8 pb-4 border border-slate-100">
-                                {ratingSummary.histogram.map((h) => {
-                                  const max = Math.max(...ratingSummary.histogram.map(i => i.count), 1);
-                                  const height = (h.count / max) * 100;
-                                  return (
-                                    <div key={h.score} className="flex-1 flex flex-col items-center gap-2 h-full group">
-                                      <span className="text-[10px] font-black text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">{h.count || 0}</span>
-                                      <div className="w-[40%] bg-slate-200 rounded-full flex items-end grow overflow-hidden">
-                                         <div 
-                                           className="w-full bg-blue-400 rounded-full min-h-[4px] transition-all duration-700 delay-100 shadow-[0_0_12px_-2px_rgba(96,165,250,0.5)]" 
-                                           style={{ height: `${height}%` }} 
-                                         />
-                                      </div>
-                                      <span className="text-xs font-black text-slate-800">{h.score}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                         </div>
-                       )}
-                    </BlurredSection>
-                    <EvaluationSection ratings={patchRatings} isLoading={isDetailLoading} />
+                    {sessionError === 'SESSION_EXPIRED' ? (
+                      <div className="bg-slate-50 rounded-[2rem] p-12 text-center flex flex-col items-center gap-4 border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-amber-500">
+                          <Star size={32} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-lg font-black text-slate-800">评分详情已隐藏</h3>
+                          <p className="text-sm font-bold text-slate-400">登录后解锁详细的评分分布和用户评价</p>
+                        </div>
+                        <button 
+                          onClick={() => setIsLoginOpen(true)}
+                          className="mt-2 bg-amber-500 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg shadow-amber-200 hover:bg-amber-600 transition-all active:scale-95"
+                        >
+                          立即登录
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <BlurredSection isLoggedIn={isLoggedIn} title="评分详情">
+                           {ratingSummary && (
+                             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 mb-6 flex flex-col gap-8">
+                                <h2 className="text-2xl font-black text-slate-900 tracking-tight">评分统计</h2>
+                                <div className="grid grid-cols-2 gap-4">
+                                   <div className="bg-blue-50/50 border border-blue-100 p-8 rounded-3xl flex flex-col items-center shadow-xs">
+                                     <div className="text-4xl font-black text-blue-700 leading-none mb-1">{ratingSummary.average.toFixed(1)}</div>
+                                     <div className="text-xs font-bold text-blue-700/60 uppercase tracking-widest">综合评分</div>
+                                   </div>
+                                   <div className="bg-slate-50 border border-slate-200 p-8 rounded-3xl flex flex-col items-center shadow-xs">
+                                     <div className="text-4xl font-black text-slate-700 leading-none mb-1">{ratingSummary.count}</div>
+                                     <div className="text-xs font-bold text-slate-700/60 uppercase tracking-widest">评价人数</div>
+                                   </div>
+                                </div>
+                                <div className="text-xs text-slate-400 italic text-center">登录获取更多详细倾向分析</div>
+                             </div>
+                           )}
+                        </BlurredSection>
+                        <EvaluationSection ratings={patchRatings} isLoading={isDetailLoading} />
+                      </>
+                    )}
                  </div>
                )}
             </div>

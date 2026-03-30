@@ -18,7 +18,7 @@ export const Home: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState('resource_update_time');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [isRestoringAdvancedMode, setIsRestoringAdvancedMode] = useState(() => false);
+
 
   const totalPages = Math.ceil(totalResources / 24);
   const [jumpPage, setJumpPage] = useState(String(currentPage));
@@ -50,7 +50,6 @@ export const Home: React.FC = () => {
   };
 
   const requiresAdvancedMode = (filters: any) =>
-    filters.selectedPlatform !== 'all' ||
     (filters.yearConstraints?.length ?? 0) > 0 ||
     (filters.selectedTags?.length ?? 0) > 0;
 
@@ -75,24 +74,15 @@ export const Home: React.FC = () => {
     }
 
     syncDraftFromQuery(lastHomeQuery);
-
-    if (!requiresAdvancedMode(lastHomeQuery)) {
-      return;
-    }
-
-    setIsRestoringAdvancedMode(true);
-    void enterAdvancedMode(sortField, sortOrder).finally(() => {
-      setIsRestoringAdvancedMode(false);
-    });
-    // restore only once on mount from persisted query
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // DO NOT automatically trigger enterAdvancedMode on mount.
+    // Let the user stay in Normal Mode (Network IO) unless they manually Apply/Submit.
   }, []);
 
   useEffect(() => {
-    if (homeMode === 'normal' && !isRestoringAdvancedMode) {
+    if (homeMode === 'normal') {
       fetchResources(1, { ...lastHomeQuery, sortField, sortOrder });
     }
-  }, [fetchResources, homeMode, isRestoringAdvancedMode, lastHomeQuery, sortField, sortOrder]);
+  }, [fetchResources, homeMode, lastHomeQuery, sortField, sortOrder]);
 
   const commitFilterDraft = (filters: any) => {
     const newQuery = { ...lastHomeQuery, ...filters };

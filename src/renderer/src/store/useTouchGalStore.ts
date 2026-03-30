@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { TouchGalResource, TouchGalDetail } from '../types';
 import { TouchGalClient } from '../data/TouchGalClient';
 
@@ -115,7 +115,7 @@ const applyAdvancedPredicate = (
             .map((item) => item.trim())
             .filter(Boolean);
 
-      if (!platforms.includes(draft.selectedPlatform)) {
+      if (!platforms.some(p => p.toLowerCase() === draft.selectedPlatform.toLowerCase())) {
         return false;
       }
     }
@@ -139,6 +139,24 @@ const applyAdvancedPredicate = (
       const tagSet = new Set(resource.fullTags);
       const matchesAllTags = draft.selectedTags.every((tag) => tagSet.has(tag));
       if (!matchesAllTags) {
+        return false;
+      }
+    }
+
+    if (draft.minRatingCount > 0) {
+      if ((resource.averageRatingCount || (resource as any).ratingCount || 0) < draft.minRatingCount) {
+        return false;
+      }
+    }
+
+    if (draft.minRatingScore > 0) {
+      if ((resource.averageRating || 0) < draft.minRatingScore) {
+        return false;
+      }
+    }
+
+    if (draft.minCommentCount > 0) {
+      if ((resource.commentCount || (resource as any).comments || 0) < draft.minCommentCount) {
         return false;
       }
     }
@@ -238,6 +256,7 @@ interface TouchGalState {
   advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
   advancedEnrichmentFailuresByDomain: Record<NsfwDomain, string[]>;
   lastHomeQuery: Record<string, any>;
+  sessionError: 'SESSION_EXPIRED' | string | null;
 
   fetchResources: (page?: number, query?: Record<string, unknown>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: Record<string, any>) => Promise<void>;
@@ -293,13 +312,62 @@ const logMiddleware = <T>(config: (set: any, get: any, api: any) => T) =>
     api
   );
 
+
+const compositeStorage = {
+  getItem: (name: string) => {
+    try {
+      const sessionStr = sessionStorage.getItem(name);
+      const localStr = localStorage.getItem(name);
+      const sessionObj = sessionStr ? JSON.parse(sessionStr) : { state: {} };
+      const localObj = localStr ? JSON.parse(localStr) : { state: {} };
+      
+      return JSON.stringify({
+        state: {
+          ...sessionObj.state,
+          user: localObj.state?.user ?? null,
+        },
+        version: localObj.version || 0
+      });
+    } catch (e) {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string) => {
+    try {
+      const fullState = JSON.parse(value);
+      const { state, version } = fullState;
+
+      localStorage.setItem(name, JSON.stringify({
+        state: { user: state.user },
+        version
+      }));
+
+      sessionStorage.setItem(name, JSON.stringify({
+        state: {
+          advancedFilterDraft: state.advancedFilterDraft,
+          selectedTags: state.selectedTags,
+          activeNsfwDomain: state.activeNsfwDomain,
+          lastHomeQuery: state.lastHomeQuery,
+        },
+        version
+      }));
+    } catch (e) {
+      console.error('[CompositeStorage] Failed to save state', e);
+    }
+  },
+  removeItem: (name: string) => {
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+  }
+};
+
 // Initialize store with persistent user if available
 const savedUser = localStorage.getItem('tg_user');
 const initialUser = savedUser ? JSON.parse(savedUser) : null;
 
 export const useTouchGalStore = create<TouchGalState>()(
   persist(
-  logMiddleware<TouchGalState>((set, get) => ({
+    logMiddleware<TouchGalState>((set, get) => ({
     resources: [],
     totalResources: 0,
     currentPage: 1,
@@ -334,6 +402,7 @@ export const useTouchGalStore = create<TouchGalState>()(
       all: []
     },
     lastHomeQuery: {},
+    sessionError: null,
 
     fetchResources: async (page = 1, query = {}) => {
       set({ isLoading: true, error: null });
@@ -343,11 +412,16 @@ export const useTouchGalStore = create<TouchGalState>()(
           resources: data.list,
           totalResources: data.total,
           currentPage: page,
-          isLoading: false
+          isLoading: false,
+          sessionError: null
         }));
       } catch (err: any) {
         console.error('[Store] Fetch Error:', err.message, err);
-        set({ error: err.message || "Failed to fetch resources", isLoading: false });
+        if (err.message?.includes('SESSION_EXPIRED')) {
+          set({ sessionError: 'SESSION_EXPIRED', isLoading: false });
+        } else {
+          set({ error: err.message || "Failed to fetch resources", isLoading: false });
+        }
       }
     },
 
@@ -355,9 +429,13 @@ export const useTouchGalStore = create<TouchGalState>()(
     set({ isLoading: true, error: null });
     try {
       const data = await TouchGalClient.searchResources(keyword, page, 20, options);
-      set({ resources: data.list, totalResources: data.total, currentPage: page, isLoading: false });
+      set({ resources: data.list, totalResources: data.total, currentPage: page, isLoading: false, sessionError: null });
     } catch (err: any) {
-      set({ error: err.message || 'Search failed', isLoading: false });
+      if (err.message?.includes('SESSION_EXPIRED')) {
+        set({ sessionError: 'SESSION_EXPIRED', isLoading: false });
+      } else {
+        set({ error: err.message || 'Search failed', isLoading: false });
+      }
     }
   },
 
@@ -383,9 +461,13 @@ export const useTouchGalStore = create<TouchGalState>()(
         gId ? TouchGalClient.fetchPatchRatings(gId, 1, 50) : Promise.resolve({ list: [] })
       ]);
       
-      set(() => ({ // Use functional update to ensure we have latest id if not in basicInfo
+      const finalId = detail.id || basicInfo?.id || 0;
+      const hasSessionError = (comments as any).requiresLogin || (ratings as any).requiresLogin;
+
+      set(() => ({ 
         selectedResource: {
           ...detail,
+          id: finalId,
           introduction: introData.introduction ?? detail.introduction,
           releasedDate: introData.releasedDate ?? detail.releasedDate,
           alias: introData.alias?.length ? introData.alias : detail.alias,
@@ -395,9 +477,10 @@ export const useTouchGalStore = create<TouchGalState>()(
           bangumiId: introData.bangumiId ?? detail.bangumiId,
           steamId: introData.steamId ?? detail.steamId,
         },
-        patchComments: comments.list || comments.comments || [],
-        patchRatings: ratings.list || ratings.ratings || [],
-        isDetailLoading: false
+        patchComments: comments.list || [],
+        patchRatings: ratings.list || [],
+        isDetailLoading: false,
+        sessionError: hasSessionError ? 'SESSION_EXPIRED' : null
       }));
 
       // If basicInfo didn't have ID, fetch again using detail.id
@@ -406,14 +489,23 @@ export const useTouchGalStore = create<TouchGalState>()(
           TouchGalClient.fetchPatchComments(detail.id, 1, 50),
           TouchGalClient.fetchPatchRatings(detail.id, 1, 50)
         ]);
-        set({
-          patchComments: c.list || c.comments || [],
-          patchRatings: r.list || r.ratings || [],
-        });
+        
+        const secondHasSessionError = (c as any).requiresLogin || (r as any).requiresLogin;
+
+        set((state: TouchGalState) => ({
+          patchComments: c.list || [],
+          patchRatings: r.list || [],
+          sessionError: (state.sessionError || secondHasSessionError) ? 'SESSION_EXPIRED' : null
+        }));
       }
     } catch (err: any) {
       console.error('[Store] Detail Load Error:', err);
-      set({ error: err.message || 'Failed to load details', isDetailLoading: false });
+      if (err.message?.includes('SESSION_EXPIRED')) {
+        set({ sessionError: 'SESSION_EXPIRED' });
+      } else {
+        set({ error: err.message || 'Failed to load details' });
+      }
+      set({ isDetailLoading: false });
     }
   },
 
@@ -456,7 +548,7 @@ export const useTouchGalStore = create<TouchGalState>()(
     set({ isLoading: true, error: null });
     try {
       const user = await TouchGalClient.login(username, password, captcha);
-      set({ user, isLoading: false });
+      set({ user, isLoading: false, sessionError: null });
       localStorage.setItem('tg_user', JSON.stringify(user));
       // Save session/token if needed (handled by Main Process cookies usually)
     } catch (err: any) {
@@ -468,7 +560,7 @@ export const useTouchGalStore = create<TouchGalState>()(
   },
 
   logout: () => {
-    set({ user: null });
+    set({ user: null, sessionError: null });
     localStorage.removeItem('tg_user');
   },
   setIsLoginOpen: (isOpen: boolean) => set({ isLoginOpen: isOpen }),
@@ -857,40 +949,23 @@ export const useTouchGalStore = create<TouchGalState>()(
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
+  },
+})),
+{
+  name: 'touchgal-home-viewmodel',
+  storage: compositeStorage as any,
+  merge: (persistedState, currentState): TouchGalState => {
+    const persisted = (persistedState as Partial<TouchGalState>) ?? {};
+    return {
+      ...currentState,
+      ...persisted,
+      advancedFilterDraft: persisted.advancedFilterDraft || defaultAdvancedFilterDraft(),
+      selectedTags: persisted.selectedTags || [],
+      lastHomeQuery: persisted.lastHomeQuery || {},
+      activeNsfwDomain: persisted.activeNsfwDomain || 'sfw'
+    };
   }
-} as TouchGalState)),
-  {
-    name: 'touchgal-home-viewmodel',
-    storage: createJSONStorage(() => localStorage),
-    partialize: (state) => ({
-      advancedFilterDraft: state.advancedFilterDraft,
-      selectedTags: state.selectedTags,
-      activeNsfwDomain: state.activeNsfwDomain,
-      lastHomeQuery: state.lastHomeQuery
-    }),
-    merge: (persistedState, currentState): TouchGalState => {
-      const persisted = (persistedState as Partial<TouchGalState>) ?? {};
-      const mergedDraft = {
-        ...defaultAdvancedFilterDraft(),
-        ...(persisted.advancedFilterDraft ?? {}),
-        yearConstraints: Array.isArray(persisted.advancedFilterDraft?.yearConstraints)
-          ? persisted.advancedFilterDraft?.yearConstraints
-          : [],
-        selectedTags: Array.isArray(persisted.advancedFilterDraft?.selectedTags)
-          ? persisted.advancedFilterDraft?.selectedTags
-          : []
-      };
-
-      return {
-        ...currentState,
-        ...persisted,
-        advancedFilterDraft: mergedDraft,
-        selectedTags: Array.isArray(persisted.selectedTags)
-          ? persisted.selectedTags
-          : mergedDraft.selectedTags,
-        activeNsfwDomain: persisted.activeNsfwDomain ?? mergedDraft.nsfwMode,
-        lastHomeQuery: persisted.lastHomeQuery ?? {}
-      };
-    }
-  })
+}
+)
 );
+

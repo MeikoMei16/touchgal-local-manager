@@ -375,9 +375,35 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
         </div>
 
       </div>
-      <div className="flex justify-end mt-6">
+      <div className="flex justify-end gap-3 mt-6">
         <button
-          className="px-5 py-3 rounded-full border-none bg-primary text-white font-bold text-sm cursor-pointer transition-all hover:bg-primary/90 shadow-md"
+          className="px-5 py-3 rounded-full border-2 border-slate-200 bg-white text-slate-500 font-bold text-sm cursor-pointer transition-all hover:bg-slate-50 hover:border-slate-300"
+          onClick={() => {
+            const { resetAdvancedFilterDraft, clearTags } = useTouchGalStore.getState();
+            resetAdvancedFilterDraft();
+            clearTags();
+            // Local state sync
+            setNsfwMode('safe');
+            setPlatform('all');
+            setYearConstraints([]);
+            setMinRatingCount(0);
+            setMinRatingScore(0);
+            setMinCommentCount(0);
+            publishChange({
+              nsfwMode: 'safe',
+              selectedPlatform: 'all',
+              yearConstraints: [],
+              minRatingCount: 0,
+              minRatingScore: 0,
+              minCommentCount: 0,
+              selectedTags: []
+            });
+          }}
+        >
+          重置条件
+        </button>
+        <button
+          className="px-8 py-3 rounded-full border-none bg-primary text-white font-bold text-sm cursor-pointer transition-all hover:bg-primary/90 shadow-md transform active:scale-95"
           onClick={() => submitFilters()}
         >
           应用筛选

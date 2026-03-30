@@ -159,12 +159,17 @@ const normalizeResource = (resource: any) => {
   const raw = resource as any
   const counts = raw._count ?? {}
 
-  // Highly Aggressive Stats Mapping for Home/List/Search
+  // Explicit mapping to avoid passthrough pollution
   const viewCount = raw.view ?? raw.view_count ?? raw.visit ?? raw.views ?? 0
   const downloadCount = raw.download ?? raw.download_count ?? raw.downloads ?? 0
   const favoriteCount = counts.favorite_folder ?? raw.favorite_count ?? 0
   const commentCount = counts.comment ?? raw.comment_count ?? 0
-  const resourceCount = counts.resource ?? raw.resource_count ?? 0
+
+  // Standardize naming
+  const uniqueId = raw.uniqueId ?? raw.unique_id ?? ''
+  const name = raw.name ?? 'Unknown title'
+  const banner = raw.banner ?? raw.banner_url ?? raw.bannerUrl ?? null
+  const averageRating = raw.averageRating ?? raw.ratingSummary?.average ?? raw.rating_stat?.avg_overall ?? 0
 
   const company =
     typeof raw.company === 'string'
@@ -179,22 +184,26 @@ const normalizeResource = (resource: any) => {
     releasedDate = new Date(raw.created).toLocaleDateString()
   }
 
+  // Preserve detail structure if present (e.g. from /patch)
+  const detail = raw.detail ?? null
+
   return {
-    ...raw, // FULL PASSTHROUGH for rendering robustness
-    id: raw.id ?? 0,
-    uniqueId: raw.uniqueId ?? raw.unique_id ?? '',
-    name: raw.name ?? 'Unknown title',
-    banner: raw.banner ?? null,
-    averageRating: raw.averageRating ?? raw.ratingSummary?.average ?? raw.rating_stat?.avg_overall ?? 0,
+    id: raw.id ?? raw.patchId ?? raw.patch_id ?? raw.galgameId ?? raw.galgame_id ?? 0,
+    uniqueId,
+    name,
+    banner,
+    averageRating,
     tags: extractTags(raw),
     viewCount,
     downloadCount,
     favoriteCount,
     commentCount,
-    resourceCount,
     releasedDate,
     company,
     pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
+    detail, // Critical for screenshots
+    alias: raw.alias ?? [],
+    vndbId: raw.vndbId ?? raw.vndb_id ?? null,
   }
 }
 
@@ -254,14 +263,39 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
 })
 
 const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
+  if (!payload) {
+    throw new Error('Empty response from API')
+  }
+
   if (typeof payload === 'string') {
-    console.error('[API] Error payload (string):', payload)
+    log.error('[API] Error payload (string):', payload)
+    if (payload.includes('登录失效')) {
+      throw new Error('SESSION_EXPIRED')
+    }
     throw new Error(payload)
   }
+
+  // Handle common error object patterns
+  if (typeof payload === 'object' && !Array.isArray(payload)) {
+    const obj = payload as any;
+    if (obj.error || obj.message || obj.errors) {
+       const msg = obj.message || obj.error || (Array.isArray(obj.errors) ? obj.errors[0]?.message : 'Unknown API Error');
+       if (String(msg).includes('登录失效') || String(msg).includes('Login required') || String(msg).includes('未登录')) {
+         throw new Error('SESSION_EXPIRED');
+       }
+       // If it's a controlled error object but not a login error, we might still want to return it 
+       // but only if it's NOT an actual failure (e.g. some status message).
+       // However, usually these are errors.
+       if (obj.error || (obj.errors && obj.errors.length > 0)) {
+         throw new Error(String(msg));
+       }
+    }
+  }
+
   if (Array.isArray(payload)) {
     const first = payload[0]
     if (first && typeof first === 'object' && 'code' in first && 'path' in first) {
-      console.error('[API] Validation errors (Zod):', JSON.stringify(payload, null, 2))
+      log.error('[API] Validation errors (Zod):', JSON.stringify(payload, null, 2))
       throw new Error(String((first as Record<string, unknown>).message || 'TouchGal returned a validation error'))
     }
   }
@@ -504,6 +538,7 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
     throw new Error('Invalid resource ID (must be 8 characters)')
   }
 
+  // COMPLETELY DEPEND ON NETWORK IO - No DB fallback
   try {
     const [detailResponse, introResponse] = await Promise.all([
       API_CLIENT.get('/patch', { params: { uniqueId } }),
@@ -521,20 +556,10 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
       log.warn('Failed to fetch downloads for', uniqueId)
     }
 
-    const fullDetail = { ...detail, ...intro, downloads }
-
-    // Save to cache
-    getDb().prepare('UPDATE games SET detail_json = ?, last_detailed_at = CURRENT_TIMESTAMP WHERE unique_id = ?')
-      .run(JSON.stringify(fullDetail), uniqueId)
-
-    return fullDetail
+    // Merge detail, intro, and downloads. intro overrides detail fields.
+    return { ...detail, ...intro, downloads }
   } catch (error) {
-    log.warn(`[API] Failed to fetch detail for ${uniqueId}, checking cache...`)
-    const cached = getDb().prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string } | undefined
-    if (cached?.detail_json) {
-      log.info(`[Cache] Returning cached detail for ${uniqueId}`)
-      return JSON.parse(cached.detail_json)
-    }
+    log.error(`[API] Network IO failed for ${uniqueId}:`, error)
     throw error
   }
 })
@@ -542,9 +567,9 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
 function normalizeComment(raw: any) {
   return {
     id: raw.id,
-    content: raw.content,
-    userName: raw.user?.name || raw.user_name || 'Anonymous',
-    userAvatar: raw.user?.avatar || raw.user_avatar || null,
+    content: raw.content ?? raw.text ?? raw.body ?? '',
+    userName: raw.user?.name || raw.user_name || raw.author?.name || 'Anonymous',
+    userAvatar: raw.user?.avatar || raw.user_avatar || raw.author?.avatar || null,
     createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
   }
 }
@@ -552,42 +577,56 @@ function normalizeComment(raw: any) {
 function normalizeRating(raw: any) {
   return {
     id: raw.id,
-    overall: raw.overall || 0,
+    overall: raw.overall ?? raw.rating ?? raw.score ?? 0,
     recommend: raw.recommend || 'neutral',
-    shortSummary: raw.shortSummary || raw.short_summary || '',
+    shortSummary: raw.shortSummary || raw.short_summary || raw.comment || '',
     playStatus: raw.playStatus || raw.play_status || 'other',
-    userName: raw.user?.name || raw.user_name || 'Anonymous',
-    userAvatar: raw.user?.avatar || raw.user_avatar || null,
+    userName: raw.user?.name || raw.user_name || raw.author?.name || 'Anonymous',
+    userAvatar: raw.user?.avatar || raw.user_avatar || raw.author?.avatar || null,
   }
 }
 
 handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: number, limit: number) => {
-  const response = await API_CLIENT.get('/patch/comment', { params: { patchId, page, limit } })
-  const data = ensureValidResponse(response.data)
-  return {
-    total: data.total || 0,
-    list: (data.list || data.comments || []).map(normalizeComment)
+  try {
+    if (!patchId) return { total: 0, list: [] }
+    const response = await API_CLIENT.get('/patch/comment', { params: { patchId, page, limit } })
+    const data = ensureValidResponse(response.data)
+    return {
+      total: data.total || 0,
+      list: (data.list || data.comments || []).map(normalizeComment)
+    }
+  } catch (error: any) {
+    log.error(`[API] Failed to fetch comments for patch ${patchId}:`, error.message)
+    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401)) {
+      return { total: 0, list: [], requiresLogin: true }
+    }
+    // Return empty list instead of crashing renderer
+    return { total: 0, list: [], error: error.message }
   }
 })
 
 handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: number, limit: number) => {
-  const response = await API_CLIENT.get('/patch/rating', { params: { patchId, page, limit } })
-  const data = ensureValidResponse(response.data)
-  return {
-    total: data.total || 0,
-    list: (data.list || data.ratings || []).map(normalizeRating)
+  try {
+    if (!patchId) return { total: 0, list: [] }
+    const response = await API_CLIENT.get('/patch/rating', { params: { patchId, page, limit } })
+    const data = ensureValidResponse(response.data)
+    return {
+      total: data.total || 0,
+      list: (data.list || data.ratings || []).map(normalizeRating)
+    }
+  } catch (error: any) {
+    log.error(`[API] Failed to fetch ratings for patch ${patchId}:`, error.message)
+    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401)) {
+      return { total: 0, list: [], requiresLogin: true }
+    }
+    return { total: 0, list: [], error: error.message }
   }
 })
 
 handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
-  try {
-    const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
-    return normalizeIntroduction(ensureValidResponse(response.data))
-  } catch (error) {
-    const cached = getDb().prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string } | undefined
-    if (cached?.detail_json) return JSON.parse(cached.detail_json)
-    throw error
-  }
+  // COMPLETELY DEPEND ON NETWORK IO
+  const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
+  return normalizeIntroduction(ensureValidResponse(response.data))
 })
 
 handleWithLog('tg-match-folder', async (_event, folderName: string) => {
