@@ -5,11 +5,11 @@ import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
 import { LoginModal } from './components/LoginModal';
 import ProfileView from './components/ProfileView';
-import { useTouchGalStore } from './store/useTouchGalStore';
+import { useAuthStore } from './store/useTouchGalStore';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('home');
-  const { isLoginOpen, setIsLoginOpen } = useTouchGalStore();
+  const { isLoginOpen } = useAuthStore();
 
   const navItems = [
     { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },
@@ -73,7 +73,7 @@ const App: React.FC = () => {
       </main>
 
       <DetailOverlay />
-      {isLoginOpen && <LoginModal onClose={() => setIsLoginOpen(false)} />}
+      {isLoginOpen && <LoginModal />}
     </div>
   );
 };

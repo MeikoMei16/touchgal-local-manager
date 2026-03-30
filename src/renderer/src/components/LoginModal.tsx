@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useAuthStore } from '../store/useTouchGalStore';
 import { User, Lock, ShieldCheck, X, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { CaptchaChallenge } from './CaptchaChallenge';
 
-export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { isLoading, error, captchaUrl, captchaChallenge, fetchCaptcha, login, user } = useTouchGalStore();
+export const LoginModal: React.FC = () => {
+  const { isLoading, error, captchaUrl, captchaChallenge, fetchCaptcha, login, user, setIsLoginOpen } = useAuthStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,16 +21,20 @@ export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   // Close modal on successful login
   useEffect(() => {
     if (user) {
-      onClose();
+      setIsLoginOpen(false);
     }
-  }, [user, onClose]);
+  }, [user, setIsLoginOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) return;
     
-    // First, fetch captcha to see if it's a challenge or legacy
-    await fetchCaptcha();
+    if (captchaUrl && captcha) {
+      await login(username, password, captcha);
+    } else if (!captchaChallenge) {
+      await fetchCaptcha();
+      setCaptcha('');
+    }
   };
 
   // This effect handles jumping to challenge if it's returned
@@ -46,11 +50,11 @@ export const LoginModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[2000] animate-in fade-in duration-300" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[2000] animate-in fade-in duration-300" onClick={() => setIsLoginOpen(false)}>
       <div className="bg-white w-full max-w-sm p-10 rounded-[32px] shadow-2xl relative animate-in zoom-in-95 ease-out-back duration-500" onClick={(e) => e.stopPropagation()}>
         <header className="flex justify-between items-center mb-8">
           <h2 className="m-0 text-2xl font-black text-slate-900 tracking-tight">Login to TouchGal</h2>
-          <button className="bg-slate-100 text-slate-500 border-none rounded-full w-10 h-10 flex items-center justify-center cursor-pointer transition-all hover:bg-slate-200 hover:text-slate-800" onClick={onClose}>
+          <button className="bg-slate-100 text-slate-500 border-none rounded-full w-10 h-10 flex items-center justify-center cursor-pointer transition-all hover:bg-slate-200 hover:text-slate-800" onClick={() => setIsLoginOpen(false)}>
             <X size={20} />
           </button>
         </header>

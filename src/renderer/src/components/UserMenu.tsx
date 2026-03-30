@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useAuthStore } from '../store/useTouchGalStore';
 import { User, LogOut, UserCircle } from 'lucide-react';
 
 export const UserMenu: React.FC = () => {
-  const { user, logout, setIsLoginOpen } = useTouchGalStore();
+  const { user, logout, setIsLoginOpen } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

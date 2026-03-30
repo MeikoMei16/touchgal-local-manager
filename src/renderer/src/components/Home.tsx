@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useUIStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import { SortDropdown } from './SortDropdown.tsx';
@@ -14,7 +14,7 @@ export const Home: React.FC = () => {
     homeMode, activeNsfwDomain, advancedBuildProgress, exitAdvancedMode,
     updateAdvancedFilterDraft, setActiveNsfwDomain, enterAdvancedMode, applyAdvancedFilters,
     lastHomeQuery, setLastHomeQuery
-  } = useTouchGalStore();
+  } = useUIStore();
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState('resource_update_time');
   const [sortOrder, setSortOrder] = useState('desc');
@@ -80,9 +80,16 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     if (homeMode === 'normal') {
-      fetchResources(1, { ...lastHomeQuery, sortField, sortOrder });
+      const queryParams = { 
+        ...lastHomeQuery, 
+        nsfwMode: lastHomeQuery.nsfwMode || activeNsfwDomain || 'safe',
+        sortField, 
+        sortOrder 
+      };
+      console.log('[Home] useEffect triggering fetchResources:', queryParams);
+      fetchResources(1, queryParams);
     }
-  }, [fetchResources, homeMode, lastHomeQuery, sortField, sortOrder]);
+  }, [fetchResources, homeMode, lastHomeQuery, sortField, sortOrder, activeNsfwDomain]);
 
   const commitFilterDraft = (filters: any) => {
     const newQuery = { ...lastHomeQuery, ...filters };
@@ -100,6 +107,11 @@ export const Home: React.FC = () => {
       if (homeMode !== 'normal') {
         exitAdvancedMode();
       }
+      // Explicitly trigger refresh in Normal Mode
+      console.log('[Home] handleFilterChange triggering fetchResources:', { ...newQuery, sortField, sortOrder });
+      fetchResources(1, { ...newQuery, sortField, sortOrder });
+    } else if (homeMode === 'advanced_ready') {
+      applyAdvancedFilters(currentPage, sortField, sortOrder);
     }
   };
 

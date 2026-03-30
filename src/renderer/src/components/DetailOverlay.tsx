@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useUIStore, useAuthStore } from '../store/useTouchGalStore';
 import { X, Globe, Star, Loader2, Download, MessageSquare, Share2, Heart, Info as InfoIcon, FileText } from 'lucide-react';
 import { EvaluationSection } from './EvaluationSection';
 import { CommentSection } from './CommentSection';
@@ -24,9 +24,10 @@ type TabType = 'info' | 'links' | 'board' | 'evaluation';
 
 export const DetailOverlay: React.FC = () => {
   const { 
-    selectedResource, clearSelected, user, addTagFilter, 
-    isDetailLoading, patchComments, patchRatings, sessionError, setIsLoginOpen
-  } = useTouchGalStore();
+    selectedResource, clearSelected, addTagFilter, 
+    isDetailLoading, patchComments, patchRatings
+  } = useUIStore();
+  const { user, sessionError, setIsLoginOpen } = useAuthStore();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const scrollRef = React.useRef<HTMLDivElement>(null);

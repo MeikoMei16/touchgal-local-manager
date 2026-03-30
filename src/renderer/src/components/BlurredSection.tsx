@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
 import { Lock } from 'lucide-react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useAuthStore } from '../store/useTouchGalStore';
 
 interface BlurredSectionProps {
   isLoggedIn: boolean;
@@ -9,7 +9,7 @@ interface BlurredSectionProps {
 }
 
 export const BlurredSection: React.FC<BlurredSectionProps> = ({ isLoggedIn, title, children }) => {
-  const setIsLoginOpen = useTouchGalStore((state) => state.setIsLoginOpen);
+  const setIsLoginOpen = useAuthStore((state) => state.setIsLoginOpen);
 
   if (isLoggedIn) return <section className="w-full">{children}</section>;
 

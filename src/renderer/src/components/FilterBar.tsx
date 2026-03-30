@@ -3,7 +3,7 @@ import {
   ChevronDown, Calendar, Star, MessageSquare, Users, 
   Laptop, Shield, ShieldCheck, AlertTriangle, Tag, X, Plus, Search
 } from 'lucide-react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useUIStore } from '../store/useTouchGalStore';
 
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
@@ -15,7 +15,7 @@ type NsfwMode = 'safe' | 'nsfw' | 'all';
 type Operator = '=' | '>=' | '<=' | '>' | '<';
 
 export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }) => {
-  const { selectedTags, addTagFilter, removeTagFilter, advancedFilterDraft } = useTouchGalStore();
+  const { selectedTags, addTagFilter, removeTagFilter, advancedFilterDraft } = useUIStore();
 
   // --- State ---
   const [nsfwMode, setNsfwMode] = useState<NsfwMode>('safe');
@@ -379,7 +379,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
         <button
           className="px-5 py-3 rounded-full border-2 border-slate-200 bg-white text-slate-500 font-bold text-sm cursor-pointer transition-all hover:bg-slate-50 hover:border-slate-300"
           onClick={() => {
-            const { resetAdvancedFilterDraft, clearTags } = useTouchGalStore.getState();
+            const { resetAdvancedFilterDraft, clearTags } = useUIStore.getState();
             resetAdvancedFilterDraft();
             clearTags();
             // Local state sync

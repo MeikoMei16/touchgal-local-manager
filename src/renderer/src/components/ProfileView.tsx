@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useTouchGalStore } from '../store/useTouchGalStore';
+import { useAuthStore } from '../store/useTouchGalStore';
 import { MessageSquare, Star, Package, Heart, Coins, Users, User } from 'lucide-react';
 
 const ProfileView: React.FC = () => {
@@ -12,7 +12,7 @@ const ProfileView: React.FC = () => {
     userRatings,
     userCollections,
     isLoading 
-  } = useTouchGalStore();
+  } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections'>('comments');
 
@@ -29,7 +29,7 @@ const ProfileView: React.FC = () => {
   }, [user, activeTab, fetchUserActivity]);
 
   if (!user) {
-    const { setIsLoginOpen } = useTouchGalStore();
+    const { setIsLoginOpen } = useAuthStore.getState();
     return (
       <div className="flex flex-col items-center justify-center h-full text-on-surface-variant">
         <Users size={64} className="mb-4 opacity-20" />

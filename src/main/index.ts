@@ -62,11 +62,17 @@ const API_CLIENT = axios.create({
 // Cookie Interceptors
 API_CLIENT.interceptors.request.use((config) => {
   if (currentCookie) {
-    config.headers['Cookie'] = currentCookie;
+    // Merge existing cookies with current session cookies
+    const existing = config.headers['Cookie'];
+    if (existing) {
+      config.headers['Cookie'] = `${currentCookie}; ${existing}`;
+    } else {
+      config.headers['Cookie'] = currentCookie;
+    }
   }
   log.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
     params: config.params,
-    headers: config.headers
+    headers: { ...config.headers, Cookie: '[REDACTED]' } // Security: hide full cookie in debug logs if preferred
   });
   return config;
 });
@@ -700,8 +706,52 @@ handleWithLog('tg-get-download-queue', () => {
 })
 
 handleWithLog('tg-fetch-captcha', async () => {
+  log.info('[Captcha] Fetching new captcha...')
   const response = await API_CLIENT.get('/auth/captcha')
-  return ensureValidResponse(response.data)
+  const data = ensureValidResponse(response.data)
+  log.info('[Captcha] API response data:', { ...data, images: data.images ? `[${data.images.length} images]` : undefined })
+  
+  // If it's a challenge type with multiple images
+  if (data.images && Array.isArray(data.images)) {
+    log.info(`[Captcha] Processing ${data.images.length} challenge images...`)
+    const processedImages = await Promise.all(data.images.map(async (img: any) => {
+      try {
+        const imageSource = img.data || img.url;
+        if (!imageSource) return img;
+
+        // If it's already a base64 data URL, just use it
+        if (typeof imageSource === 'string' && imageSource.startsWith('data:')) {
+          return { ...img, url: imageSource };
+        }
+
+        const imgRes = await API_CLIENT.get(imageSource, { responseType: 'arraybuffer' });
+        const contentType = imgRes.headers['content-type'] || 'image/png';
+        const base64 = Buffer.from(imgRes.data).toString('base64');
+        return { ...img, url: `data:${contentType};base64,${base64}` };
+      } catch (e: any) {
+        log.error(`[Captcha] Failed to fetch image:`, e.message);
+        return img;
+      }
+    }));
+    return { ...data, images: processedImages }
+  }
+  
+  // If it's a legacy single-url captcha
+  const url = data.url || (typeof data === 'string' ? data : null)
+  if (url && typeof url === 'string' && url.startsWith('http')) {
+    log.info(`[Captcha] Processing legacy captcha image: ${url}`)
+    try {
+      const imgRes = await API_CLIENT.get(url, { responseType: 'arraybuffer' })
+      const contentType = imgRes.headers['content-type'] || 'image/png'
+      const base64 = Buffer.from(imgRes.data).toString('base64')
+      const dataUrl = `data:${contentType};base64,${base64}`
+      return typeof data === 'string' ? dataUrl : { ...data, url: dataUrl }
+    } catch (e: any) {
+      log.error(`[Captcha] Failed to fetch legacy image ${url}:`, e.message)
+    }
+  }
+
+  return data
 })
 
 handleWithLog('tg-verify-captcha', async (_event, sessionId: string, selectedIds: string[]) => {
