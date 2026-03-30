@@ -15,6 +15,19 @@ Rule:
 
 - renderer code must use `window.api` and `TouchGalClient`
 
+### Main-process auth token normalization owns header safety
+
+Rule:
+
+- sanitize and normalize persisted auth token input before using it in upstream headers
+- build upstream auth cookies in the main process instead of concatenating raw renderer/user-provided strings
+- do not send a `Cookie` header at all when there is no valid auth cookie to send
+
+Reason:
+
+- prevents invalid header content from poisoning upstream browse/search requests
+- keeps legacy token formats and migrated disk state from breaking the app on startup
+
 ## Advanced Filtering
 
 ### Tags are strict filters, not search terms
@@ -58,11 +71,13 @@ Rule:
 - homepage sorting and upstream browse query fields belong to store state, not component-local state
 - `lastHomeQuery` is the canonical homepage query object
 - homepage persistence for query/page restore uses renderer `localStorage`
+- homepage mount effects must wait for persisted state hydration before issuing a normal-mode fetch
 
 Reason:
 
 - avoids split-brain state between React local state and persisted browse state
 - keeps normal-mode fetches and advanced-mode transitions consistent
+- prevents refresh from silently falling back to page `1` and default sort before persisted state is available
 
 ### Advanced tag state has one source of truth
 
@@ -101,6 +116,18 @@ Rule:
 Reason:
 
 - ensures React effects observe a real state transition
+
+### Credential failure after captcha solve must not auto-chain into a new captcha
+
+Rule:
+
+- when captcha verification succeeds but login credentials are rejected, clear the captcha UI and return the user to the login form with the error message
+- only captcha verification failure should immediately fetch a replacement captcha
+
+Reason:
+
+- avoids trapping the user in a repeated captcha loop when the real problem is bad credentials
+- matches expected desktop-login behavior more closely
 
 ## Build / Tooling
 

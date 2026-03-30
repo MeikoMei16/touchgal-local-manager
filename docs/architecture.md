@@ -39,6 +39,7 @@ src/renderer/src/
 Owns:
 
 - upstream HTTP requests
+- upstream session token persistence and normalization
 - Electron window lifecycle
 - SQLite access
 - filesystem access
@@ -48,6 +49,13 @@ Rules:
 
 - Renderer must not call TouchGal upstream APIs directly.
 - Normalization of inconsistent upstream payloads belongs here.
+- Upstream auth cookie/header construction belongs here.
+
+Session handling notes:
+
+- the main process stores the TouchGal token under Electron `userData`
+- token input is normalized before persistence so legacy `Bearer ...`, full cookie strings, and whitespace-polluted values do not poison request headers
+- upstream browse/search requests only attach a `Cookie` header when there is a valid normalized auth cookie to send
 
 ### Preload
 
@@ -64,6 +72,7 @@ Current output:
 Owns:
 
 - application UI
+- auth UI state
 - homepage query state and result state
 - advanced-filter orchestration
 - detail overlay lifecycle
@@ -73,29 +82,42 @@ Homepage state currently lives in [`src/renderer/src/store/useTouchGalStore.ts`]
 Key frontend state split:
 
 - persisted homepage query: `lastHomeQuery`
+- persisted homepage page index: `currentPage`
 - advanced draft state: `advancedFilterDraft`
 - advanced datasets and progress: `advancedDatasetsByDomain`, `advancedBuildProgress`
 - current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
+- auth modal state: captcha payloads, login errors, and session-expired UI state
 
 Renderer persistence notes:
 
 - homepage UI state is persisted through Zustand in renderer `localStorage`
 - auth UI state is persisted separately from the encrypted token managed by the main process
+- persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
+- hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
 
 Important note:
 
 - sorting for the homepage is store-owned, not component-local
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
+- normal homepage refresh should restore sort key, sort order, upstream filters, and current page from persisted state
 
 ## Data Flow
 
 Normal homepage browsing:
 
-1. Renderer derives a normalized homepage query from store state.
-2. Renderer calls `TouchGalClient.fetchGalgameResources()`.
-3. Preload forwards to `tg-fetch-resources`.
-4. Main process relays to upstream TouchGal API and normalizes the response.
-5. Renderer store updates `resources`, `totalResources`, and pagination state.
+1. Renderer hydrates `lastHomeQuery` and `currentPage` from persisted UI storage.
+2. Homepage fetch effects wait until hydration is complete.
+3. Renderer derives a normalized homepage query from store state.
+4. Renderer calls `TouchGalClient.fetchGalgameResources()`.
+5. Preload forwards to `tg-fetch-resources`.
+6. Main process relays to upstream TouchGal API and normalizes the response.
+7. Renderer store updates `resources`, `totalResources`, and pagination state.
+
+Normal homepage refresh behavior:
+
+1. Refresh recreates the renderer process.
+2. Zustand rehydrates persisted `lastHomeQuery` and `currentPage`.
+3. Homepage mount effects resume with the hydrated values instead of falling back to page `1` and default sort.
 
 Advanced homepage browsing:
 
@@ -108,7 +130,15 @@ Exiting advanced search:
 
 1. Renderer clears advanced constraints and advanced-mode UI state.
 2. Homepage returns to `normal` mode.
-3. A fresh normal-mode fetch is triggered from the reset homepage query.
+3. The reset query preserves the current top-level sort field and sort order.
+4. A fresh normal-mode fetch is triggered from the reset homepage query.
+
+Login and captcha flow:
+
+1. Renderer requests either a legacy captcha image or a challenge payload through the main-process relay.
+2. Captcha verification failures fetch a fresh captcha and surface a retry error.
+3. Credential failures after a successful captcha solve clear the captcha UI and return the user to the login form with an error, rather than immediately chaining into another captcha prompt.
+4. Successful login clears captcha UI state while token/session handling remains in the main process.
 
 Detail loading:
 
@@ -145,7 +175,9 @@ Status note:
 ### Implemented or Active
 
 - Homepage resource browsing
+- Homepage refresh persistence for query, sort, and page
 - Login and captcha relay
+- Main-process token normalization and safer upstream cookie/header assembly
 - Detail overlay with introduction, comments, and ratings
 - Advanced filtering with local multi-stage pipeline
 - Basic SQLite bootstrap

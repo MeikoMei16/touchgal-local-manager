@@ -92,6 +92,8 @@ Query model:
 - normal-mode fetches derive their upstream request from that query
 - `sortField` and `sortOrder` are part of the store query, not component-local state
 - homepage query state and current page are persisted in renderer `localStorage`
+- hydration must complete before normal-mode homepage fetch effects run
+- normal homepage refresh is expected to restore sort key, sort order, upstream filters, and current page
 
 Draft model:
 
@@ -112,6 +114,8 @@ Modes:
 - Datasets are isolated by domain.
 - Exiting advanced mode returns homepage behavior to normal API pagination.
 - Clearing advanced search resets advanced constraints while preserving the current top-level sort field and sort order.
+- Clearing advanced search currently resets the homepage page index back to `1`.
+- Persisted homepage query state does not auto-enter advanced mode on mount; normal browse remains the default until the user explicitly submits advanced mode again.
 
 ## Current Behavior Notes
 
@@ -122,6 +126,8 @@ Modes:
 - Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
 - Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
 - The advanced-mode exit button is expected to clear advanced constraints and immediately refresh the homepage back into normal browse mode.
+- Normal-mode page navigation updates persisted page state first; the resulting fetch is driven by the homepage effect, not by direct button-triggered fetch calls.
+- Normal-mode sort changes keep the current page instead of forcing a page reset.
 
 ## Caching
 
