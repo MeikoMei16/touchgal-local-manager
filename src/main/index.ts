@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, safeStorage } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { join } from 'node:path'
@@ -18,25 +18,58 @@ log.transports.console.level = 'debug'
 Object.assign(console, log.functions)
 log.info('Log initialized (Spying on Renderer) at:', logPath)
 
-// Persistence Helpers
-const cookiePath = join(app.getPath('userData'), 'session_cookies.txt')
-let currentCookie = ''
-try {
-  if (fs.existsSync(cookiePath)) {
-    currentCookie = fs.readFileSync(cookiePath, 'utf8')
-    log.info('Loaded cookies from disk')
+// Persistence Helpers: JWT Token with Encryption
+const tokenPath = join(app.getPath('userData'), 'session_token.dat')
+let currentToken = ''
+
+const saveToken = (token: string) => {
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(token)
+      fs.writeFileSync(tokenPath, encrypted)
+    } else {
+      // Fallback to plain text if encryption is not available (not recommended)
+      fs.writeFileSync(tokenPath, token, 'utf8')
+      log.warn('Encryption not available, saving token as plain text')
+    }
+  } catch (e) {
+    log.error('Failed to save token:', e)
   }
-} catch (e) {
-  log.warn('Failed to load cookies')
 }
 
-const saveCookies = (cookies: string) => {
+const loadToken = () => {
   try {
-    fs.writeFileSync(cookiePath, cookies, 'utf8')
+    if (fs.existsSync(tokenPath)) {
+      const buffer = fs.readFileSync(tokenPath)
+      if (safeStorage.isEncryptionAvailable()) {
+        currentToken = safeStorage.decryptString(buffer)
+        log.info('Loaded encrypted token from disk')
+      } else {
+        currentToken = buffer.toString('utf8')
+        log.info('Loaded plain text token from disk (fallback)')
+      }
+    } else {
+      // Compatibility: Check for old cookie file
+      const oldCookiePath = join(app.getPath('userData'), 'session_cookies.txt')
+      if (fs.existsSync(oldCookiePath)) {
+        const oldCookies = fs.readFileSync(oldCookiePath, 'utf8')
+        // Try to extract token from old cookie string
+        const match = oldCookies.match(/kun-galgame-patch-moe-token=([^;]+)/)
+        if (match) {
+          currentToken = match[1]
+          saveToken(currentToken)
+          log.info('Migrated old cookie to encrypted token')
+          fs.unlinkSync(oldCookiePath) // Clean up old file
+        }
+      }
+    }
   } catch (e) {
-    log.error('Failed to save cookies:', e)
+    log.warn('Failed to load or migrate token:', e)
   }
 }
+
+// Initial load (will be finalized if encryption becomes available later)
+loadToken()
 
 // Capture all uncaught errors
 process.on('uncaughtException', (err) => {
@@ -59,20 +92,28 @@ const API_CLIENT = axios.create({
   timeout: 30000,
 })
 
-// Cookie Interceptors
+// JWT & Cookie Interceptors
 API_CLIENT.interceptors.request.use((config) => {
-  if (currentCookie) {
-    // Merge existing cookies with current session cookies
-    const existing = config.headers['Cookie'];
-    if (existing) {
-      config.headers['Cookie'] = `${currentCookie}; ${existing}`;
+  if (currentToken) {
+    // 1. Standard JWT Authorization Header
+    config.headers['Authorization'] = `Bearer ${currentToken}`;
+    
+    // 2. Compatibility Cookie Header (for backend middleware)
+    const existingCookie = config.headers['Cookie'] as string | undefined;
+    const authCookie = `kun-galgame-patch-moe-token=${currentToken}`;
+    
+    if (existingCookie) {
+      if (!existingCookie.includes('kun-galgame-patch-moe-token')) {
+        config.headers['Cookie'] = `${authCookie}; ${existingCookie}`;
+      }
     } else {
-      config.headers['Cookie'] = currentCookie;
+      config.headers['Cookie'] = authCookie;
     }
   }
+  
   log.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
     params: config.params,
-    headers: { ...config.headers, Cookie: '[REDACTED]' } // Security: hide full cookie in debug logs if preferred
+    headers: { ...config.headers, Authorization: 'Bearer [REDACTED]', Cookie: '[REDACTED]' }
   });
   return config;
 });
@@ -80,10 +121,19 @@ API_CLIENT.interceptors.request.use((config) => {
 API_CLIENT.interceptors.response.use((response) => {
   const setCookies = response.headers['set-cookie'] as string[] | undefined;
   if (setCookies) {
-    const newCookies = setCookies.map(c => c.split(';')[0]).join('; ');
-    currentCookie = currentCookie ? `${currentCookie}; ${newCookies}` : newCookies;
-    saveCookies(currentCookie);
-    log.info('[API] Cookies updated and saved');
+    // Extract the specific token from Set-Cookie headers
+    for (const cookieStr of setCookies) {
+      const match = cookieStr.match(/kun-galgame-patch-moe-token=([^;]+)/);
+      if (match) {
+        const newToken = match[1];
+        if (newToken !== currentToken) {
+          currentToken = newToken;
+          saveToken(currentToken);
+          log.info('[API] JWT Token updated and encrypted');
+        }
+        break; 
+      }
+    }
   }
   return response;
 });
@@ -481,7 +531,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     };
 
     const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
-    const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+    const cookieString = `${currentToken ? currentToken + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
 
     try {
       const response = await API_CLIENT.post('/search', body, {
@@ -489,7 +539,8 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
       });
       log.info('[API] /search (POST) success, items:', response.data?.galgames?.length);
       const normalized = normalizeFeedResponse(ensureValidResponse(response.data));
-      normalized.list.forEach(upsertGame);
+      // TODO: Background Delta Sync (Isolated from primary Network IO flow)
+      // normalized.list.forEach(upsertGame);
       return normalized;
     } catch (err: any) {
       log.error('[API] /search error:', err.response?.data || err.message);
@@ -537,7 +588,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
   };
 
   const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
-  const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+  const cookieString = `${currentToken ? currentToken + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
 
   log.info('[API] GET /galgame params:', apiParams);
   try {
@@ -561,7 +612,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
 handleWithLog('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
   const body = { ...buildSearchBody(keyword, page, limit), ...options }
   const nsfwValue = options?.nsfwMode === 'nsfw' ? 'nsfw' : (options?.nsfwMode === 'all' ? 'all' : 'sfw');
-  const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+  const cookieString = `${currentToken ? currentToken + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
 
   const response = await API_CLIENT.post('/search', body, {
     headers: { 'Cookie': cookieString }
