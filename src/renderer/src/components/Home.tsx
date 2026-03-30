@@ -13,6 +13,7 @@ export const Home: React.FC = () => {
     removeTagFilter, clearTags, advancedFilterDraft,
     homeMode, activeNsfwDomain, advancedBuildProgress, exitAdvancedMode,
     updateAdvancedFilterDraft, setActiveNsfwDomain, enterAdvancedMode, applyAdvancedFilters,
+    advancedDatasetsByDomain,
     lastHomeQuery, setLastHomeQuery
   } = useUIStore();
   const [showFilters, setShowFilters] = useState(false);
@@ -22,6 +23,8 @@ export const Home: React.FC = () => {
 
   const totalPages = Math.ceil(totalResources / 24);
   const [jumpPage, setJumpPage] = useState(String(currentPage));
+  const activeAdvancedDataset = advancedDatasetsByDomain[activeNsfwDomain];
+  const failedTagCount = activeAdvancedDataset?.failedTagIds.length ?? 0;
 
   useEffect(() => {
     setJumpPage(String(currentPage));
@@ -241,6 +244,11 @@ export const Home: React.FC = () => {
             <span className="text-sm font-semibold">
               当前数据域: {activeNsfwDomain.toUpperCase()} · {advancedBuildProgress.message || '本地高级筛选数据已切换为独立模式'}
             </span>
+            {advancedFilterDraft.selectedTags.length > 0 && failedTagCount > 0 && (
+              <span className="text-xs font-bold text-amber-800/80">
+                标签富化失败 {failedTagCount} 条，这些候选已从严格标签结果中排除
+              </span>
+            )}
           </div>
           <button
             className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"

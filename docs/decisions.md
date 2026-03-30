@@ -22,11 +22,24 @@ Rule:
 Rule:
 
 - homepage tag filtering must be done by local predicate after enrichment
+- un-hydrated resources must not appear in strict tag-filtered results
 
 Reason:
 
 - `/search` expresses retrieval semantics
 - advanced filtering requires deterministic boolean `AND`
+
+### Main-process homepage fetching must not switch to `/search` for tags
+
+Rule:
+
+- `tg-fetch-resources` stays on `/galgame`
+- `selectedTags` are handled locally, not forwarded as upstream tag search
+
+Reason:
+
+- keeps homepage browse semantics separate from search semantics
+- avoids mixing retrieval behavior into strict advanced filtering
 
 ### Stage ownership is fixed
 

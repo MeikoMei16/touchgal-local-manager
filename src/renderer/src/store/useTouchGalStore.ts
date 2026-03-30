@@ -682,7 +682,13 @@ export const useUIStore = create<UIState>()(
         if (!ds) return;
         const filtered = applyAdvancedPredicate(ds.resources, get().advancedFilterDraft);
         const sorted = sortAdvancedResources(filtered, sortField, sortOrder);
-        set({ resources: paginateAdvancedResources(sorted, page), totalResources: sorted.length, currentPage: page });
+        const maxPage = Math.max(1, Math.ceil(sorted.length / ADVANCED_PAGE_SIZE));
+        const safePage = Math.min(Math.max(1, page), maxPage);
+        set({
+          resources: paginateAdvancedResources(sorted, safePage),
+          totalResources: sorted.length,
+          currentPage: safePage
+        });
       },
       addTagFilter: (tag) => { const next = get().selectedTags.includes(tag) ? get().selectedTags : [...get().selectedTags, tag]; set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },
       removeTagFilter: (tag) => { const next = get().selectedTags.filter(t => t !== tag); set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },

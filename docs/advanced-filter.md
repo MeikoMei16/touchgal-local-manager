@@ -102,9 +102,17 @@ Modes:
 
 - Candidate pages are fetched with bounded concurrency.
 - Tag enrichment also uses bounded concurrency.
-- During Stage 3, un-hydrated resources remain visible until enrichment resolves.
+- During Stage 3, strict tag filtering hides un-hydrated resources until they are enriched.
 - Local sorting and pagination happen after predicate application in advanced mode.
+- Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
+- Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
 
-## Known Mismatch To Watch
+## Caching
 
-The main-process relay still contains an older branch that switches to `/search` when `selectedTags` are present. The advanced-mode pipeline already avoids depending on that branch, but the relay should eventually be aligned with the documented architecture.
+Advanced datasets are cached by upstream coarse-filter key:
+
+- content domain
+- selected platform
+- minimum rating count
+
+When those upstream inputs do not change, the renderer can reuse the existing candidate catalog and only continue any missing tag enrichment work.
