@@ -287,9 +287,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
           {/* Stats Section */}
           <div className="grid grid-cols-3 gap-4 mt-2">
             {[
-              { label: '最低评分人数', icon: <Users size={16} />, val: minRatingCount, set: setMinRatingCount },
-              { label: '最低资源评分', icon: <Star size={16} />, val: minRatingScore, set: setMinRatingScore, step: 0.1 },
-              { label: '最低评论数量', icon: <MessageSquare size={16} />, val: minCommentCount, set: setMinCommentCount }
+              { label: '最低评分人数', icon: <Users size={16} />, val: minRatingCount, key: 'minRatingCount' },
+              { label: '最低资源评分', icon: <Star size={16} />, val: minRatingScore, key: 'minRatingScore', step: 0.1 },
+              { label: '最低评论数量', icon: <MessageSquare size={16} />, val: minCommentCount, key: 'minCommentCount' }
             ].map((stat, idx) => (
               <div key={idx} className="relative group">
                 <div className="flex items-center justify-center gap-2 h-14 bg-slate-50 border-2 border-slate-200 rounded-3xl transition-all group-focus-within:border-blue-500 group-focus-within:bg-white">
@@ -300,7 +300,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
                     step={stat.step || 1}
                     className="w-16 bg-transparent text-center font-black text-slate-700 outline-none"
                     value={stat.val}
-                    onChange={e => stat.set(parseFloat(e.target.value) || 0)}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value) || 0;
+                      if (stat.key === 'minRatingCount') setMinRatingCount(val);
+                      if (stat.key === 'minRatingScore') setMinRatingScore(val);
+                      if (stat.key === 'minCommentCount') setMinCommentCount(val);
+                      publishChange({ [stat.key]: val });
+                    }}
                     onKeyDown={e => e.key === 'Enter' && submitFilters()}
                   />
                 </div>
