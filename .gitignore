@@ -16,9 +16,9 @@ dist-ssr
 *.local
 out/
 .gemini/
-.agents/
-.agent/
-.pnpm-store/
+# Reference Projects
+reference_project/
+astrbot_plugin_touchgal/
 
 # SQLite
 *.db

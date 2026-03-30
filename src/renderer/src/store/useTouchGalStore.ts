@@ -112,7 +112,8 @@ const applyAdvancedPredicate = (resources: AdvancedResourceRecord[], draft: Adva
       const tagSet = new Set(resource.fullTags);
       if (!draft.selectedTags.every(tag => tagSet.has(tag))) return false;
     }
-    if (draft.minRatingCount > 0 && (resource.averageRatingCount || (resource as any).ratingCount || 0) < draft.minRatingCount) return false;
+    const ratingCount = (resource as any).ratingSummary?.count ?? (resource as any).averageRatingCount ?? (resource as any).ratingCount ?? 0;
+    if (draft.minRatingCount > 0 && ratingCount < draft.minRatingCount) return false;
     if (draft.minRatingScore > 0 && (resource.averageRating || 0) < draft.minRatingScore) return false;
     if (draft.minCommentCount > 0 && (resource.commentCount || (resource as any).comments || 0) < draft.minCommentCount) return false;
     return true;

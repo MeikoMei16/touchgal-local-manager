@@ -29,6 +29,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   const [tagSearchInput, setTagSearchInput] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [isSearchingTags, setIsSearchingTags] = useState(false);
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+
+  // Popular tags for quick selection (also fallback while API is wired up)
+  const POPULAR_TAGS = [
+    '萌系', '学园', '恋爱', '奇幻', '日常', '催泪',
+    '冒险', '战斗', '悬疑', '推理', '百合', '乙女',
+    '科幻', '历史', '音乐', '机器人', '吸血鬼', '魔法少女',
+  ];
   
   // Stats
   const [minRatingCount, setMinRatingCount] = useState(0);
@@ -141,18 +149,25 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
 
   useEffect(() => {
     const search = async () => {
-      if (!tagSearchInput.trim()) {
+      const q = tagSearchInput.trim().toLowerCase();
+      if (!q) {
         setTagSuggestions([]);
         return;
       }
       setIsSearchingTags(true);
+      let results: string[] = [];
       try {
-        const results = await window.api.searchTags(tagSearchInput);
-        setTagSuggestions(results.map((t: any) => t.name));
-      } catch { /* ignore */ }
+        const apiResults = await (window.api as any).searchTags?.(tagSearchInput);
+        if (apiResults?.length) {
+          results = apiResults.map((t: any) => t.name);
+        }
+      } catch { /* API not yet wired — fall through to local */ }
+      // Always supplement with popular tags matching the query
+      const localMatches = POPULAR_TAGS.filter(t => t.toLowerCase().includes(q) && !results.includes(t));
+      setTagSuggestions([...results, ...localMatches].slice(0, 12));
       setIsSearchingTags(false);
     };
-    const timer = setTimeout(search, 300);
+    const timer = setTimeout(search, 200);
     return () => clearTimeout(timer);
   }, [tagSearchInput]);
 
@@ -308,26 +323,25 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
               </div>
             </div>
             
-            <div className={`flex items-center gap-2 px-4 py-2.5 bg-white border-2 rounded-2xl transition-all shadow-sm ${tagSearchInput ? 'border-blue-400 ring-4 ring-blue-50 w-full' : 'border-slate-200 w-48 hover:border-slate-400'}`}>
-               <div className={isSearchingTags ? 'animate-spin' : ''}>
-                  <Search size={18} className="text-slate-400" />
-               </div>
+            <div className={`relative flex items-center gap-2 px-4 py-2.5 bg-white border-2 rounded-2xl transition-all shadow-sm ${tagSearchInput ? 'border-blue-400 ring-4 ring-blue-50 w-full' : 'border-slate-200 w-48 hover:border-slate-400'}`}>
+               <Search size={18} className={`text-slate-400 shrink-0 ${isSearchingTags ? 'animate-spin' : ''}`} />
                <input 
                  type="text" 
                  placeholder="寻找并添加标签..." 
                  className="bg-transparent border-none outline-none font-bold text-sm text-slate-700 placeholder:text-slate-400 w-full"
                  value={tagSearchInput}
                  data-submit-mode="skip"
-                 onChange={e => setTagSearchInput(e.target.value)}
-                 onBlur={() => setTimeout(() => setTagSuggestions([]), 200)}
+                 onChange={e => { setTagSearchInput(e.target.value); setIsSuggestionsOpen(true); }}
+                 onFocus={() => setIsSuggestionsOpen(true)}
+                 onBlur={() => setTimeout(() => setIsSuggestionsOpen(false), 150)}
                />
-               {tagSuggestions.length > 0 && (
-                  <div className="absolute top-20 left-8 right-8 z-[60] bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto animate-in slide-in-from-top-2">
+               {isSuggestionsOpen && tagSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-[60] mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto animate-in slide-in-from-top-2">
                      {tagSuggestions.map(tag => (
                         <div 
                           key={tag} 
                           className="px-4 py-3 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between group/tip"
-                          onClick={() => handleAddTag(tag)}
+                          onMouseDown={e => { e.preventDefault(); handleAddTag(tag); }}
                         >
                            <span className="font-bold text-slate-600 group-hover/tip:text-blue-700">{tag}</span>
                            <Plus size={16} className="text-slate-300 group-hover/tip:text-blue-500" />
