@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useUIStore } from '../store/useTouchGalStore';
+import { HomeQueryState, useUIStore } from '../store/useTouchGalStore';
 import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import { SortDropdown } from './SortDropdown.tsx';
@@ -17,14 +17,14 @@ export const Home: React.FC = () => {
     lastHomeQuery, setLastHomeQuery
   } = useUIStore();
   const [showFilters, setShowFilters] = useState(false);
-  const [sortField, setSortField] = useState('created');
-  const [sortOrder, setSortOrder] = useState('desc');
 
 
   const totalPages = Math.ceil(totalResources / 24);
   const [jumpPage, setJumpPage] = useState(String(currentPage));
   const activeAdvancedDataset = advancedDatasetsByDomain[activeNsfwDomain];
   const failedTagCount = activeAdvancedDataset?.failedTagIds.length ?? 0;
+  const sortField = lastHomeQuery.sortField;
+  const sortOrder = lastHomeQuery.sortOrder;
 
   useEffect(() => {
     setJumpPage(String(currentPage));
@@ -52,22 +52,17 @@ export const Home: React.FC = () => {
     return 'sfw';
   };
 
-  const normalizeSortField = (value: string) => {
-    if (value === 'visit') return 'view';
-    return value;
-  };
-
   // 上游: nsfwMode / selectedPlatform → 直接走 API，无需 advanced mode
   // 中游: yearConstraints / minRatingCount / minRatingScore / minCommentCount → 需要 advanced mode (全量拉取后本地过滤)
   // 下游: selectedTags → 需要 advanced mode + 标签富化
-  const requiresAdvancedMode = (filters: any) =>
+  const requiresAdvancedMode = (filters: HomeQueryState) =>
     (filters.yearConstraints?.length ?? 0) > 0 ||
     (filters.minRatingCount ?? 0) > 0 ||
     (filters.minRatingScore ?? 0) > 0 ||
     (filters.minCommentCount ?? 0) > 0 ||
     (filters.selectedTags?.length ?? 0) > 0;
 
-  const syncDraftFromQuery = (query: any) => {
+  const syncDraftFromQuery = (query: HomeQueryState) => {
     const nextDomain = mapDomain(query.nsfwMode ?? 'safe');
     setActiveNsfwDomain(nextDomain);
     updateAdvancedFilterDraft({
@@ -83,26 +78,16 @@ export const Home: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!lastHomeQuery || Object.keys(lastHomeQuery).length === 0) {
-      return;
-    }
-
-    const restoredSortField = normalizeSortField(lastHomeQuery.sortField ?? 'created');
-    setSortField(restoredSortField);
-    if (restoredSortField !== lastHomeQuery.sortField) {
-      setLastHomeQuery({ ...lastHomeQuery, sortField: restoredSortField });
-    }
     syncDraftFromQuery(lastHomeQuery);
     // DO NOT automatically trigger enterAdvancedMode on mount.
     // Let the user stay in Normal Mode (Network IO) unless they manually Apply/Submit.
-  }, []);
+  }, [lastHomeQuery, setActiveNsfwDomain, updateAdvancedFilterDraft]);
 
   useEffect(() => {
     if (homeMode === 'normal') {
       const queryParams = { 
         ...lastHomeQuery, 
         nsfwMode: lastHomeQuery.nsfwMode || activeNsfwDomain || 'safe',
-        sortField: normalizeSortField(sortField), 
         sortOrder 
       };
       console.log('[Home] useEffect triggering fetchResources:', queryParams);
@@ -110,19 +95,16 @@ export const Home: React.FC = () => {
     }
   }, [fetchResources, homeMode, lastHomeQuery, sortField, sortOrder, activeNsfwDomain]);
 
-  const commitFilterDraft = (filters: any) => {
+  const commitFilterDraft = (filters: Partial<HomeQueryState>) => {
     const newQuery = { ...lastHomeQuery, ...filters };
     const nextDomain = syncDraftFromQuery(newQuery);
 
-    setLastHomeQuery({
-      ...newQuery,
-      sortField: normalizeSortField(newQuery.sortField ?? sortField)
-    });
+    setLastHomeQuery(newQuery);
 
     return { newQuery, nextDomain };
   };
 
-  const handleFilterChange = (filters: any) => {
+  const handleFilterChange = (filters: Partial<HomeQueryState>) => {
     const { newQuery } = commitFilterDraft(filters);
 
     // 上游筛选 (NSFW/Platform) 变化时，检测是否影响已构建的 advanced dataset
@@ -133,7 +115,6 @@ export const Home: React.FC = () => {
     if (!requiresAdvancedMode(newQuery)) {
       // 纯上游筛选：直接 API 请求，无需 advanced mode
       if (homeMode !== 'normal') exitAdvancedMode();
-      fetchResources(1, { ...newQuery, sortField, sortOrder });
     } else if (homeMode === 'advanced_ready' && !domainChanged && !platformChanged) {
       // Advanced 已就绪且上游未变化：直接本地重过滤，零网络 IO
       applyAdvancedFilters(currentPage, sortField, sortOrder);
@@ -141,14 +122,13 @@ export const Home: React.FC = () => {
     // 其他情况 (advanced_building 中 / domain 变化)：等待用户点击「应用筛选」再重建
   };
 
-  const handleAdvancedSubmit = async (filters: any) => {
+  const handleAdvancedSubmit = async (filters: Partial<HomeQueryState>) => {
     const { newQuery } = commitFilterDraft(filters);
 
     if (!requiresAdvancedMode(newQuery)) {
       if (homeMode !== 'normal') {
         exitAdvancedMode();
       }
-      fetchResources(1, { ...newQuery, sortField, sortOrder });
       setShowFilters(false);
       return;
     }
@@ -157,7 +137,7 @@ export const Home: React.FC = () => {
     setShowFilters(false);
   };
 
-  const applyFiltersFromCurrentDraft = async (overrides: any) => {
+  const applyFiltersFromCurrentDraft = async (overrides: Partial<HomeQueryState>) => {
     const merged = {
       nsfwMode:
         overrides.nsfwMode ??
@@ -186,21 +166,16 @@ export const Home: React.FC = () => {
     { label: '收藏量', value: 'favorite' }
   ];
 
-  const updateSort = (field: string, order: string) => {
-    const normalizedField = normalizeSortField(field);
-    setSortField(normalizedField);
-    setSortOrder(order);
-    if (homeMode === 'normal') {
-      fetchResources(1, { ...lastHomeQuery, sortField: normalizedField, sortOrder: order });
-      return;
-    }
-    applyAdvancedFilters(1, normalizedField, order);
+  const updateSort = (field: HomeQueryState['sortField'], order: HomeQueryState['sortOrder']) => {
+    const nextQuery = { ...lastHomeQuery, sortField: field, sortOrder: order };
+    setLastHomeQuery(nextQuery);
+    if (homeMode !== 'normal') applyAdvancedFilters(1, field, order);
   };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
     if (homeMode === 'normal') {
-      fetchResources(page, { ...lastHomeQuery, sortField, sortOrder });
+      fetchResources(page, lastHomeQuery);
       return;
     }
     applyAdvancedFilters(page, sortField, sortOrder);
@@ -222,7 +197,7 @@ export const Home: React.FC = () => {
           <SortDropdown 
             value={sortField} 
             options={sortOptions} 
-            onSelect={(val) => updateSort(val, sortOrder)}
+            onSelect={(val) => updateSort(val as HomeQueryState['sortField'], sortOrder)}
             disabled={isLoading}
           />
 

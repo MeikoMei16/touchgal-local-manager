@@ -39,6 +39,28 @@ export interface AdvancedDatasetCache {
   upstreamKey: string | null;
 }
 
+export type HomeSortField =
+  | 'resource_update_time'
+  | 'created'
+  | 'rating'
+  | 'view'
+  | 'download'
+  | 'favorite';
+
+export type HomeSortOrder = 'asc' | 'desc';
+
+export interface HomeQueryState {
+  nsfwMode: 'safe' | 'nsfw' | 'all';
+  selectedPlatform: string;
+  yearConstraints: Array<{ op: string; val: number }>;
+  minRatingCount: number;
+  minRatingScore: number;
+  minCommentCount: number;
+  selectedTags: string[];
+  sortField: HomeSortField;
+  sortOrder: HomeSortOrder;
+}
+
 export const defaultAdvancedFilterDraft = (): AdvancedFilterDraft => ({
   nsfwMode: 'sfw',
   selectedPlatform: 'all',
@@ -63,6 +85,42 @@ const defaultAdvancedDatasetCache = (): AdvancedDatasetCache => ({
   failedTagIds: [],
   lastBuiltAt: null,
   upstreamKey: null
+});
+
+export const defaultHomeQuery = (): HomeQueryState => ({
+  nsfwMode: 'safe',
+  selectedPlatform: 'all',
+  yearConstraints: [],
+  minRatingCount: 0,
+  minRatingScore: 0,
+  minCommentCount: 0,
+  selectedTags: [],
+  sortField: 'created',
+  sortOrder: 'desc'
+});
+
+const normalizeSortField = (value: unknown): HomeSortField => {
+  if (value === 'visit') return 'view';
+  if (value === 'resource_update_time' || value === 'created' || value === 'rating' || value === 'view' || value === 'download' || value === 'favorite') {
+    return value;
+  }
+  return 'created';
+};
+
+const normalizeSortOrder = (value: unknown): HomeSortOrder => (value === 'asc' ? 'asc' : 'desc');
+
+const normalizeHomeQuery = (query: Partial<HomeQueryState> | null | undefined): HomeQueryState => ({
+  ...defaultHomeQuery(),
+  ...query,
+  nsfwMode: query?.nsfwMode === 'nsfw' || query?.nsfwMode === 'all' ? query.nsfwMode : 'safe',
+  selectedPlatform: query?.selectedPlatform ?? 'all',
+  yearConstraints: Array.isArray(query?.yearConstraints) ? query.yearConstraints : [],
+  minRatingCount: Number(query?.minRatingCount ?? 0) || 0,
+  minRatingScore: Number(query?.minRatingScore ?? 0) || 0,
+  minCommentCount: Number(query?.minCommentCount ?? 0) || 0,
+  selectedTags: Array.isArray(query?.selectedTags) ? query.selectedTags : [],
+  sortField: normalizeSortField(query?.sortField),
+  sortOrder: normalizeSortOrder(query?.sortOrder)
 });
 
 // --- HELPERS (Copied from old store) ---
@@ -344,9 +402,9 @@ interface UIState {
   advancedBuildProgress: AdvancedBuildProgress;
   advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
   selectedTags: string[];
-  lastHomeQuery: any;
+  lastHomeQuery: HomeQueryState;
 
-  fetchResources: (page?: number, query?: any) => Promise<void>;
+  fetchResources: (page?: number, query?: Partial<HomeQueryState>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: any) => Promise<void>;
   selectResource: (uniqueId: string) => Promise<void>;
   clearSelected: () => void;
@@ -359,7 +417,7 @@ interface UIState {
   removeTagFilter: (tag: string) => void;
   clearTags: () => void;
   resetAdvancedFilterDraft: () => void;
-  setLastHomeQuery: (query: any) => void;
+  setLastHomeQuery: (query: Partial<HomeQueryState>) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -385,13 +443,14 @@ export const useUIStore = create<UIState>()(
         all: defaultAdvancedDatasetCache()
       },
       selectedTags: [],
-      lastHomeQuery: {},
+      lastHomeQuery: defaultHomeQuery(),
 
       fetchResources: async (page = 1, query = {}) => {
         console.log('[useUIStore] fetchResources called:', { page, query });
         set({ isLoading: true, error: null });
         try {
-          const data = await TouchGalClient.fetchGalgameResources(page, 24, query);
+          const normalizedQuery = normalizeHomeQuery({ ...get().lastHomeQuery, ...query });
+          const data = await TouchGalClient.fetchGalgameResources(page, 24, normalizedQuery);
           set({ resources: data.list, totalResources: data.total, currentPage: page, isLoading: false });
         } catch (err: any) {
           console.error('[useUIStore] fetchResources error:', err);
@@ -732,9 +791,21 @@ export const useUIStore = create<UIState>()(
       removeTagFilter: (tag) => { const next = get().selectedTags.filter(t => t !== tag); set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },
       clearTags: () => { const next: string[] = []; set({ selectedTags: next, advancedFilterDraft: { ...get().advancedFilterDraft, selectedTags: next } }); },
       resetAdvancedFilterDraft: () => set({ advancedFilterDraft: defaultAdvancedFilterDraft(), selectedTags: [] }),
-      setLastHomeQuery: (query) => set({ lastHomeQuery: query })
+      setLastHomeQuery: (query) => set({ lastHomeQuery: normalizeHomeQuery(query) })
     }),
-    { name: 'touchgal-ui-storage', storage: createJSONStorage(() => sessionStorage) }
+    {
+      name: 'touchgal-ui-storage',
+      storage: createJSONStorage(() => sessionStorage),
+      merge: (persistedState, currentState) => {
+        const typedPersisted = persistedState as { state?: Partial<UIState> } | undefined;
+        const persistedQuery = typedPersisted?.state?.lastHomeQuery;
+        return {
+          ...currentState,
+          ...typedPersisted?.state,
+          lastHomeQuery: normalizeHomeQuery(persistedQuery)
+        };
+      }
+    }
   )
 );
 
