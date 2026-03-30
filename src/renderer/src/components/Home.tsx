@@ -139,7 +139,7 @@ export const Home: React.FC = () => {
         />
       )}
 
-      {isLoading ? (
+      {isLoading && resources.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-primary gap-4 font-bold text-lg">
           <Loader2 className="animate-spin" size={48} />
           <span className="animate-pulse">正在寻找更多游戏...</span>

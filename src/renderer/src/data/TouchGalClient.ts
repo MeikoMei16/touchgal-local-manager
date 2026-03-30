@@ -30,6 +30,14 @@ export const TouchGalClient = {
     return PatchIntroductionSchema.parse(raw);
   },
 
+  fetchPatchComments: async (patchId: number, page = 1, limit = 20) => {
+    return await window.api.getPatchComments(patchId, page, limit);
+  },
+
+  fetchPatchRatings: async (patchId: number, page = 1, limit = 20) => {
+    return await window.api.getPatchRatings(patchId, page, limit);
+  },
+
   fetchCaptcha: async () => {
     return await window.api.fetchCaptcha();
   },

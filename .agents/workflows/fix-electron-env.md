@@ -4,30 +4,45 @@ description: fix-electron-env
 
 ## Fix Electron Runtime Environment
 
-Use this workflow if the Electron window fails to launch or if there are ESM/CJS bundling errors.
+Use this workflow to resolve "not a function" errors, preload desyncs, or window launch failures.
 
-1. **Clean Project & System Architecture**
-Run this to remove build artifacts and the system Electron cache:
+### Option A: Quick Refresh (Preload/IPC Desyncs)
+**Try this first.** It cleans build artifacts without re-downloading dependencies.
+
+// turbo
+1. **Clean Out/Dist Directories**
 ```bash
-rm -rf dist dist-electron release node_modules pnpm-lock.yaml ~/.cache/electron/
+pnpm clean && pnpm dev
 ```
 
-2. **Install System Dependencies (Fedora)**
+---
+
+### Option B: Deep Reset (System/Dependency Issues)
+Use if Option A fails or if you have ESM/CJS bundling errors.
+
+1. **Nuclear Cleanup**
+Removes build artifacts, dependencies, and system Electron cache.
+```bash
+rm -rf out dist dist-electron release node_modules pnpm-lock.yaml ~/.cache/electron/
+```
+
+2. **System Dependencies (Fedora/Linux)**
 // turbo
 ```bash
 sudo dnf install libX11 libXcomposite libXcursor libXdamage libXext libXfixes libXi libXrender libXtst cups-libs alsa-lib libXrandr pango cairo-gobject mesa-libGBM
 ```
 
-3. **Re-install Dependencies**
-Ensure proper Electron binary download for Linux:
+3. **Fresh Install**
 ```bash
-pnpm install
+pnpm install && pnpm dev
 ```
 
-4. **Verify ESM Configuration**
-Ensure `electron/main.ts` uses native ESM `import` statements and **NOT** `createRequire`.
+---
 
-5. **Run Development Mode**
+### Option C: Database Reset
+**WARNING: This deletes your local game metadata.** Use only if the SQLite database is corrupted.
+
+1. **Remove Database**
 ```bash
-pnpm run dev
+rm -rf ~/.config/touchgal-local-manager/touchgal.db && pnpm dev
 ```

@@ -7,6 +7,7 @@ interface TouchGalState {
   totalResources: number;
   currentPage: number;
   isLoading: boolean;
+  isDetailLoading: boolean;
   error: string | null;
   selectedResource: TouchGalDetail | null;
   user: any | null;
@@ -18,6 +19,8 @@ interface TouchGalState {
   userComments: any[];
   userRatings: any[];
   userCollections: any[];
+  patchComments: any[];
+  patchRatings: any[];
 
   fetchResources: (page?: number, query?: Record<string, unknown>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: Record<string, any>) => Promise<void>;
@@ -70,6 +73,7 @@ export const useTouchGalStore = create<TouchGalState>()(
     totalResources: 0,
     currentPage: 1,
     isLoading: false,
+    isDetailLoading: false,
     error: null,
     selectedResource: null,
     user: initialUser,
@@ -81,6 +85,8 @@ export const useTouchGalStore = create<TouchGalState>()(
     userComments: [],
     userRatings: [],
     userCollections: [],
+    patchComments: [],
+    patchRatings: [],
 
     fetchResources: async (page = 1, query = {}) => {
       set({ isLoading: true, error: null });
@@ -109,11 +115,28 @@ export const useTouchGalStore = create<TouchGalState>()(
   },
 
   selectResource: async (uniqueId: string) => {
-    set({ isLoading: true, error: null });
+    // Find basic info from currently loaded resources to show immediately
+    const basicInfo = get().resources.find((r: TouchGalResource) => r.uniqueId === uniqueId);
+    if (basicInfo) {
+      set({ 
+        selectedResource: { ...basicInfo } as TouchGalDetail, 
+        isDetailLoading: true, 
+        error: null 
+      });
+    } else {
+      set({ isDetailLoading: true, error: null });
+    }
+
     try {
-      const detail = await TouchGalClient.getPatchDetail(uniqueId);
-      const introData = await TouchGalClient.getPatchIntroduction(uniqueId);
-      set({
+      const gId = basicInfo?.id;
+      const [detail, introData, comments, ratings] = await Promise.all([
+        TouchGalClient.getPatchDetail(uniqueId),
+        TouchGalClient.getPatchIntroduction(uniqueId),
+        gId ? TouchGalClient.fetchPatchComments(gId, 1, 50) : Promise.resolve({ list: [] }),
+        gId ? TouchGalClient.fetchPatchRatings(gId, 1, 50) : Promise.resolve({ list: [] })
+      ]);
+      
+      set(() => ({ // Use functional update to ensure we have latest id if not in basicInfo
         selectedResource: {
           ...detail,
           introduction: introData.introduction ?? detail.introduction,
@@ -125,14 +148,29 @@ export const useTouchGalStore = create<TouchGalState>()(
           bangumiId: introData.bangumiId ?? detail.bangumiId,
           steamId: introData.steamId ?? detail.steamId,
         },
-        isLoading: false
-      });
+        patchComments: comments.list || comments.comments || [],
+        patchRatings: ratings.list || ratings.ratings || [],
+        isDetailLoading: false
+      }));
+
+      // If basicInfo didn't have ID, fetch again using detail.id
+      if (!gId && detail.id) {
+        const [c, r] = await Promise.all([
+          TouchGalClient.fetchPatchComments(detail.id, 1, 50),
+          TouchGalClient.fetchPatchRatings(detail.id, 1, 50)
+        ]);
+        set({
+          patchComments: c.list || c.comments || [],
+          patchRatings: r.list || r.ratings || [],
+        });
+      }
     } catch (err: any) {
-      set({ error: err.message || 'Failed to load details', isLoading: false });
+      console.error('[Store] Detail Load Error:', err);
+      set({ error: err.message || 'Failed to load details', isDetailLoading: false });
     }
   },
 
-  clearSelected: () => set({ selectedResource: null }),
+  clearSelected: () => set({ selectedResource: null, patchComments: [], patchRatings: [] }),
 
   fetchCaptcha: async () => {
     set({ isLoading: true });

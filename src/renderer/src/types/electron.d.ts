@@ -14,6 +14,8 @@ export interface ElectronAPI {
   searchResources: (keyword: string, page: number, limit: number, options?: any) => Promise<any>;
   getPatchDetail: (uniqueId: string) => Promise<any>;
   getPatchIntroduction: (uniqueId: string) => Promise<any>;
+  getPatchComments: (patchId: number, page: number, limit: number) => Promise<any>;
+  getPatchRatings: (patchId: number, page: number, limit: number) => Promise<any>;
   fetchCaptcha: () => Promise<any>;
   verifyCaptcha: (sessionId: string, selectedIds: string[]) => Promise<any>;
   login: (username: string, password: string, captcha: string) => Promise<any>;

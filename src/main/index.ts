@@ -194,7 +194,7 @@ const normalizeResource = (resource: any) => {
     resourceCount,
     releasedDate,
     company,
-    pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? null,
+    pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
   }
 }
 
@@ -486,6 +486,46 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
       return JSON.parse(cached.detail_json)
     }
     throw error
+  }
+})
+
+function normalizeComment(raw: any) {
+  return {
+    id: raw.id,
+    content: raw.content,
+    userName: raw.user?.name || raw.user_name || 'Anonymous',
+    userAvatar: raw.user?.avatar || raw.user_avatar || null,
+    createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+  }
+}
+
+function normalizeRating(raw: any) {
+  return {
+    id: raw.id,
+    overall: raw.overall || 0,
+    recommend: raw.recommend || 'neutral',
+    shortSummary: raw.shortSummary || raw.short_summary || '',
+    playStatus: raw.playStatus || raw.play_status || 'other',
+    userName: raw.user?.name || raw.user_name || 'Anonymous',
+    userAvatar: raw.user?.avatar || raw.user_avatar || null,
+  }
+}
+
+handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: number, limit: number) => {
+  const response = await API_CLIENT.get('/patch/comment', { params: { patchId, page, limit } })
+  const data = ensureValidResponse(response.data)
+  return {
+    total: data.total || 0,
+    list: (data.list || data.comments || []).map(normalizeComment)
+  }
+})
+
+handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: number, limit: number) => {
+  const response = await API_CLIENT.get('/patch/rating', { params: { patchId, page, limit } })
+  const data = ensureValidResponse(response.data)
+  return {
+    total: data.total || 0,
+    list: (data.list || data.ratings || []).map(normalizeRating)
   }
 })
 
