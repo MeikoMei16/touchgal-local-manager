@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import axios from 'axios'
 import log from 'electron-log'
-import { initDb, getDb, upsertGame } from './db'
+import { initDb, getDb } from './db'
 import { cleanFolderName, discoverExecutables } from './utils'
 import { downloadManager } from './downloader'
 
@@ -507,48 +507,13 @@ handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {
 handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, query: any) => {
   log.info('[IPC] tg-fetch-resources request:', { page, limit, query });
 
-  // If there are tags, we MUST use the search API (POST /search) because /galgame (GET) 
-  // doesn't support tag filtering in the backend schema.
   if (query.selectedTags && query.selectedTags.length > 0) {
-    log.info('[API] Switching to /search (POST) because tags are present');
-    const tagQueryItems = (query.selectedTags as string[]).map(t => ({ type: 'tag', name: t }));
-    const body = {
-      queryString: JSON.stringify(tagQueryItems),
-      limit,
-      page,
-      selectedType: query.selectedType ?? 'all',
-      selectedLanguage: query.selectedLanguage ?? 'all',
-      selectedPlatform: query.selectedPlatform ?? 'all',
-      sortField: query.sortField ?? 'resource_update_time',
-      sortOrder: query.sortOrder ?? 'desc',
-      selectedYears: ['all'], // Default for simplicity, can be expanded
-      selectedMonths: ['all'],
-      searchOption: {
-        searchInIntroduction: true,
-        searchInAlias: true,
-        searchInTag: true,
-      },
-    };
-
-    const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
-    const cookieString = `${currentToken ? currentToken + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
-
-    try {
-      const response = await API_CLIENT.post('/search', body, {
-        headers: { 'Cookie': cookieString }
-      });
-      log.info('[API] /search (POST) success, items:', response.data?.galgames?.length);
-      const normalized = normalizeFeedResponse(ensureValidResponse(response.data));
-      // TODO: Background Delta Sync (Isolated from primary Network IO flow)
-      // normalized.list.forEach(upsertGame);
-      return normalized;
-    } catch (err: any) {
-      log.error('[API] /search error:', err.response?.data || err.message);
-      throw err;
-    }
+    log.warn('[API] selectedTags received by tg-fetch-resources; ignoring upstream tag filtering and relying on local advanced pipeline');
   }
 
-  // Otherwise use the standard /galgame (GET) endpoint
+  // Use the standard /galgame (GET) endpoint only.
+  // Tag filtering is intentionally NOT delegated upstream because /galgame tagString is unreliable
+  // and /search has retrieval semantics that do not match strict local filtering.
   // Advanced Year Logic Translation (Intersection of all constraints)
   let yearArray: string[] = ['all'];
   if (query.yearConstraints && query.yearConstraints.length > 0) {
@@ -583,7 +548,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     sortOrder: query.sortOrder ?? 'desc',
     yearString: (yearArray && yearArray.length > 0) ? JSON.stringify(yearArray) : (query.yearString ?? '["all"]'),
     monthString: query.monthString ?? '["all"]',
-    tagString: query.selectedTags && query.selectedTags.length > 0 ? JSON.stringify(query.selectedTags) : '["all"]',
+    tagString: '["all"]',
     minRatingCount: query.minRatingCount ?? 0
   };
 

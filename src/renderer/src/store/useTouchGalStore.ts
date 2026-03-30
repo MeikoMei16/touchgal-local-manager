@@ -36,6 +36,7 @@ export interface AdvancedDatasetCache {
   hydratedTagIds: string[];
   failedTagIds: string[];
   lastBuiltAt: number | null;
+  upstreamKey: string | null;
 }
 
 export const defaultAdvancedFilterDraft = (): AdvancedFilterDraft => ({
@@ -53,6 +54,15 @@ const defaultBuildProgress = (): AdvancedBuildProgress => ({
   completed: 0,
   total: 0,
   message: ''
+});
+
+const defaultAdvancedDatasetCache = (): AdvancedDatasetCache => ({
+  resources: [],
+  total: 0,
+  hydratedTagIds: [],
+  failedTagIds: [],
+  lastBuiltAt: null,
+  upstreamKey: null
 });
 
 // --- HELPERS (Copied from old store) ---
@@ -150,6 +160,13 @@ const paginateAdvancedResources = (
 };
 
 const createSessionId = () => `adv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const getAdvancedUpstreamKey = (draft: AdvancedFilterDraft, domain: NsfwDomain) =>
+  JSON.stringify({
+    domain,
+    selectedPlatform: draft.selectedPlatform ?? 'all',
+    minRatingCount: draft.minRatingCount ?? 0
+  });
 
 async function runBounded<TInput, TOutput>(items: TInput[], limit: number, worker: (item: TInput, index: number) => Promise<TOutput>): Promise<TOutput[]> {
   const results = new Array<TOutput>(items.length);
@@ -324,9 +341,9 @@ export const useUIStore = create<UIState>()(
       advancedBuildSessionId: null,
       advancedBuildProgress: defaultBuildProgress(),
       advancedDatasetsByDomain: {
-        sfw: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null },
-        nsfw: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null },
-        all: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null }
+        sfw: defaultAdvancedDatasetCache(),
+        nsfw: defaultAdvancedDatasetCache(),
+        all: defaultAdvancedDatasetCache()
       },
       selectedTags: [],
       lastHomeQuery: {},
@@ -395,16 +412,8 @@ export const useUIStore = create<UIState>()(
         const draft = get().advancedFilterDraft;
         const domain = get().activeNsfwDomain;
         const sessionId = createSessionId();
+        const upstreamKey = getAdvancedUpstreamKey(draft, domain);
         set({ homeMode: 'advanced_building', advancedBuildSessionId: sessionId, error: null });
-
-        // Reset dataset for this domain
-        set(s => ({
-          advancedDatasetsByDomain: {
-            ...s.advancedDatasetsByDomain,
-            [domain]: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null }
-          },
-          advancedBuildProgress: { stage: 'catalog', completed: 0, total: 0, message: '正在获取目录总量...' }
-        }));
 
         try {
           // ── Stage 1: build upstream API query ───────────────────────────────
@@ -424,6 +433,127 @@ export const useUIStore = create<UIState>()(
             if (draft.minCommentCount > 0 && (record.commentCount || (record as any).comments || 0) < draft.minCommentCount) return false;
             return true;
           };
+
+          const existingDataset = get().advancedDatasetsByDomain[domain];
+          const canReuseCatalog =
+            existingDataset.upstreamKey === upstreamKey &&
+            existingDataset.resources.length > 0;
+
+          if (canReuseCatalog) {
+            set({
+              homeMode: 'advanced_ready',
+              advancedBuildProgress: {
+                stage: 'ready',
+                completed: existingDataset.resources.length,
+                total: existingDataset.resources.length,
+                message: `复用已缓存目录，${existingDataset.resources.length} 个候选`
+              }
+            });
+            get().applyAdvancedFilters(1, sortField, sortOrder);
+
+            if (draft.selectedTags.length > 0) {
+              const pendingResources = existingDataset.resources.filter(
+                (resource) =>
+                  !resource.tagsHydrated &&
+                  !existingDataset.failedTagIds.includes(resource.uniqueId)
+              );
+
+              if (pendingResources.length > 0) {
+                set(s => ({
+                  advancedBuildProgress: {
+                    ...s.advancedBuildProgress,
+                    stage: 'enrichment',
+                    completed: 0,
+                    total: pendingResources.length,
+                    message: `正在富化标签 (0/${pendingResources.length})...`
+                  }
+                }));
+
+                let hydrated = 0;
+                await runBounded(pendingResources, ADVANCED_TAG_CONCURRENCY, async (resource) => {
+                  if (get().advancedBuildSessionId !== sessionId) return;
+                  try {
+                    const intro = await TouchGalClient.getPatchIntroduction(resource.uniqueId);
+                    if (get().advancedBuildSessionId !== sessionId) return;
+                    hydrated++;
+                    set(s => {
+                      const ds = s.advancedDatasetsByDomain[domain];
+                      if (!ds) return {};
+                      const next = ds.resources.map((item: AdvancedResourceRecord) =>
+                        item.uniqueId === resource.uniqueId
+                          ? {
+                              ...item,
+                              fullTags: intro.tags?.length ? intro.tags : item.fullTags,
+                              releasedDate: intro.releasedDate || item.releasedDate,
+                              normalizedYear: intro.releasedDate
+                                ? normalizeYear({ ...item, releasedDate: intro.releasedDate })
+                                : item.normalizedYear,
+                              tagsHydrated: true
+                            }
+                          : item
+                      );
+                      return {
+                        advancedBuildProgress: {
+                          ...s.advancedBuildProgress,
+                          completed: hydrated,
+                          message: `正在富化标签 (${hydrated}/${pendingResources.length})...`
+                        },
+                        advancedDatasetsByDomain: {
+                          ...s.advancedDatasetsByDomain,
+                          [domain]: {
+                            ...ds,
+                            resources: next,
+                            hydratedTagIds: ds.hydratedTagIds.includes(resource.uniqueId)
+                              ? ds.hydratedTagIds
+                              : [...ds.hydratedTagIds, resource.uniqueId]
+                          }
+                        }
+                      };
+                    });
+                    get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
+                  } catch {
+                    set(s => {
+                      const ds = s.advancedDatasetsByDomain[domain];
+                      if (!ds) return {};
+                      return {
+                        advancedDatasetsByDomain: {
+                          ...s.advancedDatasetsByDomain,
+                          [domain]: {
+                            ...ds,
+                            failedTagIds: ds.failedTagIds.includes(resource.uniqueId)
+                              ? ds.failedTagIds
+                              : [...ds.failedTagIds, resource.uniqueId]
+                          }
+                        }
+                      };
+                    });
+                  }
+                });
+
+                if (get().advancedBuildSessionId !== sessionId) return;
+                set(s => ({
+                  homeMode: 'advanced_ready',
+                  advancedBuildProgress: {
+                    ...s.advancedBuildProgress,
+                    stage: 'ready',
+                    message: `标签富化完成，${hydrated} 个`
+                  }
+                }));
+                get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
+              }
+            }
+
+            return;
+          }
+
+          // Reset dataset for this domain when upstream inputs changed or no cache exists.
+          set(s => ({
+            advancedDatasetsByDomain: {
+              ...s.advancedDatasetsByDomain,
+              [domain]: defaultAdvancedDatasetCache()
+            },
+            advancedBuildProgress: { stage: 'catalog', completed: 0, total: 0, message: '正在获取目录总量...' }
+          }));
 
           // ── Fetch page 1 to get total count ────────────────────────────────
           const firstPage = await TouchGalClient.fetchGalgameResources(1, ADVANCED_PAGE_SIZE, upstreamQuery);
@@ -474,7 +604,14 @@ export const useUIStore = create<UIState>()(
             advancedBuildProgress: { stage: 'ready', completed: finalCandidates.length, total: finalCandidates.length, message: `目录完成，${finalCandidates.length} 个候选` },
             advancedDatasetsByDomain: {
               ...s.advancedDatasetsByDomain,
-              [domain]: { resources: finalCandidates, total: finalCandidates.length, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: Date.now() }
+              [domain]: {
+                resources: finalCandidates,
+                total: finalCandidates.length,
+                hydratedTagIds: [],
+                failedTagIds: [],
+                lastBuiltAt: Date.now(),
+                upstreamKey
+              }
             }
           }));
           get().applyAdvancedFilters(1, sortField, sortOrder);
