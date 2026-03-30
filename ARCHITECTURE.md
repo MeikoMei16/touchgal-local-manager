@@ -1,644 +1,334 @@
-# TouchGal Local Manager — 完整功能架构设计
+# TouchGal Local Manager — Architecture & Feature Design
 
-> 本文件是所有后续开发的规划蓝图，涵盖待实现功能的技术方案、数据流设计和实现路径。
+> Living document. Sections marked ✅ are implemented. Sections marked 🔲 are planned.
 
 ---
 
-## 一、已有架构概览
+## 一、当前架构概览 ✅
 
 ```
 Electron App
 ├── Main Process (Node.js)
-│   ├── index.ts         — IPC Hub + API Proxy (绕过 CORS) + 数据标准化
-│   ├── db.ts            — SQLite (better-sqlite3) + FTS5 全文搜索 + Detail 缓存
-│   ├── downloader.ts    — 下载任务队列管理器 (单例)
-│   ├── utils.ts         — 文件夹名清洗、可执行文件探测
-│   └── logs/            — 本地日志存储 (~/.config/touchgal-local-manager/logs/)
+│   ├── index.ts         — IPC Hub + API Proxy (CORS bypass) + data normalization
+│   ├── db.ts            — SQLite (better-sqlite3) + FTS5 full-text search + delta sync
+│   ├── downloader.ts    — Download task queue manager (singleton)
+│   └── utils.ts         — Folder name sanitization, executable discovery
 ├── Preload (contextBridge)
-│   └── index.ts         — window.api 安全桥接，最小化 API 暴露
+│   └── index.ts         — window.api bridge (minimum surface, no nodeIntegration)
 └── Renderer (React 19 + Vite + Zustand + Tailwind 4)
-    ├── [Styling Guide](docs/styling.md) — Design system & Material 3 tokens
     ├── components/
-    │   ├── Home.tsx         — 主页列表 + 分页
-    │   ├── FilterBar.tsx    — 筛选面板 (平台/年份/NSFW/标签)
-    │   ├── ResourceCard.tsx — 游戏卡片
-    │   ├── DetailOverlay.tsx — 详情面板 (覆盖层)
-    │   ├── Library.tsx      — 本地库管理
-    │   ├── LoginModal.tsx   — 登录
-    │   ├── CaptchaChallenge.tsx — 验证码校验
-    │   └── UserMenu.tsx     — 用户菜单与状态
-    ├── store/useTouchGalStore.ts — Zustand 全局状态
-    ├── data/TouchGalClient.ts   — window.api 强类型封装
-    ├── schemas/index.ts         — Zod 响应验证
-    └── types/                   — TypeScript 接口
+    │   ├── Home.tsx             — Main game list + pagination + advanced filter trigger
+    │   ├── FilterBar.tsx        — Three-tier filter panel (upstream/midstream/downstream)
+    │   ├── ResourceCard.tsx     — Game card with stats
+    │   ├── DetailOverlay.tsx    — Detail panel: tabs, rating histogram, screenshots, tags
+    │   ├── Library.tsx          — Local library management
+    │   ├── LoginModal.tsx       — Login + captcha flow
+    │   ├── BlurredSection.tsx   — Auth-gated content blur wrapper
+    │   ├── EvaluationSection.tsx
+    │   ├── CommentSection.tsx
+    │   └── ScreenshotGallery.tsx
+    ├── store/useTouchGalStore.ts — Zustand global state (UI + auth + advanced pipeline)
+    ├── data/TouchGalClient.ts    — Typed window.api wrapper
+    ├── schemas/index.ts          — Zod response validation
+    └── types/                    — TypeScript interfaces
 ```
 
 ---
 
-## 二、功能 1：多标签过滤（主页 /galgame）
+## 二、三阶段数据管线 (Three-Stage Pipeline) ✅
 
-### 2.1 问题分析
+### 核心设计原则
 
-TouchGal API `/api/galgame` 支持通过 `tagString` 参数传递标签列表（JSON 数组格式）进行服务端过滤。  
-详情页标签已显示"X 个 galgame 使用了此标签"，点击标签应能触发主页的多标签过滤。
+`/api/search` endpoint 的标签过滤结果不可靠，**禁止使用**。全部高级筛选通过数据管线实现。
 
-### 2.2 API 调用方式
+### 数据流图
 
 ```
-GET /api/galgame?tagString=["萌系","学园"]&page=1&limit=24...
+用户开启高级筛选
+        │
+        ▼
+┌─────────────────────────────────────────────────────────┐
+│  Stage 1 — Upstream (API)                               │
+│  参数: nsfwMode, platform, minRatingCount               │
+│  方式: GET /api/galgame?...  (并发 4 页流式拉取)        │
+│  目标: 利用后端索引圈定候选池，减少本地处理量           │
+└──────────────────────┬──────────────────────────────────┘
+                       │ 流式逐页输出
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  Stage 2 — Midstream (local CPU, per-page, in-memory)   │
+│  参数: yearConstraints, minRatingScore, minCommentCount  │
+│  方式: 每页到达后立即过滤，通过的才进候选集             │
+│  支持: 年份区间叠加 (e.g. >=2020 AND <=2024)           │
+│  实时: 每页过滤完立即更新 UI，用户看到结果流入          │
+└──────────────────────┬──────────────────────────────────┘
+                       │ 候选集 (数量已大幅缩小)
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  Stage 3 — Downstream (tag enrichment, on-demand IO)    │
+│  参数: selectedTags                                      │
+│  触发: 仅当 selectedTags.length > 0 时运行              │
+│  方式: 对候选集调用 getPatchIntroduction (并发 6)        │
+│  效果: 50 个候选 → 50 次请求，而非全站扫描             │
+│  实时: 每富化一条立即重新应用标签过滤                   │
+└─────────────────────────────────────────────────────────┘
 ```
 
-标签在 API 中以名称字符串数组传递，与 `/api/search` 的 `queryString` 格式不同，属于专用参数。
+### 筛选字段层级归属
 
-### 2.3 架构方案
+| 字段 | 层级 | 处理位置 | 说明 |
+|---|---|---|---|
+| `nsfwMode` | 上游 | API query param | SFW/NSFW/全部 |
+| `selectedPlatform` | 上游 | API query param | Windows/Android/iOS 等 |
+| `minRatingCount` | 上游 | API query param | 后端原生支持 |
+| `yearConstraints` | 中游 | 本地内存 | 支持多约束叠加 (`>=`, `<=`, `=`, `>`, `<`) |
+| `minRatingScore` | 中游 | 本地内存 | 读取 `ratingSummary.average` |
+| `minCommentCount` | 中游 | 本地内存 | 读取 `commentCount` |
+| `selectedTags` | 下游 | 详情 API + 本地 | 富化后本地匹配 |
 
-#### 主进程 (`src/main/index.ts`)
-- `tg-fetch-resources` IPC 接口新增 `tagString` 参数
-- 将 `selectedTags: string[]` 序列化为 `JSON.stringify(tags)` 传入 API
+### 关键实现细节
 
-#### 渲染进程
-
-**FilterBar.tsx — 标签搜索与选择**
-```
-[当前状态] 标签区域有 UI 框架但"添加标签"按钮无功能
-
-[目标实现]
-1. 点击"添加标签"→ 弹出 TagSearchModal
-2. TagSearchModal: 输入关键词 → 调用 GET /api/tag?name=xxx&limit=20
-3. 返回标签列表 (含使用数量) → 展示为可选列表
-4. 选中标签 → 加入 FilterBar selectedTags 状态
-5. FilterBar 触发 onFilterChange → Home.tsx 重新请求
-```
-
-**DetailOverlay.tsx — 标签点击跳转**
-```
-[当前状态] 标签以静态药丸渲染，无交互
-
-[目标实现]
-标签点击 → 调用 store.addTagFilter(tagName) → 关闭详情面板 → 
-Home 页面激活该标签过滤 → FilterBar 显示已选标签
-```
-
-#### 新增 IPC 接口
 ```typescript
-// 主进程添加
-ipcMain.handle('tg-search-tags', async (_event, keyword: string) => {
-  const response = await API_CLIENT.get('/tag', { params: { name: keyword, limit: 20 } })
-  return ensureValidResponse(response.data) // [{ id, name, count }]
+// enterAdvancedMode — useTouchGalStore.ts
+
+// Stage 1: upstream query
+const upstreamQuery = { nsfwMode, selectedPlatform, minRatingCount }
+
+// Stage 2: midstream predicate (pure function, zero IO)
+const midstreamPass = (record) => {
+  if (yearConstraints.length > 0) { /* range check */ }
+  if (minRatingScore > 0 && record.averageRating < minRatingScore) return false
+  if (minCommentCount > 0 && record.commentCount < minCommentCount) return false
+  return true
+}
+
+// Stage 3: only runs if selectedTags.length > 0
+// Enriches ONLY finalCandidates, not full catalog
+await runBounded(finalCandidates, 6, async (resource) => {
+  const intro = await TouchGalClient.getPatchIntroduction(resource.uniqueId)
+  // update store, re-apply filter incrementally
 })
 ```
 
-#### Zustand Store 新增
-```typescript
-addTagFilter: (tag: string) => void   // 从详情页添加标签到主页筛选
-clearDetailAndGoHome: () => void      // 关闭详情 + 激活标签筛选
-```
+### 上游变化时的 Advanced Mode 行为
+
+| 情况 | 行为 |
+|---|---|
+| NSFW/Platform 变化，无 advanced 条件 | 直接 API 请求，退出 advanced mode |
+| NSFW/Platform 变化，有 advanced 条件，domain 改变 | 不自动重建，等用户点「应用筛选」 |
+| Advanced Ready 状态，仅中游/下游条件变化 | 本地重过滤，零网络 IO |
 
 ---
 
-## 三、功能 2：详情页完善
+## 三、标签系统 ✅
 
-### 3.1 PV 视频未加载
+### FilterBar 标签搜索
 
-**根本原因**: API `/api/patch` 返回的 `pvVideoUrl` 字段经 `normalizeResource` 后映射到了 `pvUrl`，但 API 实际字段名需核对。
+- **数据源**: `TAG_LIBRARY` — 内置 91 个热门标签，含使用量，定义在 `FilterBar.tsx` 文件顶层
+- **搜索**: 150ms 防抖，本地 `.filter().sort(count desc).slice(12)` 匹配，零 API 请求
+- **UI**: 搜索框 `onFocus` 开启建议列表，`onMouseDown + preventDefault` 解决 blur race condition
+- **Dropdown**: `position: absolute + z-[100]`，父容器 `overflow-visible`，不会被截断
 
-**修复方案**:
-```typescript
-// normalizeResource 中确保映射
-pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? null,
-screenshots: raw.fullScreenshotUrls ?? raw.screenshots ?? [],
+### DetailOverlay 标签点击
+
+```
+tag.onClick → store.addTagFilter(tagName) → clearSelected() → Home 激活标签过滤
 ```
 
-### 3.2 登录后才可见内容的模糊处理
+### 标签库维护
 
-**目标效果**: 未登录时，评论区和个人评价区域内容模糊 + 遮罩 + 引导登录按钮。
+标签数据来源为 TouchGal 官网，当前 91 条，按使用量排序。需要增加标签时直接编辑 `FilterBar.tsx` 顶部的 `TAG_LIBRARY` 数组。
 
-**架构方案**:
+---
+
+## 四、详情页 ✅
+
+### 标签页结构
+
+| Tab | 内容 |
+|---|---|
+| 游戏信息 | 介绍、截图画廊、PV 视频、标签（可点击跳转过滤）、会社、外部 ID |
+| 资源链接 | 下载资源列表（待实现） |
+| 讨论版 | 评论区（登录后可见） |
+| 游戏评价 | 评分直方图 + 推荐倾向 + 用户评价（部分登录后可见） |
+
+### 评分直方图 (RatingHistogram) ✅
+
+```
+ratingSummary.average     → 综合评分大字显示
+ratingSummary.count       → 评价人数 (toLocaleString 格式化)
+ratingSummary.histogram[] → 横向条形图，按分数降序，颜色按区间
+  9+ → emerald-500
+  7+ → blue-500
+  5+ → amber-400
+  3+ → orange-400
+  <3 → rose-500
+ratingSummary.recommend   → 推荐倾向堆叠比例条 + 图例
+```
+
+**注意**: `ratingSummary.count` 是 `minRatingCount` 中游过滤的数据来源，必须从 API 的 `ratingSummary` 字段读取，而非 `averageRatingCount`（该字段不存在）。
+
+### 登录墙 (BlurredSection)
 
 ```tsx
-// 新增 BlurredSection 组件
-const BlurredSection: React.FC<{ isLoggedIn: boolean; title: string }> = ({ isLoggedIn, title, children }) => {
-  if (isLoggedIn) return <section>{children}</section>
-  return (
-    <section className="relative">
-      <div className="blur-sm pointer-events-none select-none opacity-40">{children}</div>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/60 backdrop-blur-sm rounded-xl">
-        <Lock size={24} />
-        <span className="font-bold text-slate-600">登录后可查看{title}</span>
-        <button onClick={openLogin} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold">立即登录</button>
-      </div>
-    </section>
-  )
-}
+// 未登录时: 内容模糊 + 遮罩 + 引导登录
+// 已登录时: 正常渲染
+<BlurredSection isLoggedIn={isLoggedIn} title="用户评价">
+  <EvaluationSection ... />
+</BlurredSection>
 ```
 
-**需要模糊的区域**:
-- 用户评论列表 (`GET /api/patch/comment?patchId=xxx`)
-- 用户个人评价留言
-- 收藏操作按钮（改为提示登录）
-
-**登录态管理**: `useTouchGalStore` 已有 `isLoggedIn` 状态，直接读取。
-
-### 3.3 标签使用数量显示
-
-详情页标签药丸点击后应支持跳转过滤（见功能1），标签悬停 tooltip 显示使用量（从 API tag 接口缓存）。
+评分直方图对所有用户可见（不需要登录），用户评价区需登录。
 
 ---
 
-## 四、功能 3：下载链接解析与下载管理器
+## 五、验证码与登录流程 ✅
 
-### 4.1 已知链接类型
+### 修复的 Bug
 
-| 存储类型 | URL 格式 | 解析方式 |
+**症状**: 验证码通过但邮箱/密码错误后，再次点击 NEXT 不会重新弹出验证码。
+
+**根因**: `login()` 失败后调用 `fetchCaptcha()` 时，`captchaChallenge` 从旧值覆盖为新值（非 null→值），React `useEffect([captchaChallenge])` 无法检测到变化。
+
+**修复**:
+```typescript
+// useTouchGalStore.ts — login action
+} catch (err) {
+  // 先置 null，再 fetch，确保 useEffect 能检测到变化
+  set({ error: err.message, captchaUrl: null, captchaChallenge: null })
+  await get().fetchCaptcha()
+}
+```
+
+---
+
+## 六、功能 3：下载链接解析与下载管理器 🔲
+
+### 6.1 已验证：Cloudreve 直链提取
+
+```typescript
+// PUT /api/v3/share/download/{shareId}
+// Response: { code: 0, data: "https://xxx.touchgaldownload.xyz/uploads/...?X-Amz-Signature=..." }
+```
+
+- 后端为 S3 兼容对象存储（Backblaze B2 / MinIO 类）
+- 直链有效期 **1 小时**，必须在下载前实时获取
+
+### 6.2 支持的链接类型
+
+| 类型 | URL 格式 | 状态 |
 |---|---|---|
-| **pan.touchgal.net** (Cloudreve) | `https://pan.touchgal.net/s/{shareId}` | `PUT /api/v3/share/download/{shareId}` → 返回 S3 预签名直链 |
-| **百度网盘** | `https://pan.baidu.com/s/{id}` | 需要 Cookie + 复杂 API，暂列为手动打开 |
-| **Mega** | `https://mega.nz/...` | 需要 mega.js SDK 解密，暂列为手动打开 |
-| **OneDrive** | `https://1drv.ms/...` | 重定向后得直链，可尝试 HEAD 跟随 |
-| **Google Drive** | `https://drive.google.com/...` | 需要 API Key，暂列为手动打开 |
-| **直链** | `https://xxx.zip` | 直接下载 |
+| Cloudreve | `pan.touchgal.net/s/{shareId}` | ✅ 已验证解析方案 |
+| 直链 | `https://xxx.zip` | 🔲 直接下载 |
+| 百度网盘 | `pan.baidu.com/s/{id}` | 🔲 引导手动打开 |
+| Mega | `mega.nz/...` | 🔲 引导手动打开 |
+| OneDrive | `1drv.ms/...` | 🔲 引导手动打开 |
 
-### 4.2 Cloudreve (pan.touchgal.net) 直链提取（已验证）
-
-```typescript
-// 主进程
-async function resolveCloudreveLink(shareId: string): Promise<string | null> {
-  const res = await axios.put(
-    `https://pan.touchgal.net/api/v3/share/download/${shareId}`,
-    null,
-    {
-      headers: {
-        'Origin': 'https://pan.touchgal.net',
-        'Referer': `https://pan.touchgal.net/s/${shareId}`,
-        'User-Agent': '...'
-      }
-    }
-  )
-  if (res.data?.code === 0) return res.data.data  // S3 预签名 URL，有效期 1 小时
-  return null
-}
-```
-
-直链格式: `https://{random}.touchgaldownload.xyz/uploads/...?X-Amz-Signature=...&X-Amz-Expires=3600`
-
-> **注意**: 直链有效期 **1 小时**，需在下载前实时获取，不能预先存储。
-
-### 4.3 下载管理器完整架构
+### 6.3 下载管理器设计
 
 ```
-DownloadManager (src/main/downloader.ts) — 重构为完整管理器
-├── 任务队列 (SQLite 持久化)
-│   ├── id, gameId, gameName
-│   ├── resourceName, storageType (cloudreve|baidu|mega|direct)
-│   ├── shareId, rawUrl
-│   ├── savePath (用户指定下载目录)
-│   ├── status: queued|resolving|downloading|paused|completed|error
-│   ├── progress (0-100), speed (bytes/s), eta (seconds)
-│   ├── downloadedBytes, totalBytes
-│   ├── filename (从 Content-Disposition 解析)
-│   └── error (失败原因)
-├── 下载引擎 (Node.js http/https + 分块)
-│   ├── 串行队列 (同时最多 N 个并发，可配置)
-│   ├── 支持断点续传 (Range: bytes=xxx- header)
-│   ├── 速度计算 (滑动窗口平均)
-│   └── 进度通过 IPC event 推送到渲染进程
+DownloadManager (src/main/downloader.ts) — 待完整实现
+├── SQLite 持久化任务队列
+│   └── status: queued|resolving|downloading|paused|completed|error
+├── 下载引擎
+│   ├── 断点续传 (Range header)
+│   ├── 速度计算 (滑动窗口)
+│   └── 进度推送 (webContents.send → ipcRenderer.on)
 └── IPC 接口
-    ├── tg-resolve-link(rawUrl) → { directUrl, filename, size, type }
-    ├── tg-add-download(taskParams) → taskId
-    ├── tg-pause-download(taskId)
-    ├── tg-resume-download(taskId)
-    ├── tg-cancel-download(taskId)
-    ├── tg-retry-download(taskId)
-    ├── tg-get-queue() → DownloadTask[]
-    ├── tg-set-save-path(path) — 设置全局下载目录
-    └── tg-open-in-folder(taskId) — 打开文件所在目录
-```
-
-**进度推送** (主进程 → 渲染进程):
-```typescript
-// 主进程: 使用 webContents.send 推送进度事件
-win.webContents.send('download-progress', { taskId, progress, speed, eta, downloadedBytes, totalBytes })
-
-// 渲染进程: preload 注册监听
-onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (_, data) => callback(data))
-```
-
-### 4.4 下载管理器 UI
-
-```
-新增 Downloads.tsx 页面
-├── 顶部状态栏: 正在下载 N 个 | 总速度 x MB/s | 队列 N 个
-├── 任务列表
-│   ├── 游戏 banner 缩略图 + 名称
-│   ├── 资源名称 (如"PC 版汉化补丁 v1.2")
-│   ├── 进度条 (带百分比和已下载/总大小)
-│   ├── 速度 + 预计剩余时间
-│   ├── 操作按钮: 暂停/继续 | 取消 | 打开文件夹
-│   └── 状态标签: 解析中/下载中/已完成/失败
-├── 已完成列表 (可折叠)
-└── 设置: 下载目录 | 最大并发数
+    ├── tg-resolve-link, tg-add-download, tg-pause/resume/cancel/retry
+    └── tg-get-queue, tg-set-save-path, tg-open-in-folder
 ```
 
 ---
 
-## 五、功能 4：本地文件管理机制
+## 七、功能 4：本地文件管理 🔲
 
-### 5.1 下载后的文件处理流程
-
-```
-下载完成
-   │
-   ├─→ 单文件 (.zip/.rar/.7z) ──────────→ [解压] → [命名匹配] → [入库]
-   │
-   └─→ 分卷压缩 (part1.rar, part2.rar) → [等待全部就绪] → [合并解压] → [命名匹配] → [入库]
-```
-
-### 5.2 分卷检测算法
-
-```typescript
-function detectParts(files: string[]): PartGroup[] {
-  // 匹配模式:
-  // game.part1.rar, game.part2.rar (RAR 分卷)
-  // game.z01, game.z02, game.zip (ZIP 分卷)
-  // game.001, game.002 (7z 分卷)
-  const patterns = [
-    /^(.+)\.part(\d+)\.rar$/i,
-    /^(.+)\.r(\d+)$/i,       // .r00, .r01...
-    /^(.+)\.z(\d{2})$/i,     // .z01, .z02...
-    /^(.+)\.(\d{3})$/,       // .001, .002...
-  ]
-  // 分组逻辑: 按基础名称归组，检测是否完整 (part1 到 partN 连续)
-}
-```
-
-### 5.3 文件名匹配与入库
-
-解压后文件夹名称可能与游戏元数据不一致，需要匹配策略:
+### 下载后处理流程
 
 ```
-优先级 1: 压缩包内包含 .tg_id 文件 → 直接读取 uniqueId
-优先级 2: 下载任务携带 gameId → 直接关联
-优先级 3: SQLite FTS5 模糊匹配解压后的文件夹名 → 候选列表供用户确认
-优先级 4: 用户手动拖拽匹配 (Library.tsx 已有基础框架)
+下载完成 → 检测分卷 → Bandizip 解压 → FTS5 模糊匹配元数据 → 入库
 ```
 
-### 5.4 本地库数据库 Schema (扩展)
+### 分卷检测模式
 
-```sql
--- 现有
-CREATE TABLE games (id, unique_id, name, banner, ...);
-CREATE TABLE local_paths (id, path, game_id, FOREIGN KEY(game_id));
+| 格式 | 示例 |
+|---|---|
+| RAR 分卷 | `game.part1.rar`, `game.part2.rar` |
+| ZIP 分卷 | `game.z01`, `game.z02`, `game.zip` |
+| 7z 分卷 | `game.001`, `game.002` |
 
--- 新增
-CREATE TABLE download_files (
-  id INTEGER PRIMARY KEY,
-  task_id INTEGER,           -- 关联下载任务
-  game_id INTEGER,           -- 关联游戏
-  file_path TEXT NOT NULL,   -- 绝对路径
-  file_type TEXT,            -- 'archive'|'extracted'|'executable'
-  is_extracted INTEGER DEFAULT 0,
-  extracted_path TEXT,       -- 解压目标路径
-  FOREIGN KEY(game_id) REFERENCES games(id)
-);
+### 游戏匹配优先级
 
-CREATE TABLE extraction_jobs (
-  id INTEGER PRIMARY KEY,
-  source_files TEXT,         -- JSON 数组，分卷文件路径列表
-  target_dir TEXT,
-  status TEXT,               -- 'pending'|'running'|'done'|'error'
-  game_id INTEGER,
-  created_at INTEGER
-);
-```
+1. 压缩包内 `.tg_id` 文件 → 直接读取 `uniqueId`
+2. 下载任务携带 `gameId` → 直接关联
+3. SQLite FTS5 模糊匹配解压后文件夹名 → 候选列表供用户确认
+4. 用户手动拖拽匹配
 
 ---
 
-## 六、功能 5：Bandizip 批量解压集成
+## 八、功能 5：Bandizip 批量解压 🔲
 
-### 6.1 Bandizip CLI 能力
-
-Bandizip 提供 `bz.exe` CLI 工具，支持完整的无头操作:
+### Bandizip CLI 集成
 
 ```bash
-# 解压到指定目录
-bz.exe x -o:"D:\Games\output" -y "D:\Downloads\game.part1.rar"
-
-# 测试压缩包完整性
-bz.exe t "D:\Downloads\game.part1.rar"
-
-# 创建压缩包
-bz.exe c "output.zip" "input_folder\"
-
-# 分卷解压 (只需指定第一个分卷，Bandizip 自动处理其余)
-bz.exe x -o:"D:\Games" -y "D:\Downloads\game.part1.rar"
+bz.exe x -o:"D:\Games\output" -y "game.part1.rar"
+# 只需传第一个分卷，Bandizip 自动处理其余
 ```
 
-### 6.2 Bandizip 路径探测
+### 路径探测顺序
 
-```typescript
-// src/main/utils.ts 新增
-async function findBandizip(): Promise<string | null> {
-  const candidates = [
-    'C:\\Program Files\\Bandizip\\bz.exe',
-    'C:\\Program Files (x86)\\Bandizip\\bz.exe',
-    process.env['PROGRAMFILES'] + '\\Bandizip\\bz.exe',
-    process.env['PROGRAMFILES(X86)'] + '\\Bandizip\\bz.exe',
-  ]
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p
-  }
-  // 尝试 PATH 查找
-  try {
-    const result = execSync('where bz.exe', { encoding: 'utf8' })
-    return result.trim().split('\n')[0]
-  } catch { return null }
-}
-```
-
-### 6.3 解压队列管理器
-
-```typescript
-// src/main/extractor.ts (新文件)
-class ExtractionManager {
-  private queue: ExtractionJob[] = []
-  private running = false
-
-  async addJob(job: ExtractionJob): Promise<number>
-  async processNext(): Promise<void>
-  
-  private async extractWithBandizip(job: ExtractionJob): Promise<void> {
-    const bzPath = await findBandizip()
-    if (!bzPath) throw new Error('Bandizip not found')
-    
-    // 对于分卷，只传第一个文件
-    const firstFile = job.sourceFiles.sort()[0]
-    
-    return new Promise((resolve, reject) => {
-      const child = spawn(bzPath, ['x', `-o:${job.targetDir}`, '-y', firstFile], {
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-      
-      child.stdout.on('data', (data) => {
-        // 解析 Bandizip 输出的进度信息
-        const match = data.toString().match(/(\d+)%/)
-        if (match) {
-          this.emitProgress(job.id, parseInt(match[1]))
-        }
-      })
-      
-      child.on('close', (code) => {
-        if (code === 0) resolve()
-        else reject(new Error(`bz.exe exited with code ${code}`))
-      })
-    })
-  }
-}
-```
-
-### 6.4 IPC 接口
-
-```typescript
-ipcMain.handle('bz-check-available', async () => {
-  const path = await findBandizip()
-  return { available: !!path, path }
-})
-
-ipcMain.handle('bz-test-archive', async (_event, filePath: string) => {
-  // 验证压缩包完整性
-})
-
-ipcMain.handle('bz-extract', async (_event, job: ExtractionJobParams) => {
-  return extractionManager.addJob(job)
-})
-
-ipcMain.handle('bz-extract-batch', async (_event, jobs: ExtractionJobParams[]) => {
-  // 批量加入解压队列
-  return Promise.all(jobs.map(j => extractionManager.addJob(j)))
-})
-
-ipcMain.handle('bz-get-queue', () => {
-  return extractionManager.getQueue()
-})
-```
-
-### 6.5 解压 UI
-
-```
-ExtractionPanel.tsx
-├── Bandizip 状态检测条 (找到/未找到 + 路径显示)
-├── 批量任务队列
-│   ├── 源文件列表 (高亮显示分卷归组)
-│   ├── 目标目录选择
-│   ├── 完整性验证结果 (绿勾/红叉)
-│   ├── 解压进度条
-│   └── 完成后自动入库开关
-├── 全局设置
-│   ├── Bandizip 路径 (手动指定)
-│   ├── 默认解压目录
-│   ├── 解压完成后: 删除原压缩包 | 移入回收站 | 保留
-│   └── 解压完成后: 自动匹配游戏元数据
-└── 日志查看器 (滚动输出 bz.exe stdout)
-```
+1. `C:\Program Files\Bandizip\bz.exe`
+2. `C:\Program Files (x86)\Bandizip\bz.exe`
+3. `%PROGRAMFILES%\Bandizip\bz.exe`
+4. `where bz.exe` (PATH 查找)
 
 ---
 
-## 七、新增文件清单
+## 九、设置页面 (Settings.tsx) 🔲
 
-```
-src/
-├── main/
-│   ├── index.ts          [修改] 新增标签搜索/下载解析 IPC
-│   ├── downloader.ts     [重构] 完整下载管理器
-│   ├── extractor.ts      [新建] Bandizip 解压管理器
-│   └── utils.ts          [修改] findBandizip() + detectParts()
-└── renderer/src/
-    ├── components/
-    │   ├── FilterBar.tsx     [修改] 标签搜索弹窗 + API 对接
-    │   ├── DetailOverlay.tsx [修改] 标签点击跳转 + 模糊遮罩 + PV修复
-    │   ├── Downloads.tsx     [新建] 下载管理器页面
-    │   ├── ExtractionPanel.tsx [新建] 解压管理页面
-    │   ├── TagSearchModal.tsx  [新建] 标签搜索弹窗
-    │   └── BlurredSection.tsx  [新建] 登录墙模糊组件
-    └── store/
-        ├── useTouchGalStore.ts [修改] 下载队列状态 + 标签过滤状态
-        └── useSettingsStore.ts [新建] 应用设置全局状态
-```
+配置持久化到 `userData/settings.json`，通过 `tg-get-settings` / `tg-set-settings` IPC 读写。
+
+### 分区与字段
+
+| 分区 | 关键字段 |
+|---|---|
+| **账户** | 登录状态展示 + 退出登录 |
+| **存储与路径** | `downloadDir`, `libraryRoots`, `bandizipPath`, `afterExtract` |
+| **下载行为** | `maxConcurrentDownloads`, `autoExtractAfterDownload`, `autoMatchAfterExtract`, `downloadSpeedLimit` |
+| **浏览与显示** | `defaultNsfwMode`, `defaultPageSize`, `defaultSortField`, `defaultPlatform` |
+| **本地数据库** | 重建 FTS5 索引、清空记录、导出/导入 JSON |
+| **高级** | `apiBaseUrl`, `requestTimeout`, `devMode`, `logLevel` |
+
+影响主进程的设置（`apiBaseUrl`, `maxConcurrentDownloads`, `bandizipPath`）变更后需立即通知主进程生效，不能仅写文件。
 
 ---
 
-## 八、设置页面 (Settings.tsx)
+## 十、实现优先级
 
-应用设置持久化到 Electron `app.getPath('userData')/settings.json`，通过 `tg-get-settings` / `tg-set-settings` IPC 读写。渲染进程维护 `useSettingsStore`（Zustand），启动时从主进程加载一次，之后本地实时更新。
-
-### 8.1 设置分区与字段
-
-#### 账户 (Account)
-| 设置项 | 类型 | 说明 |
+| 优先级 | 功能 | 状态 |
 |---|---|---|
-| 登录状态展示 | 只读 | 头像、用户名、登录时间；未登录时显示登录按钮 |
-| 退出登录 | 按钮 | 清空 store.user + Cookie |
-
-#### 存储与路径 (Storage & Paths)
-| 设置项 | 类型 | 默认值 |
-|---|---|---|
-| `downloadDir` | 目录选择 | `~/Downloads/TouchGal` |
-| `libraryRoots` | 目录列表（可增删）| `[]` — Library 扫描时默认使用全部 |
-| `bandizipPath` | 文件选择 + 自动探测 | 自动探测，找不到则空 |
-| `afterExtract` | radio | `keep` / `trash` / `delete` |
-| 数据库路径 | 只读展示 + "打开目录"按钮 | `userData/touchgal.db` |
-
-#### 下载行为 (Download)
-| 设置项 | 类型 | 默认值 |
-|---|---|---|
-| `maxConcurrentDownloads` | slider 1-5 | `2` |
-| `autoExtractAfterDownload` | 开关 | `true` |
-| `autoMatchAfterExtract` | 开关 | `true` |
-| `directLinkRefreshMode` | radio | `before_download`（下载前实时获取）/ `scheduled`（提前 30 分钟刷新） |
-| `downloadSpeedLimit` | 数字输入 (KB/s, 0=不限) | `0` |
-
-#### 浏览与显示 (Browse & Display)
-| 设置项 | 类型 | 默认值 |
-|---|---|---|
-| `defaultNsfwMode` | radio | `safe` / `nsfw` / `all` |
-| `defaultPageSize` | select | `12` / `24` / `48` |
-| `defaultSortField` | select | `resource_update_time` |
-| `defaultPlatform` | select | `all` |
-| `defaultLanguage` | select | `all` |
-
-这些值在 Home.tsx 初始化 FilterBar 时作为初始状态注入，用户可临时覆盖但不自动回写设置。
-
-#### 本地数据库 (Local Database)
-| 操作 | 类型 | 说明 |
-|---|---|---|
-| 重建 FTS5 索引 | 危险按钮（需确认）| `INSERT INTO games_fts(games_fts) VALUES('rebuild')` |
-| 清空已完成下载记录 | 按钮 | 只删 `download_tasks WHERE status='done'` |
-| 清空游戏目录缓存 | 危险按钮 | 清空 `games` 表，保留 `local_paths` 和 `personal_metadata` |
-| 导出个人数据 | 按钮 | 将 `personal_metadata` / `collections` / `play_sessions` 导出为 JSON |
-| 导入个人数据 | 按钮 | 从 JSON 恢复，冲突时 upsert |
-| 数据库统计 | 只读 | 显示 games / local_paths / download_tasks 条数 + DB 文件大小 |
-
-#### 高级 (Advanced)
-| 设置项 | 类型 | 默认值 |
-|---|---|---|
-| `apiBaseUrl` | 文本输入 + 恢复默认按钮 | `https://www.touchgal.top/api` |
-| `requestTimeout` | 数字输入 (秒) | `30` |
-| `devMode` | 开关 | `false`，开启后显示 DevTools 入口 + 原始 API 响应查看器 |
-| `logLevel` | select | `info` / `debug` / `verbose` |
-| 打开日志文件 | 按钮 | 用 shell.openPath 打开 `userData/logs/` |
-
-### 8.2 数据流
-
-```
-启动时:
-  Main: 读 settings.json → 返回 SettingsObject
-  Renderer: useSettingsStore.init(settings)
-
-用户修改:
-  Renderer: useSettingsStore.set(key, value) → 防抖 500ms → tg-set-settings(partial)
-  Main: 深度合并到 settings.json
-
-影响主进程的设置 (需立即通知主进程):
-  apiBaseUrl / requestTimeout → 重建 API_CLIENT axios 实例
-  bandizipPath → 更新 ExtractionManager.bzPath
-  maxConcurrentDownloads → 更新 DownloadManager.concurrency
-  downloadSpeedLimit → 更新 DownloadManager.speedLimit
-```
-
-### 8.3 新增文件
-
-```
-src/
-├── main/
-│   └── settings.ts          [新建] SettingsManager: 读写 settings.json, 提供 getSettings/patchSettings
-├── renderer/src/
-│   ├── components/
-│   │   └── Settings.tsx     [新建] 设置页面 UI，分 tab 展示各分区
-│   └── store/
-│       └── useSettingsStore.ts [新建] Zustand settings 状态，启动时从主进程加载
-```
-
-### 8.4 Settings.json 默认值
-
-```typescript
-export interface AppSettings {
-  // Storage
-  downloadDir: string
-  libraryRoots: string[]
-  bandizipPath: string
-  afterExtract: 'keep' | 'trash' | 'delete'
-  // Download
-  maxConcurrentDownloads: number
-  autoExtractAfterDownload: boolean
-  autoMatchAfterExtract: boolean
-  directLinkRefreshMode: 'before_download' | 'scheduled'
-  downloadSpeedLimit: number
-  // Browse
-  defaultNsfwMode: 'safe' | 'nsfw' | 'all'
-  defaultPageSize: 12 | 24 | 48
-  defaultSortField: string
-  defaultPlatform: string
-  defaultLanguage: string
-  // Advanced
-  apiBaseUrl: string
-  requestTimeout: number
-  devMode: boolean
-  logLevel: 'info' | 'debug' | 'verbose'
-}
-
-export const DEFAULT_SETTINGS: AppSettings = {
-  downloadDir: '',           // 运行时填充 app.getPath('downloads') + '/TouchGal'
-  libraryRoots: [],
-  bandizipPath: '',          // 运行时自动探测
-  afterExtract: 'trash',
-  maxConcurrentDownloads: 2,
-  autoExtractAfterDownload: true,
-  autoMatchAfterExtract: true,
-  directLinkRefreshMode: 'before_download',
-  downloadSpeedLimit: 0,
-  defaultNsfwMode: 'safe',
-  defaultPageSize: 24,
-  defaultSortField: 'resource_update_time',
-  defaultPlatform: 'all',
-  defaultLanguage: 'all',
-  apiBaseUrl: 'https://www.touchgal.top/api',
-  requestTimeout: 30,
-  devMode: false,
-  logLevel: 'info',
-}
-```
+| P0 | 三阶段数据管线 | ✅ 已完成 |
+| P0 | 详情页评分直方图 | ✅ 已完成 |
+| P0 | 标签搜索 (本地库) | ✅ 已完成 |
+| P0 | 登录/验证码流程修复 | ✅ 已完成 |
+| P1 | Cloudreve 直链下载 | 🔲 待实现 |
+| P1 | 完整下载管理器 UI | 🔲 待实现 |
+| P2 | 设置页面 | 🔲 待实现 |
+| P2 | Bandizip 集成 + 解压队列 | 🔲 待实现 |
+| P3 | 解压后游戏元数据自动匹配 | 🔲 待实现 |
 
 ---
 
-## 九、实现优先级
+## 十一、关键技术决策
 
-| 优先级 | 功能 | 依赖 | 预估工作量 |
-|---|---|---|---|
-| P0 | Cloudreve 直链解析 + 基础下载 | — | 0.5 天 |
-| P0 | DetailOverlay PV 修复 | — | 0.5 小时 |
-| P1 | 标签搜索 API + FilterBar 对接 | — | 1 天 |
-| P1 | 登录墙模糊组件 | LoginModal | 0.5 天 |
-| P1 | 完整下载管理器 UI + 断点续传 | 直链解析 | 2 天 |
-| P2 | Bandizip 集成 + 解压队列 | 下载管理器 | 1.5 天 |
-| P2 | 分卷检测 + 自动归组 | 解压队列 | 1 天 |
-| P2 | 设置页面 UI + SettingsManager | — | 1 天 |
-| P3 | 解压后自动游戏元数据匹配 | FTS5 | 1 天 |
+1. **禁用 `/api/search` 做标签过滤** — 该端点返回的标签过滤结果不可靠。替代方案是三阶段管线的下游富化。
 
----
+2. **Cloudreve 直链用 PUT** — `PUT /api/v3/share/download/{shareId}` 是令牌生成接口，必须用 PUT 而非 GET。
 
-## 十、关键技术决策记录
+3. **下载进度用 `webContents.send`** — IPC handle 是请求-响应模型，无法持续推送。进度事件必须用主动推送。
 
-1. **双向可见性日志 (Unified Visibility)**: 集成 `electron-log` v5，主进程通过 `log.initialize()` 劫持渲染进程日志。日志文件保存于用户数据目录，支持 90 天循环。
+4. **Bandizip 分卷只传第一个文件** — `bz.exe x` 命令会自动查找同目录其余分卷。
 
-2. **智能详情缓存 (Detail Caching)**: `games` 表新增 `detail_json` 列。详情页加载时优先尝试 API，成功后更新本地 JSON；API 失败（如登录失效）时回退到本地缓存。这保证了“登录可见内容”在掉线后依然能访问。
+5. **标签过滤用本地库而非 API** — `/api/tag` 接口搜索质量有限，内置 TAG_LIBRARY 响应更快且零依赖。
 
-3. **Cookie 持久化**: 主进程通过 Axios 拦截器捕获 `Set-Cookie` 并保存至 `session_cookies.txt`。其有效期与服务端同步，但在本地无期保存以实现“长期免登”。
-
-4. **Cloudreve 直链用 PUT**: `PUT /api/v3/share/download/{shareId}` 是 Cloudreve 的令牌生成接口，必须用 PUT 而非 GET。直链有效期 1 小时，每次下载前必须实时获取。
-
-5. **下载进度用 `webContents.send`**: 由于下载是持续推送，不能用 `ipcMain.handle`（请求-响应模式），必须用主动推送事件。
-
-6. **分卷解压只传第一个文件**: Bandizip 的 `x` 命令会自动查找同目录下的其余分卷文件，无需手动指定所有分卷。
-
-7. **标签过滤用服务端 API**: `/api/galgame` 支持 `tagString` 参数，优先服务端过滤而非本地过滤，避免拉取全量数据。
-
-8. **解压后游戏匹配用 FTS5**: 本地 SQLite FTS5 索引已建立，模糊匹配解压后的文件夹名比依赖在线 API 更快更可靠。
+6. **`ratingSummary.count` 是评价人数的正确来源** — `averageRatingCount` 字段不存在于 API 响应中。
