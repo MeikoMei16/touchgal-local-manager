@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  ChevronDown, Calendar, Star, MessageSquare, Users, 
-  Laptop, Shield, ShieldCheck, AlertTriangle, Tag, X, Plus, Search
+  ChevronDown, Calendar, Star, MessageSquare, Tag, X, Plus, Search
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 
@@ -65,7 +64,6 @@ interface FilterBarProps {
   isLoading?: boolean;
 }
 
-type NsfwMode = 'safe' | 'nsfw' | 'all';
 type Operator = '=' | '>=' | '<=' | '>' | '<';
 
 export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }) => {
@@ -73,9 +71,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   const selectedTags = advancedFilterDraft.selectedTags;
 
   // --- State ---
-  const [nsfwMode, setNsfwMode] = useState<NsfwMode>('safe');
-  const [platform, setPlatform] = useState('all');
-  const [isPlatformOpen, setIsPlatformOpen] = useState(false);
   const [yearInput, setYearInput] = useState('');
   const [activeOp, setActiveOp] = useState<Operator>('>=');
   const [isOpMenuOpen, setIsOpMenuOpen] = useState(false);
@@ -86,22 +81,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
 
   // Stats
-  const [minRatingCount, setMinRatingCount] = useState(0);
   const [minRatingScore, setMinRatingScore] = useState(0);
   const [minCommentCount, setMinCommentCount] = useState(0);
 
-  const platformRef = useRef<HTMLDivElement>(null);
   const opMenuRef = useRef<HTMLDivElement>(null);
-
-  // --- Constants ---
-  const platforms = [
-    { label: '全部平台', value: 'all' },
-    { label: 'Windows', value: 'windows' },
-    { label: 'Android', value: 'android' },
-    { label: 'MacOS', value: 'macos' },
-    { label: 'iOS', value: 'ios' },
-    { label: 'Linux', value: 'linux' }
-  ];
 
   const operators = [
     { label: '精确等于 (=)', value: '=' },
@@ -114,7 +97,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   // --- Click Outside ---
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (platformRef.current && !platformRef.current.contains(event.target as Node)) setIsPlatformOpen(false);
       if (opMenuRef.current && !opMenuRef.current.contains(event.target as Node)) setIsOpMenuOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -122,16 +104,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   }, []);
 
   useEffect(() => {
-    setNsfwMode(
-      advancedFilterDraft.nsfwMode === 'nsfw'
-        ? 'nsfw'
-        : advancedFilterDraft.nsfwMode === 'all'
-          ? 'all'
-          : 'safe'
-    );
-    setPlatform(advancedFilterDraft.selectedPlatform);
     setYearConstraints(advancedFilterDraft.yearConstraints);
-    setMinRatingCount(advancedFilterDraft.minRatingCount);
     setMinRatingScore(advancedFilterDraft.minRatingScore);
     setMinCommentCount(advancedFilterDraft.minCommentCount);
   }, [advancedFilterDraft]);
@@ -153,10 +126,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   // --- Helpers ---
   const emitChange = (overrides: any = {}) => {
     return {
-      nsfwMode: overrides.nsfwMode ?? nsfwMode,
-      selectedPlatform: overrides.selectedPlatform ?? platform,
+      nsfwMode: overrides.nsfwMode ?? (advancedFilterDraft.nsfwMode === 'nsfw' ? 'nsfw' : advancedFilterDraft.nsfwMode === 'all' ? 'all' : 'safe'),
+      selectedPlatform: overrides.selectedPlatform ?? advancedFilterDraft.selectedPlatform,
       yearConstraints: overrides.yearConstraints ?? yearConstraints,
-      minRatingCount: overrides.minRatingCount ?? minRatingCount,
+      minRatingCount: overrides.minRatingCount ?? advancedFilterDraft.minRatingCount,
       minRatingScore: overrides.minRatingScore ?? minRatingScore,
       minCommentCount: overrides.minCommentCount ?? minCommentCount,
       selectedTags: overrides.selectedTags ?? selectedTags,
@@ -192,22 +165,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
     publishChange({ yearConstraints: newConstraints });
   };
 
-  const toggleNsfwMode = () => {
-    const modes: NsfwMode[] = ['safe', 'nsfw', 'all'];
-    const nextIdx = (modes.indexOf(nsfwMode) + 1) % modes.length;
-    const nextMode = modes[nextIdx];
-    setNsfwMode(nextMode);
-    publishChange({ nsfwMode: nextMode });
-  };
-
-  const getNsfwContent = () => {
-    switch (nsfwMode) {
-      case 'safe': return { icon: <ShieldCheck size={18} />, label: '仅限全年龄', class: 'bg-green-50 border-green-200 text-green-700' };
-      case 'nsfw': return { icon: <AlertTriangle size={18} />, label: '仅限 R18', class: 'bg-red-50 border-red-200 text-red-700' };
-      case 'all': return { icon: <Shield size={18} />, label: '混合内容', class: 'bg-slate-50 border-slate-200 text-slate-700' };
-    }
-  };
-
   const handleAddTag = (tag: string) => {
     if (selectedTags.includes(tag)) return;
     addTagFilter(tag);
@@ -231,44 +188,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
         
         {/* Left Column: Core Filters */}
         <div className="flex flex-col gap-8">
-          
-          {/* NSFW & Platform Row */}
-          <div className="flex items-center gap-4">
-            <button 
-              className={`flex items-center gap-3 h-12 px-6 rounded-full border-2 font-bold text-sm transition-all hover:-translate-y-0.5 ${getNsfwContent().class}`}
-              onClick={toggleNsfwMode}
-            >
-              {getNsfwContent().icon}
-              <span>{getNsfwContent().label}</span>
-            </button>
-
-            <div className="relative flex-1" ref={platformRef}>
-              <button 
-                className={`flex items-center justify-between w-full h-12 px-6 rounded-full border-2 border-slate-200 bg-white font-bold text-slate-600 transition-all hover:border-slate-400 ${platform !== 'all' ? 'border-blue-400 bg-blue-50 text-blue-700' : ''}`}
-                onClick={() => setIsPlatformOpen(!isPlatformOpen)}
-              >
-                <div className="flex items-center gap-3">
-                  <Laptop size={18} />
-                  <span>{platforms.find(p => p.value === platform)?.label}</span>
-                </div>
-                <ChevronDown size={16} className={`transition-transform duration-300 ${isPlatformOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {isPlatformOpen && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-2 p-2 bg-white border border-slate-200 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-2">
-                  {platforms.map(p => (
-                    <div 
-                      key={p.value} 
-                      className={`px-4 py-2.5 rounded-xl cursor-pointer text-sm font-semibold transition-colors ${platform === p.value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                      onClick={() => { setPlatform(p.value); setIsPlatformOpen(false); publishChange({ selectedPlatform: p.value }); }}
-                    >
-                      {p.label}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Year Section */}
           <div className="flex flex-col gap-3">
              <div className="flex items-center gap-2 px-1">
@@ -324,9 +243,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
           </div>
 
           {/* Stats Section */}
-          <div className="grid grid-cols-3 gap-4 mt-2">
+          <div className="grid grid-cols-2 gap-4 mt-2">
             {[
-              { label: '最低评分人数', icon: <Users size={16} />, val: minRatingCount, key: 'minRatingCount' },
               { label: '最低资源评分', icon: <Star size={16} />, val: minRatingScore, key: 'minRatingScore', step: 0.1 },
               { label: '最低评论数量', icon: <MessageSquare size={16} />, val: minCommentCount, key: 'minCommentCount' }
             ].map((stat, idx) => (
@@ -341,7 +259,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
                     value={stat.val}
                     onChange={e => {
                       const val = parseFloat(e.target.value) || 0;
-                      if (stat.key === 'minRatingCount') setMinRatingCount(val);
                       if (stat.key === 'minRatingScore') setMinRatingScore(val);
                       if (stat.key === 'minCommentCount') setMinCommentCount(val);
                       publishChange({ [stat.key]: val });
@@ -451,17 +368,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
             const { resetAdvancedFilterDraft, clearTags } = useUIStore.getState();
             resetAdvancedFilterDraft();
             clearTags();
-            setNsfwMode('safe');
-            setPlatform('all');
             setYearConstraints([]);
-            setMinRatingCount(0);
             setMinRatingScore(0);
             setMinCommentCount(0);
             publishChange({
-              nsfwMode: 'safe',
-              selectedPlatform: 'all',
               yearConstraints: [],
-              minRatingCount: 0,
               minRatingScore: 0,
               minCommentCount: 0,
               selectedTags: []

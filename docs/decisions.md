@@ -79,6 +79,55 @@ Reason:
 - keeps normal-mode fetches and advanced-mode transitions consistent
 - prevents refresh from silently falling back to page `1` and default sort before persisted state is available
 
+### Upstream homepage filters belong in homepage chrome
+
+Rule:
+
+- `nsfwMode`, `selectedPlatform`, and `minRatingCount` should be exposed directly from the homepage top bar
+- the advanced filter panel should only own midstream and downstream constraints
+
+Reason:
+
+- these three fields are upstream API inputs, not local advanced-processing inputs
+- separating them from the advanced panel makes the browse model easier to understand and reduces unnecessary advanced-mode mental overhead
+
+### Detail data must be resolved from the final patch id
+
+Rule:
+
+- detail comments and ratings must be fetched only after the resolved detail payload is available, using the final patch id from that payload
+- do not rely solely on the homepage card id when loading detail-side discussion or evaluation data
+- stale detail responses must be ignored if the user has already opened another resource
+
+Reason:
+
+- homepage cards may not always carry the final id needed by comment/rating endpoints
+- without request guarding, slower earlier detail requests can overwrite the currently open game
+
+### Detail normalization belongs in the store, not the overlay render path
+
+Rule:
+
+- merge detail payloads into a normalized `selectedResource` shape before rendering
+- avoid using repeated `as any` field fallbacks inside `DetailOverlay`
+
+Reason:
+
+- keeps the overlay focused on presentation instead of data repair
+- reduces renderer drift between partially loaded shells and resolved detail payloads
+
+### Detail histogram is a dedicated component
+
+Rule:
+
+- keep the rating-distribution chart in its own component and compose it into the detail header
+- desktop layout should use the spare right-side header space for the compact histogram instead of pushing it into the main content flow
+
+Reason:
+
+- isolates chart rendering from the rest of the overlay logic
+- keeps the detail header visually balanced while preserving the main tab content area
+
 ### Advanced tag state has one source of truth
 
 Rule:

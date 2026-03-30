@@ -76,6 +76,7 @@ Owns:
 - homepage query state and result state
 - advanced-filter orchestration
 - detail overlay lifecycle
+- detail header composition and rating histogram presentation
 
 Homepage state currently lives in [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts).
 
@@ -87,6 +88,7 @@ Key frontend state split:
 - advanced datasets and progress: `advancedDatasetsByDomain`, `advancedBuildProgress`
 - current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
 - auth modal state: captcha payloads, login errors, and session-expired UI state
+- detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
 
 Renderer persistence notes:
 
@@ -100,6 +102,7 @@ Important note:
 - sorting for the homepage is store-owned, not component-local
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
 - normal homepage refresh should restore sort key, sort order, upstream filters, and current page from persisted state
+- upstream homepage controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) are rendered directly in the homepage top bar, left of `高级筛选`
 
 ## Data Flow
 
@@ -126,6 +129,12 @@ Advanced homepage browsing:
 3. Stage 2 and Stage 3 filtering are applied locally against that dataset.
 4. Local sorting and pagination update the same result view state used by normal mode.
 
+Homepage top bar behavior:
+
+1. Sort controls remain on the left side of the homepage toolbar.
+2. Upstream browse controls live on the right side, immediately to the left of `高级筛选`.
+3. Those controls still write into `lastHomeQuery`, so they participate in the same persistence and refresh-restore path as all other homepage query fields.
+
 Exiting advanced search:
 
 1. Renderer clears advanced constraints and advanced-mode UI state.
@@ -143,8 +152,18 @@ Login and captcha flow:
 Detail loading:
 
 1. Renderer selects a card.
-2. Store fetches detail, introduction, comments, and ratings.
-3. Detail overlay renders normalized merged data.
+2. Store opens an immediate detail shell from the selected homepage card when available.
+3. Store fetches the normalized detail payload first.
+4. Store derives the final patch id from the resolved detail payload, then fetches comments and ratings with that id.
+5. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
+6. Detail overlay renders normalized merged data.
+
+Detail header layout:
+
+- the detail header uses a two-column desktop layout inside the right panel
+- primary game metadata, tags, and actions stay in the left header column
+- the compact `RatingHistogram` widget occupies the spare right-side header space on desktop
+- company/date and aggregate counters render in a dedicated footer strip under the header content
 
 ## Local Persistence
 
@@ -179,6 +198,8 @@ Status note:
 - Login and captcha relay
 - Main-process token normalization and safer upstream cookie/header assembly
 - Detail overlay with introduction, comments, and ratings
+- Guarded detail loading that resolves comments/ratings from the final detail id
+- Modular detail rating histogram component in the header
 - Advanced filtering with local multi-stage pipeline
 - Basic SQLite bootstrap
 - Basic download queue persistence and link parsing scaffold

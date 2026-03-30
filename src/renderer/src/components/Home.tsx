@@ -4,7 +4,7 @@ import { ResourceCard } from './ResourceCard.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import { SortDropdown } from './SortDropdown.tsx';
 import { UserMenu } from './UserMenu.tsx';
-import { Loader2, ChevronLeft, ChevronRight, Settings, SortAsc, SortDesc, X } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Settings, SortAsc, SortDesc, X, ChevronDown, Laptop, Users, Shield, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 export const Home: React.FC = () => {
   const { 
@@ -18,6 +18,11 @@ export const Home: React.FC = () => {
     lastHomeQuery, setLastHomeQuery, setCurrentPage
   } = useUIStore();
   const [showFilters, setShowFilters] = useState(false);
+  const [isPlatformOpen, setIsPlatformOpen] = useState(false);
+  const [isMinRatingCountOpen, setIsMinRatingCountOpen] = useState(false);
+  const [minRatingCountDraft, setMinRatingCountDraft] = useState(String(lastHomeQuery.minRatingCount || 0));
+  const platformRef = React.useRef<HTMLDivElement>(null);
+  const minRatingCountRef = React.useRef<HTMLDivElement>(null);
 
 
   const totalPages = Math.ceil(totalResources / 24);
@@ -26,6 +31,27 @@ export const Home: React.FC = () => {
   const failedTagCount = activeAdvancedDataset?.failedTagIds.length ?? 0;
   const sortField = lastHomeQuery.sortField;
   const sortOrder = lastHomeQuery.sortOrder;
+  const platformOptions = [
+    { label: '全部平台', value: 'all' },
+    { label: 'Windows', value: 'windows' },
+    { label: 'Android', value: 'android' },
+    { label: 'MacOS', value: 'macos' },
+    { label: 'iOS', value: 'ios' },
+    { label: 'Linux', value: 'linux' }
+  ];
+
+  useEffect(() => {
+    setMinRatingCountDraft(String(lastHomeQuery.minRatingCount || 0));
+  }, [lastHomeQuery.minRatingCount]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (platformRef.current && !platformRef.current.contains(event.target as Node)) setIsPlatformOpen(false);
+      if (minRatingCountRef.current && !minRatingCountRef.current.contains(event.target as Node)) setIsMinRatingCountOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     setJumpPage(String(currentPage));
@@ -51,6 +77,17 @@ export const Home: React.FC = () => {
     if (value === 'nsfw') return 'nsfw';
     if (value === 'all') return 'all';
     return 'sfw';
+  };
+
+  const getNsfwButtonContent = (value: HomeQueryState['nsfwMode']) => {
+    switch (value) {
+      case 'nsfw':
+        return { icon: <AlertTriangle size={18} />, label: '仅限 R18', className: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' };
+      case 'all':
+        return { icon: <Shield size={18} />, label: '混合内容', className: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200' };
+      default:
+        return { icon: <ShieldCheck size={18} />, label: '仅限全年龄', className: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' };
+    }
   };
 
   // 上游: nsfwMode / selectedPlatform → 直接走 API，无需 advanced mode
@@ -123,6 +160,18 @@ export const Home: React.FC = () => {
       applyAdvancedFilters(currentPage, sortField, sortOrder);
     }
     // 其他情况 (advanced_building 中 / domain 变化)：等待用户点击「应用筛选」再重建
+  };
+
+  const cycleNsfwMode = () => {
+    const modes: HomeQueryState['nsfwMode'][] = ['safe', 'nsfw', 'all'];
+    const currentIndex = modes.indexOf(lastHomeQuery.nsfwMode);
+    const nextMode = modes[(currentIndex + 1) % modes.length];
+    handleFilterChange({ nsfwMode: nextMode });
+  };
+
+  const applyMinRatingCount = (value: number) => {
+    handleFilterChange({ minRatingCount: Math.max(0, value) });
+    setIsMinRatingCountOpen(false);
   };
 
   const handleAdvancedSubmit = async (filters: Partial<HomeQueryState>) => {
@@ -201,7 +250,7 @@ export const Home: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col gap-2 p-4 pb-16 bg-slate-50/50">
       <div className="flex justify-between items-center w-full px-1 mb-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <SortDropdown 
             value={sortField} 
             options={sortOptions} 
@@ -219,7 +268,86 @@ export const Home: React.FC = () => {
           </button>
         </div>
         
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <button
+            className={`flex items-center gap-2 px-4 h-11 rounded-full border font-bold text-[13.5px] cursor-pointer transition-all ${getNsfwButtonContent(lastHomeQuery.nsfwMode).className}`}
+            onClick={cycleNsfwMode}
+            disabled={isLoading}
+          >
+            {getNsfwButtonContent(lastHomeQuery.nsfwMode).icon}
+            <span>{getNsfwButtonContent(lastHomeQuery.nsfwMode).label}</span>
+          </button>
+
+          <div className="relative" ref={platformRef}>
+            <button
+              className={`flex items-center gap-2 px-4 h-11 rounded-full border font-bold text-[13.5px] cursor-pointer transition-all ${lastHomeQuery.selectedPlatform !== 'all' ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+              onClick={() => setIsPlatformOpen((open) => !open)}
+              disabled={isLoading}
+            >
+              <Laptop size={18} />
+              <span>{platformOptions.find((option) => option.value === lastHomeQuery.selectedPlatform)?.label ?? '全部平台'}</span>
+              <ChevronDown size={16} className={`transition-transform ${isPlatformOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isPlatformOpen && (
+              <div className="absolute top-full left-0 z-50 mt-2 w-44 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                {platformOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-colors ${lastHomeQuery.selectedPlatform === option.value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                    onClick={() => {
+                      setIsPlatformOpen(false);
+                      handleFilterChange({ selectedPlatform: option.value });
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="relative" ref={minRatingCountRef}>
+            <button
+              className={`flex items-center gap-2 px-4 h-11 rounded-full border font-bold text-[13.5px] cursor-pointer transition-all ${lastHomeQuery.minRatingCount > 0 ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+              onClick={() => setIsMinRatingCountOpen((open) => !open)}
+              disabled={isLoading}
+            >
+              <Users size={18} />
+              <span>最低评分人数 {lastHomeQuery.minRatingCount > 0 ? `≥ ${lastHomeQuery.minRatingCount}` : '未设定'}</span>
+            </button>
+            {isMinRatingCountOpen && (
+              <div className="absolute top-full right-0 z-50 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
+                <div className="mb-2 text-xs font-black uppercase tracking-widest text-slate-400">最低评分人数</div>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 font-bold text-slate-700 outline-none focus:border-amber-400"
+                  value={minRatingCountDraft}
+                  onChange={(event) => setMinRatingCountDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      applyMinRatingCount(Number(minRatingCountDraft) || 0);
+                    }
+                  }}
+                />
+                <div className="mt-3 flex gap-2">
+                  {[0, 10, 30, 50].map((value) => (
+                    <button
+                      key={value}
+                      className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600 hover:bg-slate-200"
+                      onClick={() => {
+                        setMinRatingCountDraft(String(value));
+                        applyMinRatingCount(value);
+                      }}
+                    >
+                      {value === 0 ? '清除' : value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button 
             className={`flex items-center gap-2 px-5 py-3 rounded-[32px] border-none font-bold text-sm cursor-pointer transition-all bg-slate-200 text-slate-800 hover:bg-slate-300 ${showFilters ? 'bg-primary-container ring-2 ring-primary border-primary' : ''}`} 
             onClick={() => setShowFilters(!showFilters)}

@@ -33,6 +33,7 @@ Fields sent upstream:
 Purpose:
 
 - reduce candidate set size before local processing
+- these upstream controls are exposed directly on the homepage top bar, to the left of the `高级筛选` button
 
 ### Stage 2: Midstream local filtering
 
@@ -94,6 +95,7 @@ Query model:
 - homepage query state and current page are persisted in renderer `localStorage`
 - hydration must complete before normal-mode homepage fetch effects run
 - normal homepage refresh is expected to restore sort key, sort order, upstream filters, and current page
+- `nsfwMode`, `selectedPlatform`, and `minRatingCount` are edited from homepage chrome instead of the advanced panel
 
 Draft model:
 
@@ -128,6 +130,9 @@ Modes:
 - The advanced-mode exit button is expected to clear advanced constraints and immediately refresh the homepage back into normal browse mode.
 - Normal-mode page navigation updates persisted page state first; the resulting fetch is driven by the homepage effect, not by direct button-triggered fetch calls.
 - Normal-mode sort changes keep the current page instead of forcing a page reset.
+- Homepage top bar now splits responsibilities clearly:
+  upstream controls live in chrome
+  the advanced panel owns only midstream and downstream constraints
 
 ## Caching
 

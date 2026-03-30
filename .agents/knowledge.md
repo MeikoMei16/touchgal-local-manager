@@ -19,10 +19,18 @@ Short project facts for future agents working in this repository.
 - Renderer must go through `window.api`.
 - Preload is bundled as CommonJS `.cjs`.
 
+## Detail Page Notes
+
+- Detail loading is store-driven from `useTouchGalStore`.
+- Comments and ratings must be fetched from the resolved detail id, not only the homepage card id.
+- Ignore stale detail responses when users switch cards quickly.
+- `RatingHistogram.tsx` is the dedicated detail rating chart component.
+
 ## Advanced Filter Rule
 
 - Homepage tag filtering is strict local filtering.
 - Do not rely on `/search` for homepage tag correctness.
+- Homepage upstream controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) live in the top bar, not inside the advanced panel.
 
 ## Useful Pointers
 

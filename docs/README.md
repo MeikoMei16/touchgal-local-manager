@@ -13,8 +13,10 @@ Current cross-cutting topics covered here:
 
 - homepage query ownership, persistence, and hydration
 - advanced search pipeline, cache reuse, and exit behavior
+- homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
 - main-process auth token normalization and upstream header/cookie rules
 - current login and captcha interaction constraints
+- guarded detail loading and current detail-header layout rules
 
 ## API Notes
 
