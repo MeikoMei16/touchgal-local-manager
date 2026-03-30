@@ -124,6 +124,28 @@ const RatingHistogram: React.FC<{ ratingSummary: RatingSummary }> = ({ ratingSum
 
 type TabType = 'info' | 'links' | 'board' | 'evaluation';
 
+const SessionLockedState: React.FC<{
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  buttonClassName: string;
+  onLogin: () => void;
+}> = ({ icon: Icon, title, description, buttonClassName, onLogin }) => (
+  <div className="bg-slate-50 rounded-[2rem] p-12 text-center flex flex-col items-center gap-4 border border-slate-100">
+    <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center">
+      <Icon size={32} />
+    </div>
+    <h3 className="text-lg font-black text-slate-800">{title}</h3>
+    <p className="text-sm font-bold text-slate-400">{description}</p>
+    <button
+      onClick={onLogin}
+      className={`mt-2 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg transition-all active:scale-95 ${buttonClassName}`}
+    >
+      立即登录
+    </button>
+  </div>
+);
+
 export const DetailOverlay: React.FC = () => {
   const {
     selectedResource, clearSelected, addTagFilter,
@@ -144,6 +166,16 @@ export const DetailOverlay: React.FC = () => {
 
   const { ratingSummary } = selectedResource;
   const isLoggedIn = !!user;
+  const screenshots = selectedResource.screenshots ?? [];
+  const pvUrl = selectedResource.pvUrl;
+  const companyName = selectedResource.company || 'Unknown';
+  const aliases = selectedResource.alias ?? [];
+  const metadataRows = [
+    { icon: FileText, label: '发售时间', value: selectedResource.releasedDate || 'N/A' },
+    { icon: Globe, label: 'VNDB ID', value: selectedResource.vndbId || 'N/A' },
+    { icon: Globe, label: 'Bangumi ID', value: selectedResource.bangumiId || 'N/A' },
+    { icon: Globe, label: 'Steam ID', value: selectedResource.steamId || 'N/A' }
+  ];
 
   const handleTagClick = (tag: string) => {
     addTagFilter(tag);
@@ -316,15 +348,15 @@ export const DetailOverlay: React.FC = () => {
                     </section>
 
                     <ScreenshotGallery
-                      screenshots={(selectedResource as any).screenshots || (selectedResource as any).detail?.screenshots || []}
+                      screenshots={screenshots}
                       onImageClick={(url) => setSelectedImage(url)}
                     />
 
-                    {(selectedResource as any).pvUrl && (
+                    {pvUrl && (
                       <section className="flex flex-col gap-4">
                         <h2 className="text-2xl font-black text-slate-900 tracking-tight">PV鉴赏</h2>
                         <div className="rounded-3xl overflow-hidden bg-black aspect-video relative shadow-2xl border border-slate-800">
-                          <video controls src={(selectedResource as any).pvUrl} poster={selectedResource.banner || ''} className="w-full h-full" />
+                          <video controls src={pvUrl} poster={selectedResource.banner || ''} className="w-full h-full" />
                         </div>
                       </section>
                     )}
@@ -348,19 +380,14 @@ export const DetailOverlay: React.FC = () => {
                       <h2 className="text-2xl font-black text-slate-900 tracking-tight">所属会社</h2>
                       <div className="flex flex-wrap gap-2">
                         <div className="px-4 py-2 bg-purple-50 border border-purple-100 rounded-full font-bold text-purple-600 text-sm">
-                          {(selectedResource as any).company || 'Unknown'}
+                          {companyName}
                         </div>
                       </div>
                     </section>
 
                     <section className="flex flex-col gap-6 pt-8 border-t border-slate-100">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
-                        {[
-                          { icon: FileText, label: '发售时间', value: (selectedResource as any).releasedDate || 'N/A' },
-                          { icon: Globe, label: 'VNDB ID',    value: (selectedResource as any).vndbId || 'N/A' },
-                          { icon: Globe, label: 'Bangumi ID', value: (selectedResource as any).bangumiId || 'N/A' },
-                          { icon: Globe, label: 'Steam ID',   value: (selectedResource as any).steamId || 'N/A' },
-                        ].map(({ icon: Icon, label, value }) => (
+                        {metadataRows.map(({ icon: Icon, label, value }) => (
                           <div key={label} className="flex justify-between items-center py-2 border-b border-slate-50">
                             <div className="flex items-center gap-2 text-slate-400 font-bold text-sm italic">
                               <Icon size={16} />
@@ -372,11 +399,11 @@ export const DetailOverlay: React.FC = () => {
                       </div>
                     </section>
 
-                    {(selectedResource as any).alias?.length > 0 && (
+                    {aliases.length > 0 && (
                       <section className="flex flex-col gap-4 pt-8 border-t border-slate-100">
                         <h2 className="text-2xl font-black text-slate-900 tracking-tight">游戏别名</h2>
                         <ul className="list-disc list-inside text-slate-500 font-medium space-y-1">
-                          {(selectedResource as any).alias.map((a: string, i: number) => <li key={i}>{a}</li>)}
+                          {aliases.map((a: string, i: number) => <li key={i}>{a}</li>)}
                         </ul>
                       </section>
                     )}
@@ -395,19 +422,13 @@ export const DetailOverlay: React.FC = () => {
               {activeTab === 'board' && (
                 <div className="flex flex-col gap-6">
                   {sessionError === 'SESSION_EXPIRED' ? (
-                    <div className="bg-slate-50 rounded-[2rem] p-12 text-center flex flex-col items-center gap-4 border border-slate-100">
-                      <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-rose-500">
-                        <MessageSquare size={32} />
-                      </div>
-                      <h3 className="text-lg font-black text-slate-800">讨论内容暂不可见</h3>
-                      <p className="text-sm font-bold text-slate-400">登录后即可查看和参与社区讨论</p>
-                      <button
-                        onClick={() => setIsLoginOpen(true)}
-                        className="mt-2 bg-rose-500 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all active:scale-95"
-                      >
-                        立即登录
-                      </button>
-                    </div>
+                    <SessionLockedState
+                      icon={MessageSquare}
+                      title="讨论内容暂不可见"
+                      description="登录后即可查看和参与社区讨论"
+                      buttonClassName="bg-rose-500 shadow-rose-200 hover:bg-rose-600"
+                      onLogin={() => setIsLoginOpen(true)}
+                    />
                   ) : (
                     <CommentSection comments={patchComments} isLoading={isDetailLoading} />
                   )}
@@ -416,29 +437,19 @@ export const DetailOverlay: React.FC = () => {
 
               {activeTab === 'evaluation' && (
                 <div className="flex flex-col gap-6">
+                  {ratingSummary && <RatingHistogram ratingSummary={ratingSummary} />}
                   {sessionError === 'SESSION_EXPIRED' ? (
-                    <div className="bg-slate-50 rounded-[2rem] p-12 text-center flex flex-col items-center gap-4 border border-slate-100">
-                      <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-amber-500">
-                        <Star size={32} />
-                      </div>
-                      <h3 className="text-lg font-black text-slate-800">评分详情已隐藏</h3>
-                      <p className="text-sm font-bold text-slate-400">登录后解锁详细的评分分布和用户评价</p>
-                      <button
-                        onClick={() => setIsLoginOpen(true)}
-                        className="mt-2 bg-amber-500 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg shadow-amber-200 hover:bg-amber-600 transition-all active:scale-95"
-                      >
-                        立即登录
-                      </button>
-                    </div>
+                    <SessionLockedState
+                      icon={Star}
+                      title="评分详情已隐藏"
+                      description="登录后解锁详细的评分分布和用户评价"
+                      buttonClassName="bg-amber-500 shadow-amber-200 hover:bg-amber-600"
+                      onLogin={() => setIsLoginOpen(true)}
+                    />
                   ) : (
-                    <>
-                      {/* Histogram — always visible, no login required */}
-                      {ratingSummary && <RatingHistogram ratingSummary={ratingSummary} />}
-                      {/* User ratings — blurred until logged in */}
-                      <BlurredSection isLoggedIn={isLoggedIn} title="用户评价">
-                        <EvaluationSection ratings={patchRatings} isLoading={isDetailLoading} />
-                      </BlurredSection>
-                    </>
+                    <BlurredSection isLoggedIn={isLoggedIn} title="用户评价">
+                      <EvaluationSection ratings={patchRatings} isLoading={isDetailLoading} />
+                    </BlurredSection>
                   )}
                 </div>
               )}

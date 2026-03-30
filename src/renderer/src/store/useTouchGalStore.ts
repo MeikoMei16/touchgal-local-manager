@@ -128,6 +128,44 @@ const normalizeHomeQuery = (query: Partial<HomeQueryState> | null | undefined): 
   sortOrder: normalizeSortOrder(query?.sortOrder)
 });
 
+const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
+  ...resource,
+  introduction: null,
+  company: null,
+  vndbId: null,
+  bangumiId: null,
+  steamId: null,
+  contentLimit: null,
+  screenshots: [],
+  pvUrl: null,
+  downloads: []
+});
+
+const mergeDetailResource = (
+  detail: TouchGalDetail,
+  fallback?: TouchGalResource | null
+): TouchGalDetail => ({
+  ...(fallback ? toDetailShell(fallback) : {}),
+  ...detail,
+  id: detail.id || fallback?.id || 0,
+  introduction: detail.introduction ?? null,
+  company: detail.company ?? null,
+  vndbId: detail.vndbId ?? null,
+  bangumiId: detail.bangumiId ?? null,
+  steamId: detail.steamId ?? null,
+  contentLimit:
+    typeof detail.contentLimit === 'string'
+      ? detail.contentLimit
+      : typeof (fallback as TouchGalDetail | null | undefined)?.contentLimit === 'string'
+        ? (fallback as TouchGalDetail | null | undefined)?.contentLimit ?? null
+        : null,
+  screenshots: Array.isArray(detail.screenshots) ? detail.screenshots : [],
+  pvUrl: detail.pvUrl ?? null,
+  downloads: Array.isArray(detail.downloads) ? detail.downloads : [],
+  alias: Array.isArray(detail.alias) ? detail.alias : [],
+  tags: Array.isArray(detail.tags) ? detail.tags : []
+});
+
 // --- HELPERS (Copied from old store) ---
 const ADVANCED_PAGE_SIZE = 24;
 const ADVANCED_CATALOG_CONCURRENCY = 4;
@@ -244,6 +282,8 @@ async function runBounded<TInput, TOutput>(items: TInput[], limit: number, worke
   await Promise.all(runners);
   return results;
 }
+
+let activeDetailRequestKey: string | null = null;
 
 // --- AUTH STORE ---
 interface AuthState {
@@ -478,34 +518,50 @@ export const useUIStore = create<UIState>()(
       },
       selectResource: async (uniqueId) => {
         const basicInfo = get().resources.find(r => r.uniqueId === uniqueId);
-        if (basicInfo) set({ selectedResource: { ...basicInfo } as TouchGalDetail, isDetailLoading: true, error: null });
-        else set({ isDetailLoading: true, error: null });
+        activeDetailRequestKey = uniqueId;
+        if (basicInfo) {
+          set({
+            selectedResource: toDetailShell(basicInfo),
+            patchComments: [],
+            patchRatings: [],
+            isDetailLoading: true,
+            error: null
+          });
+        } else {
+          set({ patchComments: [], patchRatings: [], isDetailLoading: true, error: null });
+        }
 
         try {
-          const gId = basicInfo?.id;
-          const [detail, introData, comments, ratings] = await Promise.all([
-            TouchGalClient.getPatchDetail(uniqueId),
-            TouchGalClient.getPatchIntroduction(uniqueId),
-            gId ? TouchGalClient.fetchPatchComments(gId, 1, 50) : Promise.resolve({ list: [] }),
-            gId ? TouchGalClient.fetchPatchRatings(gId, 1, 50) : Promise.resolve({ list: [] })
+          const detail = await TouchGalClient.getPatchDetail(uniqueId);
+          if (activeDetailRequestKey !== uniqueId) return;
+
+          const mergedDetail = mergeDetailResource(detail, basicInfo);
+          const finalId = mergedDetail.id || 0;
+          const [comments, ratings] = await Promise.all([
+            finalId ? TouchGalClient.fetchPatchComments(finalId, 1, 50) : Promise.resolve({ list: [] }),
+            finalId ? TouchGalClient.fetchPatchRatings(finalId, 1, 50) : Promise.resolve({ list: [] })
           ]);
-          
-          const finalId = detail.id || basicInfo?.id || 0;
+          if (activeDetailRequestKey !== uniqueId) return;
+
           const hasSessError = (comments as any).requiresLogin || (ratings as any).requiresLogin;
 
           set({
-            selectedResource: { ...detail, id: finalId, introduction: introData.introduction ?? detail.introduction, releasedDate: introData.releasedDate ?? detail.releasedDate, alias: introData.alias?.length ? introData.alias : detail.alias, tags: introData.tags?.length ? introData.tags : detail.tags, company: introData.company ?? detail.company, vndbId: introData.vndbId ?? detail.vndbId, bangumiId: introData.bangumiId ?? detail.bangumiId, steamId: introData.steamId ?? detail.steamId },
+            selectedResource: mergedDetail,
             patchComments: comments.list || [],
             patchRatings: ratings.list || [],
             isDetailLoading: false
           });
-          if (hasSessError) useAuthStore.getState().setSessionError('SESSION_EXPIRED');
+          useAuthStore.getState().setSessionError(hasSessError ? 'SESSION_EXPIRED' : null);
         } catch (err: any) {
+          if (activeDetailRequestKey !== uniqueId) return;
           set({ error: err.message, isDetailLoading: false });
           if (err.message?.includes('SESSION_EXPIRED')) useAuthStore.getState().setSessionError('SESSION_EXPIRED');
         }
       },
-      clearSelected: () => set({ selectedResource: null, patchComments: [], patchRatings: [] }),
+      clearSelected: () => {
+        activeDetailRequestKey = null;
+        set({ selectedResource: null, patchComments: [], patchRatings: [] });
+      },
       updateAdvancedFilterDraft: (draft) => set(s => ({ advancedFilterDraft: { ...s.advancedFilterDraft, ...draft } })),
       setActiveNsfwDomain: (domain) => set(s => ({ activeNsfwDomain: domain, advancedFilterDraft: { ...s.advancedFilterDraft, nsfwMode: domain } })),
       enterAdvancedMode: async (sortField, sortOrder) => {
