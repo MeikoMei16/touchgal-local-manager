@@ -4,12 +4,19 @@ import { User, Lock, ShieldCheck, X, Loader2, RefreshCw, Eye, EyeOff } from 'luc
 import { CaptchaChallenge } from './CaptchaChallenge';
 
 export const LoginModal: React.FC = () => {
-  const { isLoading, error, captchaUrl, captchaChallenge, fetchCaptcha, login, user, setIsLoginOpen } = useAuthStore();
+  const { isLoading, error, captchaUrl, captchaChallenge, fetchCaptcha, login, user, setIsLoginOpen, clearAuthUi } = useAuthStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [captcha, setCaptcha] = useState('');
   const [isChallengeOpen, setIsChallengeOpen] = useState(false);
+
+  const closeModal = () => {
+    clearAuthUi();
+    setCaptcha('');
+    setIsChallengeOpen(false);
+    setIsLoginOpen(false);
+  };
 
   useEffect(() => {
     // Check if we already have a challenge or URL
@@ -21,9 +28,9 @@ export const LoginModal: React.FC = () => {
   // Close modal on successful login
   useEffect(() => {
     if (user) {
-      setIsLoginOpen(false);
+      closeModal();
     }
-  }, [user, setIsLoginOpen]);
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +40,8 @@ export const LoginModal: React.FC = () => {
       // Legacy image captcha flow
       await login(username, password, captcha);
       setCaptcha('');
+    } else if (captchaChallenge) {
+      setIsChallengeOpen(true);
     } else if (!captchaChallenge && !captchaUrl) {
       // No captcha yet — fetch one (either challenge or legacy)
       await fetchCaptcha();
@@ -56,11 +65,11 @@ export const LoginModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[2000] animate-in fade-in duration-300" onClick={() => setIsLoginOpen(false)}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[2000] animate-in fade-in duration-300" onClick={closeModal}>
       <div className="bg-white w-full max-w-sm p-10 rounded-[32px] shadow-2xl relative animate-in zoom-in-95 ease-out-back duration-500" onClick={(e) => e.stopPropagation()}>
         <header className="flex justify-between items-center mb-8">
           <h2 className="m-0 text-2xl font-black text-slate-900 tracking-tight">Login to TouchGal</h2>
-          <button className="bg-slate-100 text-slate-500 border-none rounded-full w-10 h-10 flex items-center justify-center cursor-pointer transition-all hover:bg-slate-200 hover:text-slate-800" onClick={() => setIsLoginOpen(false)}>
+          <button className="bg-slate-100 text-slate-500 border-none rounded-full w-10 h-10 flex items-center justify-center cursor-pointer transition-all hover:bg-slate-200 hover:text-slate-800" onClick={closeModal}>
             <X size={20} />
           </button>
         </header>
@@ -120,7 +129,7 @@ export const LoginModal: React.FC = () => {
             </div>
           )}
 
-          {error && <p className="text-red-500 text-sm font-bold m-0 text-center animate-bounce">{error}</p>}
+          {error && <p className="text-red-500 text-sm font-bold m-0 text-center whitespace-pre-line">{error}</p>}
 
           <button className="mt-4 p-4.5 bg-primary text-on-primary border-none rounded-full font-black text-base cursor-pointer flex items-center justify-center gap-2 transition-all hover:bg-primary/95 hover:shadow-xl active:scale-[0.97] shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none" type="submit" disabled={isLoading}>
             {isLoading ? <Loader2 className="animate-spin" /> : (captchaUrl ? 'Login' : 'Next')}
@@ -130,7 +139,11 @@ export const LoginModal: React.FC = () => {
         {isChallengeOpen && captchaChallenge && (
           <CaptchaChallenge 
             onSuccess={handleChallengeSuccess} 
-            onCancel={() => setIsChallengeOpen(false)} 
+            onCancel={() => {
+              clearAuthUi();
+              setCaptcha('');
+              setIsChallengeOpen(false);
+            }} 
           />
         )}
       </div>

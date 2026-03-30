@@ -39,6 +39,14 @@ export const CaptchaChallenge: React.FC<CaptchaChallengeProps> = ({ onSuccess, o
   };
 
   const prompt = captchaChallenge.target || '白毛 女孩子 (White hair girls)';
+  const imageCount = captchaChallenge.images.length;
+  const gridClass =
+    imageCount === 4
+      ? 'grid-cols-2'
+      : imageCount <= 2
+        ? 'grid-cols-2'
+        : 'grid-cols-3';
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-[3000] animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-md p-8 rounded-[40px] shadow-2xl relative animate-in zoom-in-95 ease-out-back duration-500">
@@ -52,7 +60,7 @@ export const CaptchaChallenge: React.FC<CaptchaChallengeProps> = ({ onSuccess, o
           </button>
         </header>
 
-        <div className="grid grid-cols-3 gap-2 mb-6">
+        <div className={`grid ${gridClass} gap-2 mb-6`}>
           {captchaChallenge.images.map((img: any) => {
             const isSelected = selectedIds.has(img.id);
             return (

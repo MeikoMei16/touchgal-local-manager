@@ -200,11 +200,47 @@ interface AuthState {
   logout: () => void;
   setIsLoginOpen: (isOpen: boolean) => void;
   setSessionError: (error: 'SESSION_EXPIRED' | null) => void;
+  clearAuthUi: () => void;
   fetchCaptcha: () => Promise<void>;
   verifyCaptcha: (ids: string[]) => Promise<string | null>;
   fetchUserProfile: () => Promise<void>;
   fetchUserActivity: (type: 'comments' | 'ratings' | 'collections', page?: number) => Promise<void>;
 }
+
+const formatAuthError = (err: unknown): string => {
+  const fallback = 'Login failed';
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : fallback;
+
+  const validationPrefix = 'Error invoking remote method \'tg-login\': Error: ';
+  const normalized = raw.startsWith(validationPrefix) ? raw.slice(validationPrefix.length) : raw;
+
+  if (!normalized.startsWith('[')) {
+    return normalized || fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    if (!Array.isArray(parsed)) return normalized;
+
+    const messages = parsed
+      .map((item: any) => {
+        const path = Array.isArray(item?.path) && item.path.length > 0 ? String(item.path[0]) : null;
+        const message = typeof item?.message === 'string' ? item.message : null;
+        if (!message) return null;
+        return path ? `${path}: ${message}` : message;
+      })
+      .filter(Boolean);
+
+    return messages.length > 0 ? messages.join('\n') : normalized;
+  } catch {
+    return normalized;
+  }
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -227,16 +263,18 @@ export const useAuthStore = create<AuthState>()(
           const user = await TouchGalClient.login(username, password, captcha);
           set({ user, isLoading: false, sessionError: null, captchaUrl: null, captchaChallenge: null });
         } catch (err: any) {
-          // Reset captcha to null first so the effect re-triggers in the modal
-          set({ error: err.message, isLoading: false, captchaUrl: null, captchaChallenge: null });
-          await get().fetchCaptcha();
+          // Do not immediately fetch a new captcha here. If credentials are wrong after
+          // a successful captcha solve, the user should return to the login form, see the
+          // error, and retry credentials before requesting a new captcha on the next submit.
+          set({ error: formatAuthError(err), isLoading: false, captchaUrl: null, captchaChallenge: null });
         }
       },
       logout: () => set({ user: null, userProfile: null, sessionError: null, captchaUrl: null, captchaChallenge: null, error: null }),
       setIsLoginOpen: (isOpen) => set({ isLoginOpen: isOpen }),
       setSessionError: (error) => set({ sessionError: error }),
+      clearAuthUi: () => set({ error: null, captchaUrl: null, captchaChallenge: null, isLoading: false }),
       fetchCaptcha: async () => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
           const data = await TouchGalClient.fetchCaptcha();
           if (data.images && data.sessionId) set({ captchaChallenge: data, captchaUrl: null, isLoading: false });
@@ -249,7 +287,7 @@ export const useAuthStore = create<AuthState>()(
           const result = await window.api.verifyCaptcha(get().captchaChallenge?.sessionId || '', ids);
           set({ isLoading: false });
           return result.code;
-        } catch (err: any) {
+        } catch {
           set({ error: 'Captcha verification failed', isLoading: false });
           await get().fetchCaptcha();
           return null;

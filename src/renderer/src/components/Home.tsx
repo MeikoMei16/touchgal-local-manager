@@ -17,7 +17,7 @@ export const Home: React.FC = () => {
     lastHomeQuery, setLastHomeQuery
   } = useUIStore();
   const [showFilters, setShowFilters] = useState(false);
-  const [sortField, setSortField] = useState('resource_update_time');
+  const [sortField, setSortField] = useState('created');
   const [sortOrder, setSortOrder] = useState('desc');
 
 
@@ -52,6 +52,11 @@ export const Home: React.FC = () => {
     return 'sfw';
   };
 
+  const normalizeSortField = (value: string) => {
+    if (value === 'visit') return 'view';
+    return value;
+  };
+
   // 上游: nsfwMode / selectedPlatform → 直接走 API，无需 advanced mode
   // 中游: yearConstraints / minRatingCount / minRatingScore / minCommentCount → 需要 advanced mode (全量拉取后本地过滤)
   // 下游: selectedTags → 需要 advanced mode + 标签富化
@@ -82,6 +87,11 @@ export const Home: React.FC = () => {
       return;
     }
 
+    const restoredSortField = normalizeSortField(lastHomeQuery.sortField ?? 'created');
+    setSortField(restoredSortField);
+    if (restoredSortField !== lastHomeQuery.sortField) {
+      setLastHomeQuery({ ...lastHomeQuery, sortField: restoredSortField });
+    }
     syncDraftFromQuery(lastHomeQuery);
     // DO NOT automatically trigger enterAdvancedMode on mount.
     // Let the user stay in Normal Mode (Network IO) unless they manually Apply/Submit.
@@ -92,7 +102,7 @@ export const Home: React.FC = () => {
       const queryParams = { 
         ...lastHomeQuery, 
         nsfwMode: lastHomeQuery.nsfwMode || activeNsfwDomain || 'safe',
-        sortField, 
+        sortField: normalizeSortField(sortField), 
         sortOrder 
       };
       console.log('[Home] useEffect triggering fetchResources:', queryParams);
@@ -104,7 +114,10 @@ export const Home: React.FC = () => {
     const newQuery = { ...lastHomeQuery, ...filters };
     const nextDomain = syncDraftFromQuery(newQuery);
 
-    setLastHomeQuery(newQuery);
+    setLastHomeQuery({
+      ...newQuery,
+      sortField: normalizeSortField(newQuery.sortField ?? sortField)
+    });
 
     return { newQuery, nextDomain };
   };
@@ -168,19 +181,20 @@ export const Home: React.FC = () => {
     { label: '资源更新时间', value: 'resource_update_time' },
     { label: '游戏创建时间', value: 'created' },
     { label: '评分', value: 'rating' },
-    { label: '浏览量', value: 'visit' },
+    { label: '浏览量', value: 'view' },
     { label: '下载量', value: 'download' },
     { label: '收藏量', value: 'favorite' }
   ];
 
   const updateSort = (field: string, order: string) => {
-    setSortField(field);
+    const normalizedField = normalizeSortField(field);
+    setSortField(normalizedField);
     setSortOrder(order);
     if (homeMode === 'normal') {
-      fetchResources(1, { ...lastHomeQuery, sortField: field, sortOrder: order });
+      fetchResources(1, { ...lastHomeQuery, sortField: normalizedField, sortOrder: order });
       return;
     }
-    applyAdvancedFilters(1, field, order);
+    applyAdvancedFilters(1, normalizedField, order);
   };
 
   const goToPage = (page: number) => {
