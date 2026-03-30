@@ -16,6 +16,11 @@ dist-ssr
 *.local
 out/
 .gemini/
+.codex/
+.tmp/
+*.tmp
+*.bak
+
 # Reference Projects
 reference_project/
 astrbot_plugin_touchgal/

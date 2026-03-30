@@ -1,53 +1,50 @@
-# Styling & Design System
+# Styling
 
-TouchGal Local Manager uses **Tailwind CSS 4** for all UI styling, following **Material 3 (M3)** design principles.
+Renderer styling is built with Tailwind CSS 4 and theme tokens defined in [`src/renderer/src/index.css`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/index.css).
 
-## 🛠️ Toolchain
-- **Framework**: Tailwind CSS 4
-- **Vite Integration**: `@tailwindcss/vite`
-- **Configuration**: All theme tokens and global styles are defined in `src/renderer/src/index.css`. This project does **not** use a separate `tailwind.config.js`.
+## Tooling
 
-## 🎨 Design Tokens (Material 3)
+- Tailwind CSS 4
+- `@tailwindcss/vite`
+- no separate `tailwind.config.*`
 
-The following tokens are available as Tailwind utility classes (e.g., `bg-primary`, `text-on-surface`).
+## Theme Tokens
 
-### Color Palette
-| Token | Variable | Description |
-| :--- | :--- | :--- |
-| **Primary** | `--color-primary` | Main brand color for key actions. |
-| **Secondary** | `--color-secondary` | Used for less prominent UI elements. |
-| **Surface** | `--color-surface` | Background color for pages and large containers. |
-| **Error** | `--color-error` | Used for validation errors and destructive actions. |
-| **Outline** | `--color-outline` | Subtle borders and dividers. |
+Current token groups include:
 
-> [!TIP]
-> Use `*-container` and `on-*-container` roles for card backgrounds that need high contrast with their content.
+- primary / on-primary / primary-container
+- secondary / on-secondary / secondary-container
+- tertiary / on-tertiary / tertiary-container
+- error / on-error / error-container
+- surface and surface-container roles
+- outline roles
+- radius scale
+- `font-main`
+- `font-body`
 
-### Typography
-- **Display/Titles**: `font-main` ("Lexend") — Used for headers, game titles, and branding.
-- **Body**: `font-body` ("Inter") — Used for descriptions, UI labels, and data.
+## Typography
 
-### Rounded Corners
-We use a standardized radius scale:
-- `radius-sm` (8px): Inner elements/buttons.
-- `radius-lg` (16px): Small cards/popovers.
-- `radius-xl` (28px): Main content cards/Material 3 containers.
-- `radius-2xl` (32px): Deeply rounded sections/Filter bar.
+Current theme fonts:
 
-## ✨ Global UI Utilities
+- `font-main`: `Outfit`
+- `font-body`: `Inter`
 
-### Glassmorphism
-We use custom global layers in `index.css` for consistent glass effects:
-- `.glass`: Light theme translucent background with blur. Used for overlays and sidebars.
-- `.glass-dark`: Dark/Elevated translucent background for high-contrast overlays.
+## Shared Utilities
 
-### Scrolling
-Scrollbars are standardized to be thin and unobtrusive:
-- Width: 8px
-- Style: Rounded, slate-200 thumb, transparent track.
+Global helpers currently defined in `index.css`:
 
-## 📏 Best Practices
-1. **Utility-First**: Avoid manual CSS. 99% of styling should be handled via Tailwind classes in JSX.
-2. **Standardized Tokens**: Use `bg-surface-container` instead of hardcoded hex values for backgrounds.
-3. **Responsive Grids**: Use Tailwind's `grid-cols-1 md:grid-cols-2 lg:grid-cols-3` pattern to ensure the app works well on all window sizes.
-4. **Active States**: Always provide visual feedback for clicks using `active:scale-95` or `active:bg-*` classes.
+- `.glass`
+- `.glass-dark`
+
+Scrollbar styling is also defined globally there.
+
+## Conventions
+
+- Prefer Tailwind utility classes in JSX.
+- Use theme tokens instead of hard-coded colors when possible.
+- Keep component styling close to the component unless a pattern is reused broadly.
+- Reserve global CSS for theme tokens and true cross-app utilities.
+
+## Note
+
+If you touch theme tokens, keep this document and `index.css` in sync. The CSS file is the source of truth.

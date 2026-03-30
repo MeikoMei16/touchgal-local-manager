@@ -1,92 +1,125 @@
-# User Profile API Documentation
+# User Profile API Notes
 
-This document describes the API endpoints used to retrieve user profile data, including statistics, comments, ratings, and published resources.
+This document tracks the user-related upstream endpoints that are actually wired into this project today.
 
-## Base URL
-`https://www.touchgal.top/api`
+## Scope
+
+These endpoints are relayed by the Electron main process and exposed to the renderer through `window.api`.
+
+Relevant implementation points:
+
+- [`src/main/index.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/main/index.ts)
+- [`src/preload/index.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/preload/index.ts)
+- [`src/renderer/src/data/TouchGalClient.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/data/TouchGalClient.ts)
 
 ## Authentication
-Most endpoints require a valid JWT token passed in a cookie:
-`kun-galgame-patch-moe-token=<JWT_TOKEN>`
 
----
+User-facing profile and activity endpoints may depend on the current TouchGal session cookie.
 
-## 1. User Status and Statistics
-Retrieve basic profile information and activity counts.
+Cookie used by upstream:
 
-- **Endpoint**: `/user/status/info`
-- **Method**: `GET`
-- **Parameters**:
-  - `id` (integer, required): The user's UID.
-- **Example Request**:
-  `GET /api/user/status/info?id=372067`
+- `kun-galgame-patch-moe-token=<JWT_TOKEN>`
 
-- **Response Structure**:
-```json
-{
-  "id": 372067,
-  "name": "meko262",
-  "avatar": "https://...",
-  "bio": "",
-  "moemoepoint": 183,
-  "follower": 0,
-  "following": 1,
-  "_count": {
-    "patch_comment": 9,
-    "patch_rating": 41,
-    "patch_resource": 2,
-    "patch_favorite": 0
-  }
-}
-```
+## Currently Used Endpoints
 
----
+### `GET /user/status/info`
 
-## 2. Activity Lists
-Activity endpoints follow a consistent pagination pattern.
+Purpose:
 
-- **Query Parameters**:
-  - `uid` (integer, required): The target user's UID.
-  - `page` (integer, default: 1): The page number.
-  - `limit` (integer, default: 20): Items per page.
+- fetch profile information for a specific user id
 
-### 2.1 User Comments
-Retrieve a list of patches commented on by the user.
-- **Endpoint**: `/user/profile/comment`
-- **Response**: `{ "comments": [...], "total": number }`
+Current main-process relay:
 
-### 2.2 User Ratings
-Retrieve a list of patches rated by the user.
-- **Endpoint**: `/user/profile/rating`
-- **Response**: `{ "ratings": [...], "total": number }`
+- `tg-get-user-status`
 
-### 2.3 Published Resources (Patches)
-Retrieve a list of patches/resources published by the user.
-- **Endpoint**: `/user/profile/resource`
-- **Response**: `{ "resources": [...], "total": number }`
+Parameters:
 
-### 2.4 Favorites
-Retrieve the user's favorite patches.
-- **Endpoint**: `/user/profile/favorite`
-- **Response**: `{ "favorites": [...], "total": number }`
+- `id`
 
----
+### `GET /user/status`
 
-## 3. Data Models
+Purpose:
 
-### UserComment
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | `number` | Unique ID of the comment |
-| `content` | `string` | The text content of the comment |
-| `patchName` | `string` | The name of the patch/game |
-| `created` | `string` | ISO8601 or formatted date string |
+- fetch currently logged-in user identity / self status
 
-### UserRating
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | `number` | Unique ID of the rating |
-| `overall` | `number` | Numeric rating (1-10) |
-| `recommend` | `string` | Recommendation status (e.g., `yes`, `neutral`) |
-| `shortSummary` | `string` | User's feedback text |
-| `patchName` | `string` | The name of the rated patch |
+Current main-process relay:
+
+- `tg-get-user-status-self`
+
+### `GET /user/profile/comment`
+
+Purpose:
+
+- fetch paginated comment activity for a user
+
+Current main-process relay:
+
+- `tg-get-user-comments`
+
+Parameters:
+
+- `uid`
+- `page`
+- `limit`
+
+### `GET /user/profile/rating`
+
+Purpose:
+
+- fetch paginated rating activity for a user
+
+Current main-process relay:
+
+- `tg-get-user-ratings`
+
+Parameters:
+
+- `uid`
+- `page`
+- `limit`
+
+### `GET /user/profile/resource`
+
+Purpose:
+
+- fetch paginated published resources for a user
+
+Current main-process relay:
+
+- `tg-get-user-resources`
+
+Parameters:
+
+- `uid`
+- `page`
+- `limit`
+
+### `GET /user/profile/favorite/folder`
+
+Purpose:
+
+- fetch favorite folders for a user
+
+Current main-process relay:
+
+- `tg-get-favorite-folders`
+
+Parameters:
+
+- `uid`
+
+## Renderer Surface
+
+The renderer currently consumes these methods:
+
+- `getUserStatus(id)`
+- `getUserStatusSelf()`
+- `getUserComments(uid, page, limit)`
+- `getUserRatings(uid, page, limit)`
+- `getUserResources(uid, page, limit)`
+- `getFavoriteFolders(uid)`
+
+## Notes
+
+- This file is intentionally implementation-focused, not a full upstream API reference.
+- If new user endpoints are added to `window.api`, update this document in the same change.

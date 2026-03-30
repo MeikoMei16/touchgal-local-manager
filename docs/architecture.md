@@ -1,134 +1,132 @@
-# Project Architecture
+# Architecture
 
-> **Stack**: Electron 41 · Vite 7 · React 19 · SQLite (better-sqlite3) · Tailwind CSS 4
+TouchGal Local Manager is an Electron desktop app that proxies TouchGal upstream APIs through the main process and layers local stateful UX on top of them.
 
-TouchGal Local Manager is a **local-first** desktop application. The cloud is a sync source, not a runtime dependency. All personal data stays on-device.
+## Stack
 
----
+- Electron 41
+- electron-vite 5
+- Vite 7
+- React 19
+- Zustand 5
+- Tailwind CSS 4
+- better-sqlite3
 
-## 1. Process Model
+## Runtime Layout
 
-### 1.1 Main Process (`src/main/`)
-- **Responsibility**: System I/O, IPC dispatch, window management, native API access.
-- **Bootstrapping**: Bundled by Vite as native ESM. Reads `VITE_DEV_SERVER_URL` in development.
-- **Key Modules**:
-    - `index.ts`: Entry point and window orchestration.
-    - `db.ts`: SQLite read/write operations (with local detail caching).
-    - `downloader.ts`: Integrated download orchestration engine.
-    - `logs/`: Unified logging stream (~/.config/touchgal-local-manager/logs/).
-- **CORS Bypass**: All external API calls (TouchGal Cloud) are performed here to avoid browser security restrictions.
+```text
+src/main/
+  index.ts        IPC hub, upstream API relay, response normalization
+  db.ts           SQLite schema bootstrap and cache helpers
+  downloader.ts   Early-stage download queue manager
+  utils.ts        Filesystem helpers
 
-### 1.2 Preload Script (`src/preload/index.ts`)
-- **Responsibility**: Security bridge between the sandboxed renderer and the main process.
-- **Security**: Exposes a typed `window.api` object via `contextBridge`.
-- **Packaging**: Bundled as `preload.cjs` (CommonJS) to ensure compatibility with Electron's preload requirements.
+src/preload/
+  index.ts        contextBridge surface exposed as window.api
 
-### 1.3 Renderer Process (`src/renderer/`)
-- **Responsibility**: UI and interaction logic using React 19 and Tailwind CSS 4.
-- **State Management**: Zustand lightweight reactive store.
-- **Environment**: Sandboxed, no direct Node.js access; all system calls go through `window.api`.
-
----
-
-## 2. Data Flow (Hybrid Model)
-
-We use a **Hybrid Cache Model** where the app mirrors cloud metadata locally while following strict API protocols for real-time browsing.
-
-```mermaid
-sequenceDiagram
-    participant R as Renderer (React)
-    participant S as Zustand Store
-    participant B as IPC Bridge (preload)
-    participant M as Main Process
-    participant DB as SQLite (local)
-    participant A as TouchGal Cloud API
-
-    R->>S: User action (search/filter/paginate)
-    S->>B: window.api.fetchResources()
-    B->>M: ipcRenderer.invoke('tg-fetch-resources')
-
-    alt Cache hit (SQLite)
-        M->>DB: SELECT with FTS5
-        DB-->>M: Cached rows
-    else Cache miss
-        M->>A: axios.get('/api/galgame', params with Cookie)
-        A-->>M: Raw JSON
-        M->>DB: Upsert rows (Delta Sync)
-    end
-
-    M-->>B: TouchGalResource[]
-    B-->>S: Update state
-    S-->>R: Re-render grid
+src/renderer/src/
+  components/     UI
+  data/           TouchGalClient window.api wrapper
+  store/          Zustand state and advanced-filter pipeline
+  schemas/        Zod schemas
+  types/          Shared renderer-side types
 ```
 
----
+## Process Boundaries
 
-## 3. Core Feature Pillars
+### Main Process
 
-### A — SQLite Metadata Store
-Local mirror of cloud metadata with **FTS5 full-text search**. Enables offline browsing and sub-100ms query responses.
+Owns:
 
-### B — Media Proxy & Cache
-Background pre-fetching of banners and screenshots to eliminate loading spinners during navigation.
+- upstream HTTP requests
+- Electron window lifecycle
+- SQLite access
+- filesystem access
+- download queue state
 
-### C — Smart File Linking
-Fuzzy-matches local game folders to cloud `uniqueId` via file fingerprinting. Bridges the gap between local files and the cloud catalog.
+Rules:
 
-### D — Integrated Launcher
-Executes games directly with locale emulation detection and save-file path management.
+- Renderer must not call TouchGal upstream APIs directly.
+- Normalization of inconsistent upstream payloads belongs here.
 
-### E — Download Orchestration Engine
-Integrated manager that parses multi-storage links, manages queues, verifies file integrity (size/hash), and performs auto-extraction (.rar/.7z).
+### Preload
 
-### F — Play-Time Tracking & Personal Analytics
-Tracks play sessions via process lifecycle hooks. Records duration, completion status, personal ratings, and private notes stored locally.
+Owns:
 
-### G — Relational Knowledge Graph
-Relational schema materializing game → company → tag → series relationships for "find similar" and discovery features.
+- the safe IPC bridge exposed via `contextBridge`
 
----
+Current output:
 
-## 4. SQLite Schema Highlights
+- bundled as CommonJS `.cjs` by `electron.vite.config.ts`
 
-```sql
--- Core catalog with FTS5
-CREATE TABLE games (
-    id INTEGER PRIMARY KEY,
-    unique_id TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    banner_url TEXT,
-    avg_rating REAL,
-    view_count INTEGER DEFAULT 0,
-    download_count INTEGER DEFAULT 0,
-    detail_json TEXT,
-    cloud_updated_at DATETIME,
-    last_detailed_at DATETIME,
-    local_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE VIRTUAL TABLE games_fts USING fts5(name, content='games', content_rowid='id');
+### Renderer
 
--- Local installation and tracking
-CREATE TABLE local_paths (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER REFERENCES games(id),
-    path TEXT NOT NULL,
-    exe_path TEXT,
-    size_bytes INTEGER,
-    linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+Owns:
 
-CREATE TABLE play_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER REFERENCES games(id),
-    started_at DATETIME NOT NULL,
-    ended_at DATETIME
-);
-```
+- application UI
+- local interaction state
+- advanced-filter orchestration
+- detail overlay lifecycle
 
----
+## Data Flow
 
-## 5. Design Principles
-1. **Local-First**: Fully functional without internet. Cloud is a sync source only.
-2. **Zero Data Loss**: Personal metadata (notes, ratings, play-time) survives reinstalls.
-3. **Respectful Sync**: No personal data leaves the device without explicit consent.
-4. **Performance Budget**: All UI interactions must respond in < 100ms.
+Normal homepage browsing:
+
+1. Renderer calls `TouchGalClient.fetchGalgameResources()`.
+2. Preload forwards to `tg-fetch-resources`.
+3. Main process relays to upstream TouchGal API and normalizes the response.
+4. Renderer store updates `resources`, `totalResources`, and pagination state.
+
+Detail loading:
+
+1. Renderer selects a card.
+2. Store fetches detail, introduction, comments, and ratings.
+3. Detail overlay renders normalized merged data.
+
+## Local Persistence
+
+SQLite is initialized in [`src/main/db.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/main/db.ts).
+
+Current schema areas include:
+
+- `games`
+- `games_fts`
+- `companies`
+- `tags`
+- `game_tags`
+- `external_ids`
+- `local_paths`
+- `media_cache`
+- `download_tasks`
+- `play_sessions`
+- `personal_metadata`
+- `collections`
+
+Status note:
+
+- The schema is broader than currently shipped UI features.
+- Some tables support planned local-first capabilities that are only partially wired today.
+
+## Current Feature Status
+
+### Implemented or Active
+
+- Homepage resource browsing
+- Login and captcha relay
+- Detail overlay with introduction, comments, and ratings
+- Advanced filtering with local multi-stage pipeline
+- Basic SQLite bootstrap
+- Basic download queue persistence and link parsing scaffold
+
+### Partial / In Progress
+
+- Local metadata cache usage is still limited
+- Downloader is scaffolded, not full end-to-end
+- Offline-first search is not yet the main browse path
+
+## Important Constraints
+
+- Upstream API relay lives in the main process.
+- Advanced tag filtering must not depend on `/search`.
+- Stage 1 advanced-filter fields should be handled upstream, not re-applied locally.
+- Renderer-side advanced filtering is domain-scoped: `sfw`, `nsfw`, and `all`.

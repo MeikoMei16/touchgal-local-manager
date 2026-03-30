@@ -2,47 +2,42 @@
 description: fix-electron-env
 ---
 
-## Fix Electron Runtime Environment
+## Fix Electron Environment (Linux)
 
-Use this workflow to resolve "not a function" errors, preload desyncs, or window launch failures.
+Use this workflow for:
 
-### Option A: Quick Refresh (Preload/IPC Desyncs)
-**Try this first.** It cleans build artifacts without re-downloading dependencies.
+- preload/main output desync
+- Electron launch failures
+- native module ABI mismatch
+- broken local database during development
 
-// turbo
-1. **Clean Out/Dist Directories**
+## Option A: Quick Refresh
+
 ```bash
-pnpm clean && pnpm dev
+pnpm clean
+pnpm dev
 ```
 
----
+## Option B: Full Rebuild
 
-### Option B: Deep Reset (System/Dependency Issues)
-Use if Option A fails or if you have ESM/CJS bundling errors.
-
-1. **Nuclear Cleanup**
-Removes build artifacts, dependencies, and system Electron cache.
 ```bash
-rm -rf out dist dist-electron release node_modules pnpm-lock.yaml ~/.cache/electron/
+rm -rf out dist release node_modules pnpm-lock.yaml ~/.cache/electron
+pnpm install
+pnpm dev
 ```
 
-2. **System Dependencies (Fedora/Linux)**
-// turbo
+## Option C: Native Module Rebuild Only
+
 ```bash
-sudo dnf install libX11 libXcomposite libXcursor libXdamage libXext libXfixes libXi libXrender libXtst cups-libs alsa-lib libXrandr pango cairo-gobject mesa-libGBM
+pnpm rebuild
+pnpm dev
 ```
 
-3. **Fresh Install**
+## Option D: Reset Local Database
+
+Warning: this deletes the app's local SQLite database.
+
 ```bash
-pnpm install && pnpm dev
-```
-
----
-
-### Option C: Database Reset
-**WARNING: This deletes your local game metadata.** Use only if the SQLite database is corrupted.
-
-1. **Remove Database**
-```bash
-rm -rf ~/.config/touchgal-local-manager/touchgal.db && pnpm dev
+rm -f ~/.config/touchgal-local-manager/touchgal.db
+pnpm dev
 ```
