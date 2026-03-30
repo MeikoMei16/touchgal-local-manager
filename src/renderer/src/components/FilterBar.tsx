@@ -7,14 +7,15 @@ import { useTouchGalStore } from '../store/useTouchGalStore';
 
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
+  onSubmit?: (filters: any) => void;
   isLoading?: boolean;
 }
 
 type NsfwMode = 'safe' | 'nsfw' | 'all';
 type Operator = '=' | '>=' | '<=' | '>' | '<';
 
-export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
-  const { selectedTags, addTagFilter, removeTagFilter } = useTouchGalStore();
+export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }) => {
+  const { selectedTags, addTagFilter, removeTagFilter, advancedFilterDraft } = useTouchGalStore();
 
   // --- State ---
   const [nsfwMode, setNsfwMode] = useState<NsfwMode>('safe');
@@ -65,9 +66,24 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setNsfwMode(
+      advancedFilterDraft.nsfwMode === 'nsfw'
+        ? 'nsfw'
+        : advancedFilterDraft.nsfwMode === 'all'
+          ? 'all'
+          : 'safe'
+    );
+    setPlatform(advancedFilterDraft.selectedPlatform);
+    setYearConstraints(advancedFilterDraft.yearConstraints);
+    setMinRatingCount(advancedFilterDraft.minRatingCount);
+    setMinRatingScore(advancedFilterDraft.minRatingScore);
+    setMinCommentCount(advancedFilterDraft.minCommentCount);
+  }, [advancedFilterDraft]);
+
   // --- Helpers ---
   const emitChange = (overrides: any = {}) => {
-    onFilterChange({
+    return {
       nsfwMode: overrides.nsfwMode ?? nsfwMode,
       selectedPlatform: overrides.selectedPlatform ?? platform,
       yearConstraints: overrides.yearConstraints ?? yearConstraints,
@@ -76,7 +92,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
       minCommentCount: overrides.minCommentCount ?? minCommentCount,
       selectedTags: overrides.selectedTags ?? selectedTags,
       ...overrides
-    });
+    };
+  };
+
+  const publishChange = (overrides: any = {}) => {
+    onFilterChange(emitChange(overrides));
+  };
+
+  const submitFilters = (overrides: any = {}) => {
+    const payload = emitChange(overrides);
+    onFilterChange(payload);
+    onSubmit?.(payload);
   };
 
   const handleYearEnter = (e: React.KeyboardEvent) => {
@@ -86,7 +112,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
         const newConstraints = [...yearConstraints, { op: activeOp, val }];
         setYearConstraints(newConstraints);
         setYearInput('');
-        emitChange({ yearConstraints: newConstraints });
+        publishChange({ yearConstraints: newConstraints });
       }
     }
   };
@@ -94,7 +120,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   const removeYearConstraint = (index: number) => {
     const newConstraints = yearConstraints.filter((_, i) => i !== index);
     setYearConstraints(newConstraints);
-    emitChange({ yearConstraints: newConstraints });
+    publishChange({ yearConstraints: newConstraints });
   };
 
   const toggleNsfwMode = () => {
@@ -102,7 +128,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     const nextIdx = (modes.indexOf(nsfwMode) + 1) % modes.length;
     const nextMode = modes[nextIdx];
     setNsfwMode(nextMode);
-    emitChange({ nsfwMode: nextMode });
+    publishChange({ nsfwMode: nextMode });
   };
 
   const getNsfwContent = () => {
@@ -134,11 +160,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     addTagFilter(tag);
     setTagSearchInput('');
     setTagSuggestions([]);
-    emitChange({ selectedTags: selectedTags.includes(tag) ? selectedTags : [...selectedTags, tag] });
+    publishChange({ selectedTags: selectedTags.includes(tag) ? selectedTags : [...selectedTags, tag] });
   };
 
   return (
-    <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-100/50 mb-8 overflow-hidden">
+    <div
+      className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-100/50 mb-8 overflow-hidden"
+      onKeyDown={(event) => {
+        const target = event.target as HTMLElement;
+        if (event.key !== 'Enter') return;
+        if (target?.dataset?.submitMode === 'skip') return;
+        submitFilters();
+      }}
+    >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         
         {/* Left Column: Core Filters */}
@@ -171,7 +205,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                     <div 
                       key={p.value} 
                       className={`px-4 py-2.5 rounded-xl cursor-pointer text-sm font-semibold transition-colors ${platform === p.value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                      onClick={() => { setPlatform(p.value); setIsPlatformOpen(false); emitChange({ selectedPlatform: p.value }); }}
+                      onClick={() => { setPlatform(p.value); setIsPlatformOpen(false); publishChange({ selectedPlatform: p.value }); }}
                     >
                       {p.label}
                     </div>
@@ -215,6 +249,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                   placeholder="输入年份并按回车..." 
                   className="flex-1 bg-transparent px-4 font-bold text-slate-700 placeholder:text-slate-400 outline-none"
                   value={yearInput}
+                  data-submit-mode="skip"
                   onChange={e => setYearInput(e.target.value)}
                   onKeyDown={handleYearEnter}
                 />
@@ -251,7 +286,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                     className="w-16 bg-transparent text-center font-black text-slate-700 outline-none"
                     value={stat.val}
                     onChange={e => stat.set(parseFloat(e.target.value) || 0)}
-                    onKeyDown={e => e.key === 'Enter' && emitChange()}
+                    onKeyDown={e => e.key === 'Enter' && submitFilters()}
                   />
                 </div>
               </div>
@@ -282,6 +317,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                  placeholder="寻找并添加标签..." 
                  className="bg-transparent border-none outline-none font-bold text-sm text-slate-700 placeholder:text-slate-400 w-full"
                  value={tagSearchInput}
+                 data-submit-mode="skip"
                  onChange={e => setTagSearchInput(e.target.value)}
                  onBlur={() => setTimeout(() => setTagSuggestions([]), 200)}
                />
@@ -313,7 +349,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                           className="text-slate-400 cursor-pointer hover:text-red-500" 
                           onClick={() => {
                             removeTagFilter(tag);
-                            emitChange({ selectedTags: selectedTags.filter(t => t !== tag) });
+                            publishChange({ selectedTags: selectedTags.filter(t => t !== tag) });
                           }} 
                         />
                       </div>
@@ -338,6 +374,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
           </div>
         </div>
 
+      </div>
+      <div className="flex justify-end mt-6">
+        <button
+          className="px-5 py-3 rounded-full border-none bg-primary text-white font-bold text-sm cursor-pointer transition-all hover:bg-primary/90 shadow-md"
+          onClick={() => submitFilters()}
+        >
+          应用筛选
+        </button>
       </div>
     </div>
   );

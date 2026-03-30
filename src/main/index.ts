@@ -64,9 +64,9 @@ API_CLIENT.interceptors.request.use((config) => {
   if (currentCookie) {
     config.headers['Cookie'] = currentCookie;
   }
-  log.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, { 
+  log.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
     params: config.params,
-    headers: config.headers 
+    headers: config.headers
   });
   return config;
 });
@@ -158,7 +158,7 @@ const extractTags = (resource: RawResource): string[] => {
 const normalizeResource = (resource: any) => {
   const raw = resource as any
   const counts = raw._count ?? {}
-  
+
   // Highly Aggressive Stats Mapping for Home/List/Search
   const viewCount = raw.view ?? raw.view_count ?? raw.visit ?? raw.views ?? 0
   const downloadCount = raw.download ?? raw.download_count ?? raw.downloads ?? 0
@@ -352,7 +352,7 @@ const handleWithLog = (channel: string, listener: (...args: any[]) => any) => {
 handleWithLog('scan-local-library', async (_event, paths: string[]) => {
   const folders = await scanForGalgameFolders(paths)
   const db = getDb()
-  
+
   const insertPath = db.prepare(`
     INSERT INTO local_paths (path, game_id)
     VALUES (?, (SELECT id FROM games WHERE unique_id = ?))
@@ -380,25 +380,68 @@ handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {
 })
 
 handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, query: any) => {
+  log.info('[IPC] tg-fetch-resources request:', { page, limit, query });
+
+  // If there are tags, we MUST use the search API (POST /search) because /galgame (GET) 
+  // doesn't support tag filtering in the backend schema.
+  if (query.selectedTags && query.selectedTags.length > 0) {
+    log.info('[API] Switching to /search (POST) because tags are present');
+    const tagQueryItems = (query.selectedTags as string[]).map(t => ({ type: 'tag', name: t }));
+    const body = {
+      queryString: JSON.stringify(tagQueryItems),
+      limit,
+      page,
+      selectedType: query.selectedType ?? 'all',
+      selectedLanguage: query.selectedLanguage ?? 'all',
+      selectedPlatform: query.selectedPlatform ?? 'all',
+      sortField: query.sortField ?? 'resource_update_time',
+      sortOrder: query.sortOrder ?? 'desc',
+      selectedYears: ['all'], // Default for simplicity, can be expanded
+      selectedMonths: ['all'],
+      searchOption: {
+        searchInIntroduction: true,
+        searchInAlias: true,
+        searchInTag: true,
+      },
+    };
+
+    const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
+    const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
+
+    try {
+      const response = await API_CLIENT.post('/search', body, {
+        headers: { 'Cookie': cookieString }
+      });
+      log.info('[API] /search (POST) success, items:', response.data?.galgames?.length);
+      const normalized = normalizeFeedResponse(ensureValidResponse(response.data));
+      normalized.list.forEach(upsertGame);
+      return normalized;
+    } catch (err: any) {
+      log.error('[API] /search error:', err.response?.data || err.message);
+      throw err;
+    }
+  }
+
+  // Otherwise use the standard /galgame (GET) endpoint
   // Advanced Year Logic Translation (Intersection of all constraints)
   let yearArray: string[] = ['all'];
   if (query.yearConstraints && query.yearConstraints.length > 0) {
     const currentYear = new Date().getFullYear();
     const startYear = 1995;
     const endYear = currentYear + 2;
-    
+
     // Generate full range
     let years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
-    
+
     // Apply every constraint
-    for (const c of query.yearConstraints as Array<{op: string, val: number}>) {
+    for (const c of query.yearConstraints as Array<{ op: string, val: number }>) {
       if (c.op === '=') years = years.filter(y => y === c.val);
       else if (c.op === '>=') years = years.filter(y => y >= c.val);
       else if (c.op === '<=') years = years.filter(y => y <= c.val);
       else if (c.op === '>') years = years.filter(y => y > c.val);
       else if (c.op === '<') years = years.filter(y => y < c.val);
     }
-    
+
     yearArray = years.map(String);
     if (yearArray.length === 0) yearArray = ['none']; // Ensure it doesn't default back to 'all'
   }
@@ -420,17 +463,24 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
 
   const nsfwValue = query.nsfwMode === 'nsfw' ? 'nsfw' : (query.nsfwMode === 'all' ? 'all' : 'sfw');
   const cookieString = `${currentCookie ? currentCookie + '; ' : ''}kun-patch-setting-store|state|data|kunNsfwEnable=${nsfwValue}`;
-  
-  const response = await API_CLIENT.get('/galgame', {
-    params: apiParams,
-    headers: { 'Cookie': cookieString }
-  })
-  const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
-  
-  // Delta Sync: Upsert to local DB
-  normalized.list.forEach(upsertGame)
-  
-  return normalized
+
+  log.info('[API] GET /galgame params:', apiParams);
+  try {
+    const response = await API_CLIENT.get('/galgame', {
+      params: apiParams,
+      headers: { 'Cookie': cookieString }
+    })
+    log.info('[API] GET /galgame success, items:', response.data?.galgames?.length);
+    const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
+
+    // Delta Sync: Upsert to local DB
+    normalized.list.forEach(upsertGame)
+
+    return normalized
+  } catch (err: any) {
+    log.error('[API] GET /galgame error:', err.response?.data || err.message);
+    throw err;
+  }
 })
 
 handleWithLog('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
@@ -459,10 +509,10 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
       API_CLIENT.get('/patch', { params: { uniqueId } }),
       API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
     ])
-    
+
     const detail = normalizeResource(ensureValidResponse(detailResponse.data))
     const intro = normalizeIntroduction(ensureValidResponse(introResponse.data))
-    
+
     let downloads: any[] = []
     try {
       const dlResponse = await API_CLIENT.get('/patch/download', { params: { uniqueId } })
@@ -472,7 +522,7 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
     }
 
     const fullDetail = { ...detail, ...intro, downloads }
-    
+
     // Save to cache
     getDb().prepare('UPDATE games SET detail_json = ?, last_detailed_at = CURRENT_TIMESTAMP WHERE unique_id = ?')
       .run(JSON.stringify(fullDetail), uniqueId)
@@ -543,7 +593,7 @@ handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
 handleWithLog('tg-match-folder', async (_event, folderName: string) => {
   const cleaned = cleanFolderName(folderName)
   const db = getDb()
-  
+
   // Search in FTS5 (matches both main title and aliases)
   const results = db.prepare(`
     SELECT g.* FROM games g

@@ -10,12 +10,15 @@ export const Home: React.FC = () => {
   const { 
     resources, totalResources, currentPage, isLoading, error, 
     fetchResources, selectResource,
-    selectedTags, removeTagFilter, clearTags
+    removeTagFilter, clearTags, advancedFilterDraft,
+    homeMode, activeNsfwDomain, advancedBuildProgress, exitAdvancedMode,
+    updateAdvancedFilterDraft, setActiveNsfwDomain, enterAdvancedMode, applyAdvancedFilters,
+    lastHomeQuery, setLastHomeQuery
   } = useTouchGalStore();
-  const [lastQuery, setLastQuery] = useState<any>({});
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState('resource_update_time');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [isRestoringAdvancedMode, setIsRestoringAdvancedMode] = useState(() => false);
 
   const totalPages = Math.ceil(totalResources / 24);
   const [jumpPage, setJumpPage] = useState(String(currentPage));
@@ -40,14 +43,110 @@ export const Home: React.FC = () => {
     }
   };
 
+  const mapDomain = (value: string) => {
+    if (value === 'nsfw') return 'nsfw';
+    if (value === 'all') return 'all';
+    return 'sfw';
+  };
+
+  const requiresAdvancedMode = (filters: any) =>
+    filters.selectedPlatform !== 'all' ||
+    (filters.yearConstraints?.length ?? 0) > 0 ||
+    (filters.selectedTags?.length ?? 0) > 0;
+
+  const syncDraftFromQuery = (query: any) => {
+    const nextDomain = mapDomain(query.nsfwMode ?? 'safe');
+    setActiveNsfwDomain(nextDomain);
+    updateAdvancedFilterDraft({
+      nsfwMode: nextDomain,
+      selectedPlatform: query.selectedPlatform ?? 'all',
+      yearConstraints: query.yearConstraints ?? [],
+      selectedTags: query.selectedTags ?? [],
+      minRatingCount: query.minRatingCount ?? 0,
+      minRatingScore: query.minRatingScore ?? 0,
+      minCommentCount: query.minCommentCount ?? 0
+    });
+    return nextDomain;
+  };
+
   useEffect(() => {
-    fetchResources(1, { ...lastQuery, sortField, sortOrder });
-  }, [fetchResources, lastQuery, sortField, sortOrder]);
+    if (!lastHomeQuery || Object.keys(lastHomeQuery).length === 0) {
+      return;
+    }
+
+    syncDraftFromQuery(lastHomeQuery);
+
+    if (!requiresAdvancedMode(lastHomeQuery)) {
+      return;
+    }
+
+    setIsRestoringAdvancedMode(true);
+    void enterAdvancedMode(sortField, sortOrder).finally(() => {
+      setIsRestoringAdvancedMode(false);
+    });
+    // restore only once on mount from persisted query
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (homeMode === 'normal' && !isRestoringAdvancedMode) {
+      fetchResources(1, { ...lastHomeQuery, sortField, sortOrder });
+    }
+  }, [fetchResources, homeMode, isRestoringAdvancedMode, lastHomeQuery, sortField, sortOrder]);
+
+  const commitFilterDraft = (filters: any) => {
+    const newQuery = { ...lastHomeQuery, ...filters };
+    const nextDomain = syncDraftFromQuery(newQuery);
+
+    setLastHomeQuery(newQuery);
+
+    return { newQuery, nextDomain };
+  };
 
   const handleFilterChange = (filters: any) => {
-    const newQuery = { ...lastQuery, ...filters };
-    setLastQuery(newQuery);
-    fetchResources(1, { ...newQuery, sortField, sortOrder });
+    const { newQuery } = commitFilterDraft(filters);
+
+    if (!requiresAdvancedMode(newQuery)) {
+      if (homeMode !== 'normal') {
+        exitAdvancedMode();
+      }
+    }
+  };
+
+  const handleAdvancedSubmit = async (filters: any) => {
+    const { newQuery } = commitFilterDraft(filters);
+
+    if (!requiresAdvancedMode(newQuery)) {
+      if (homeMode !== 'normal') {
+        exitAdvancedMode();
+      }
+      fetchResources(1, { ...newQuery, sortField, sortOrder });
+      setShowFilters(false);
+      return;
+    }
+
+    await enterAdvancedMode(sortField, sortOrder);
+    setShowFilters(false);
+  };
+
+  const applyFiltersFromCurrentDraft = async (overrides: any) => {
+    const merged = {
+      nsfwMode:
+        overrides.nsfwMode ??
+        (advancedFilterDraft.nsfwMode === 'nsfw'
+          ? 'nsfw'
+          : advancedFilterDraft.nsfwMode === 'all'
+            ? 'all'
+            : 'safe'),
+      selectedPlatform: overrides.selectedPlatform ?? advancedFilterDraft.selectedPlatform,
+      yearConstraints: overrides.yearConstraints ?? advancedFilterDraft.yearConstraints,
+      selectedTags: overrides.selectedTags ?? advancedFilterDraft.selectedTags,
+      minRatingCount: overrides.minRatingCount ?? advancedFilterDraft.minRatingCount,
+      minRatingScore: overrides.minRatingScore ?? advancedFilterDraft.minRatingScore,
+      minCommentCount: overrides.minCommentCount ?? advancedFilterDraft.minCommentCount
+    };
+
+    await handleAdvancedSubmit(merged);
   };
 
   const sortOptions = [
@@ -62,19 +161,27 @@ export const Home: React.FC = () => {
   const updateSort = (field: string, order: string) => {
     setSortField(field);
     setSortOrder(order);
-    fetchResources(1, { ...lastQuery, sortField: field, sortOrder: order });
+    if (homeMode === 'normal') {
+      fetchResources(1, { ...lastHomeQuery, sortField: field, sortOrder: order });
+      return;
+    }
+    applyAdvancedFilters(1, field, order);
   };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
-    fetchResources(page, { ...lastQuery, sortField, sortOrder });
+    if (homeMode === 'normal') {
+      fetchResources(page, { ...lastHomeQuery, sortField, sortOrder });
+      return;
+    }
+    applyAdvancedFilters(page, sortField, sortOrder);
   };
 
   if (error) {
     return (
       <div className="error-container">
         <p>{error}</p>
-        <button onClick={() => fetchResources(1, lastQuery)}>Retry</button>
+        <button onClick={() => fetchResources(1, lastHomeQuery)}>Retry</button>
       </div>
     );
   }
@@ -113,14 +220,38 @@ export const Home: React.FC = () => {
         </div>
       </div>
 
-      {selectedTags.length > 0 && (
+      {homeMode !== 'normal' && (
+        <div className="flex items-center justify-between gap-4 px-4 py-3 mb-2 rounded-3xl border border-amber-200 bg-amber-50 text-amber-900 shadow-sm">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-black uppercase tracking-wide">
+              {homeMode === 'advanced_building' ? '高级筛选构建中' : '高级筛选已就绪'}
+            </span>
+            <span className="text-sm font-semibold">
+              当前数据域: {activeNsfwDomain.toUpperCase()} · {advancedBuildProgress.message || '本地高级筛选数据已切换为独立模式'}
+            </span>
+          </div>
+          <button
+            className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
+            onClick={exitAdvancedMode}
+          >
+            退出高级模式
+          </button>
+        </div>
+      )}
+
+      {advancedFilterDraft.selectedTags.length > 0 && (
         <div className="flex items-center gap-3 px-2 py-1 mb-2 overflow-x-auto scrollbar-hide">
           <div className="flex gap-2">
-            {selectedTags.map(tag => (
+            {advancedFilterDraft.selectedTags.map(tag => (
               <div key={tag} className="flex items-center gap-2 px-3.5 py-1.5 bg-primary-container border border-primary/20 rounded-full font-bold text-[13px] text-on-primary-container shadow-xs animate-in zoom-in-95">
                 <span>{tag}</span>
                 <button 
-                  onClick={() => removeTagFilter(tag)}
+                  onClick={() => {
+                    removeTagFilter(tag);
+                    void applyFiltersFromCurrentDraft({
+                      selectedTags: advancedFilterDraft.selectedTags.filter((currentTag) => currentTag !== tag)
+                    });
+                  }}
                   className="bg-transparent border-none text-on-primary-container cursor-pointer flex items-center justify-center p-0 hover:text-error"
                 >
                   <X size={14} />
@@ -128,13 +259,22 @@ export const Home: React.FC = () => {
               </div>
             ))}
           </div>
-          <button onClick={clearTags} className="text-[13px] color-on-surface-variant font-bold bg-none border-none cursor-pointer underline whitespace-nowrap hover:text-primary">清空标签</button>
+          <button
+            onClick={() => {
+              clearTags();
+              void applyFiltersFromCurrentDraft({ selectedTags: [] });
+            }}
+            className="text-[13px] color-on-surface-variant font-bold bg-none border-none cursor-pointer underline whitespace-nowrap hover:text-primary"
+          >
+            清空标签
+          </button>
         </div>
       )}
 
       {showFilters && (
         <FilterBar 
           onFilterChange={handleFilterChange} 
+          onSubmit={handleAdvancedSubmit}
           isLoading={isLoading} 
         />
       )}

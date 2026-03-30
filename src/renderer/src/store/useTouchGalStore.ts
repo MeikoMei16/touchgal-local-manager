@@ -1,6 +1,215 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { TouchGalResource, TouchGalDetail } from '../types';
 import { TouchGalClient } from '../data/TouchGalClient';
+
+export type HomeMode = 'normal' | 'advanced_building' | 'advanced_ready';
+export type NsfwDomain = 'sfw' | 'nsfw' | 'all';
+
+export interface AdvancedFilterDraft {
+  nsfwMode: NsfwDomain;
+  selectedPlatform: string;
+  yearConstraints: Array<{ op: string; val: number }>;
+  minRatingCount: number;
+  minRatingScore: number;
+  minCommentCount: number;
+  selectedTags: string[];
+}
+
+export interface AdvancedBuildProgress {
+  stage: 'idle' | 'catalog' | 'enrichment' | 'ready' | 'error';
+  completed: number;
+  total: number;
+  message: string;
+}
+
+export interface AdvancedDatasetCache {
+  resources: AdvancedResourceRecord[];
+  total: number;
+  hydratedTagIds: string[];
+  failedTagIds: string[];
+  lastBuiltAt: number | null;
+}
+
+export interface AdvancedResourceRecord extends TouchGalResource {
+  fullTags: string[];
+  normalizedYear: number | null;
+  tagsHydrated: boolean;
+}
+
+const defaultAdvancedFilterDraft = (): AdvancedFilterDraft => ({
+  nsfwMode: 'sfw',
+  selectedPlatform: 'all',
+  yearConstraints: [],
+  minRatingCount: 0,
+  minRatingScore: 0,
+  minCommentCount: 0,
+  selectedTags: []
+});
+
+const defaultBuildProgress = (): AdvancedBuildProgress => ({
+  stage: 'idle',
+  completed: 0,
+  total: 0,
+  message: ''
+});
+
+const ADVANCED_PAGE_SIZE = 24;
+const ADVANCED_CATALOG_CONCURRENCY = 4;
+const ADVANCED_TAG_CONCURRENCY = 6;
+
+const uniqueById = <T extends { uniqueId: string }>(items: T[]): T[] => {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    if (!item.uniqueId || seen.has(item.uniqueId)) continue;
+    seen.add(item.uniqueId);
+    result.push(item);
+  }
+  return result;
+};
+
+const normalizeYear = (resource: TouchGalResource): number | null => {
+  const rawDate =
+    resource.releasedDate ||
+    ((resource as any).released as string | undefined) ||
+    ((resource as any).created as string | undefined) ||
+    null;
+
+  if (!rawDate) return null;
+
+  const directMatch = String(rawDate).match(/\b(19|20)\d{2}\b/);
+  if (directMatch) return Number(directMatch[0]);
+
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.getFullYear();
+};
+
+const toAdvancedResourceRecord = (resource: TouchGalResource): AdvancedResourceRecord => ({
+  ...resource,
+  fullTags: Array.isArray(resource.tags) ? resource.tags : [],
+  normalizedYear: normalizeYear(resource),
+  tagsHydrated: false
+});
+
+const compareConstraint = (year: number, op: string, value: number): boolean => {
+  if (op === '=') return year === value;
+  if (op === '>=') return year >= value;
+  if (op === '<=') return year <= value;
+  if (op === '>') return year > value;
+  if (op === '<') return year < value;
+  return true;
+};
+
+const applyAdvancedPredicate = (
+  resources: AdvancedResourceRecord[],
+  draft: AdvancedFilterDraft
+): AdvancedResourceRecord[] =>
+  resources.filter((resource) => {
+    if (draft.selectedPlatform !== 'all') {
+      const platforms = Array.isArray((resource as any).platform)
+        ? ((resource as any).platform as string[])
+        : String((resource as any).platform || '')
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+      if (!platforms.includes(draft.selectedPlatform)) {
+        return false;
+      }
+    }
+
+    if (draft.yearConstraints.length > 0) {
+      if (resource.normalizedYear == null) {
+        return false;
+      }
+      const matchesAllYears = draft.yearConstraints.every((constraint) =>
+        compareConstraint(resource.normalizedYear as number, constraint.op, constraint.val)
+      );
+      if (!matchesAllYears) {
+        return false;
+      }
+    }
+
+    if (draft.selectedTags.length > 0) {
+      if (!resource.tagsHydrated) {
+        return false;
+      }
+      const tagSet = new Set(resource.fullTags);
+      const matchesAllTags = draft.selectedTags.every((tag) => tagSet.has(tag));
+      if (!matchesAllTags) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+const getSortableValue = (resource: AdvancedResourceRecord, sortField: string, originalIndex: number) => {
+  if (sortField === 'rating') return resource.averageRating || 0;
+  if (sortField === 'view' || sortField === 'visit') return resource.viewCount || (resource as any).view || 0;
+  if (sortField === 'download') return resource.downloadCount || (resource as any).download || 0;
+  if (sortField === 'favorite') return resource.favoriteCount || 0;
+  if (sortField === 'created') {
+    const created = (resource as any).created ? new Date((resource as any).created).getTime() : 0;
+    return Number.isNaN(created) ? 0 : created;
+  }
+  return originalIndex;
+};
+
+const sortAdvancedResources = (
+  resources: AdvancedResourceRecord[],
+  sortField: string,
+  sortOrder: string
+): AdvancedResourceRecord[] => {
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  return [...resources].sort((left, right) => {
+    const leftIndex = (left as any).__catalogIndex ?? 0;
+    const rightIndex = (right as any).__catalogIndex ?? 0;
+    const leftValue = getSortableValue(left, sortField, leftIndex);
+    const rightValue = getSortableValue(right, sortField, rightIndex);
+
+    if (leftValue === rightValue) {
+      return leftIndex - rightIndex;
+    }
+
+    if (leftValue > rightValue) return direction;
+    return -direction;
+  });
+};
+
+const paginateAdvancedResources = (
+  resources: AdvancedResourceRecord[],
+  page: number
+): AdvancedResourceRecord[] => {
+  const start = (page - 1) * ADVANCED_PAGE_SIZE;
+  return resources.slice(start, start + ADVANCED_PAGE_SIZE);
+};
+
+const createSessionId = () =>
+  `adv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+async function runBounded<TInput, TOutput>(
+  items: TInput[],
+  limit: number,
+  worker: (item: TInput, index: number) => Promise<TOutput>
+): Promise<TOutput[]> {
+  if (items.length === 0) return [];
+
+  const results = new Array<TOutput>(items.length);
+  let cursor = 0;
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const currentIndex = cursor++;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(runners);
+  return results;
+}
 
 interface TouchGalState {
   resources: TouchGalResource[];
@@ -21,6 +230,14 @@ interface TouchGalState {
   userCollections: any[];
   patchComments: any[];
   patchRatings: any[];
+  homeMode: HomeMode;
+  activeNsfwDomain: NsfwDomain;
+  advancedFilterDraft: AdvancedFilterDraft;
+  advancedBuildSessionId: string | null;
+  advancedBuildProgress: AdvancedBuildProgress;
+  advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
+  advancedEnrichmentFailuresByDomain: Record<NsfwDomain, string[]>;
+  lastHomeQuery: Record<string, any>;
 
   fetchResources: (page?: number, query?: Record<string, unknown>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: Record<string, any>) => Promise<void>;
@@ -36,6 +253,19 @@ interface TouchGalState {
   addTagFilter: (tag: string) => void;
   removeTagFilter: (tag: string) => void;
   clearTags: () => void;
+  setHomeMode: (mode: HomeMode) => void;
+  setActiveNsfwDomain: (domain: NsfwDomain) => void;
+  updateAdvancedFilterDraft: (patch: Partial<AdvancedFilterDraft>) => void;
+  resetAdvancedFilterDraft: () => void;
+  startAdvancedBuildSession: (sessionId: string, domain: NsfwDomain, progress?: Partial<AdvancedBuildProgress>) => void;
+  updateAdvancedBuildProgress: (progress: Partial<AdvancedBuildProgress>) => void;
+  completeAdvancedBuildSession: (domain: NsfwDomain, cache: Partial<AdvancedDatasetCache>) => void;
+  reportAdvancedEnrichmentFailure: (domain: NsfwDomain, uniqueId: string) => void;
+  failAdvancedBuildSession: (message: string) => void;
+  exitAdvancedMode: () => void;
+  enterAdvancedMode: (sortField: string, sortOrder: string) => Promise<void>;
+  applyAdvancedFilters: (page?: number, sortField?: string, sortOrder?: string) => void;
+  setLastHomeQuery: (query: Record<string, any>) => void;
 }
 
 // Simple logger middleware
@@ -68,7 +298,8 @@ const savedUser = localStorage.getItem('tg_user');
 const initialUser = savedUser ? JSON.parse(savedUser) : null;
 
 export const useTouchGalStore = create<TouchGalState>()(
-  logMiddleware((set, get) => ({
+  persist(
+  logMiddleware<TouchGalState>((set, get) => ({
     resources: [],
     totalResources: 0,
     currentPage: 1,
@@ -87,6 +318,22 @@ export const useTouchGalStore = create<TouchGalState>()(
     userCollections: [],
     patchComments: [],
     patchRatings: [],
+    homeMode: 'normal',
+    activeNsfwDomain: 'sfw',
+    advancedFilterDraft: defaultAdvancedFilterDraft(),
+    advancedBuildSessionId: null,
+    advancedBuildProgress: defaultBuildProgress(),
+    advancedDatasetsByDomain: {
+      sfw: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null },
+      nsfw: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null },
+      all: { resources: [], total: 0, hydratedTagIds: [], failedTagIds: [], lastBuiltAt: null }
+    },
+    advancedEnrichmentFailuresByDomain: {
+      sfw: [],
+      nsfw: [],
+      all: []
+    },
+    lastHomeQuery: {},
 
     fetchResources: async (page = 1, query = {}) => {
       set({ isLoading: true, error: null });
@@ -225,13 +472,340 @@ export const useTouchGalStore = create<TouchGalState>()(
     localStorage.removeItem('tg_user');
   },
   setIsLoginOpen: (isOpen: boolean) => set({ isLoginOpen: isOpen }),
-  addTagFilter: (tag: string) => set((state: TouchGalState) => ({
-    selectedTags: state.selectedTags.includes(tag) ? state.selectedTags : [...state.selectedTags, tag]
+  addTagFilter: (tag: string) => set((state: TouchGalState) => {
+    const nextTags = state.selectedTags.includes(tag) ? state.selectedTags : [...state.selectedTags, tag];
+    return {
+      selectedTags: nextTags,
+      advancedFilterDraft: {
+        ...state.advancedFilterDraft,
+        selectedTags: nextTags
+      }
+    };
+  }),
+  removeTagFilter: (tag: string) => set((state: TouchGalState) => {
+    const nextTags = state.selectedTags.filter((t: string) => t !== tag);
+    return {
+      selectedTags: nextTags,
+      advancedFilterDraft: {
+        ...state.advancedFilterDraft,
+        selectedTags: nextTags
+      }
+    };
+  }),
+  clearTags: () => set((state: TouchGalState) => ({
+    selectedTags: [],
+    advancedFilterDraft: {
+      ...state.advancedFilterDraft,
+      selectedTags: []
+    }
   })),
-  removeTagFilter: (tag: string) => set((state: TouchGalState) => ({
-    selectedTags: state.selectedTags.filter((t: string) => t !== tag)
-  })),
-  clearTags: () => set({ selectedTags: [] }),
+  setHomeMode: (mode: HomeMode) => set({ homeMode: mode }),
+  setActiveNsfwDomain: (domain: NsfwDomain) =>
+    set((state: TouchGalState) => {
+      const nextDraft = {
+        ...state.advancedFilterDraft,
+        nsfwMode: domain
+      };
+      return {
+        activeNsfwDomain: domain,
+        advancedFilterDraft: nextDraft
+      };
+    }),
+  updateAdvancedFilterDraft: (patch: Partial<AdvancedFilterDraft>) =>
+    set((state: TouchGalState) => {
+      const nextDraft = {
+        ...state.advancedFilterDraft,
+        ...patch
+      };
+      return {
+        advancedFilterDraft: nextDraft,
+        ...(patch.selectedTags
+          ? {
+              selectedTags: patch.selectedTags
+            }
+          : {})
+      };
+    }),
+  resetAdvancedFilterDraft: () =>
+    set((state: TouchGalState) => {
+      const nextDraft = {
+        ...defaultAdvancedFilterDraft(),
+        nsfwMode: state.activeNsfwDomain
+      };
+      return {
+        advancedFilterDraft: nextDraft
+      };
+    }),
+  setLastHomeQuery: (query: Record<string, any>) => set({ lastHomeQuery: query }),
+  startAdvancedBuildSession: (
+    sessionId: string,
+    domain: NsfwDomain,
+    progress: Partial<AdvancedBuildProgress> = {}
+  ) =>
+    set({
+      homeMode: 'advanced_building',
+      activeNsfwDomain: domain,
+      advancedBuildSessionId: sessionId,
+      advancedBuildProgress: {
+        ...defaultBuildProgress(),
+        stage: 'catalog',
+        message: 'Preparing advanced filter dataset...',
+        ...progress
+      },
+      error: null
+    }),
+  updateAdvancedBuildProgress: (progress: Partial<AdvancedBuildProgress>) =>
+    set((state: TouchGalState) => ({
+      advancedBuildProgress: {
+        ...state.advancedBuildProgress,
+        ...progress
+      }
+    })),
+  completeAdvancedBuildSession: (domain: NsfwDomain, cache: Partial<AdvancedDatasetCache>) =>
+    set((state: TouchGalState) => ({
+      homeMode: 'advanced_ready',
+      activeNsfwDomain: domain,
+      advancedBuildSessionId: null,
+      advancedBuildProgress: {
+        stage: 'ready',
+        completed: cache.resources?.length ?? state.advancedBuildProgress.completed,
+        total: cache.total ?? state.advancedBuildProgress.total,
+        message: 'Advanced filter dataset ready.'
+      },
+      advancedDatasetsByDomain: {
+        ...state.advancedDatasetsByDomain,
+        [domain]: {
+          ...state.advancedDatasetsByDomain[domain],
+          ...cache,
+          lastBuiltAt: Date.now()
+        }
+      }
+    })),
+  reportAdvancedEnrichmentFailure: (domain: NsfwDomain, uniqueId: string) =>
+    set((state: TouchGalState) => ({
+      advancedEnrichmentFailuresByDomain: {
+        ...state.advancedEnrichmentFailuresByDomain,
+        [domain]: state.advancedEnrichmentFailuresByDomain[domain].includes(uniqueId)
+          ? state.advancedEnrichmentFailuresByDomain[domain]
+          : [...state.advancedEnrichmentFailuresByDomain[domain], uniqueId]
+      },
+      advancedDatasetsByDomain: {
+        ...state.advancedDatasetsByDomain,
+        [domain]: {
+          ...state.advancedDatasetsByDomain[domain],
+          failedTagIds: state.advancedDatasetsByDomain[domain].failedTagIds.includes(uniqueId)
+            ? state.advancedDatasetsByDomain[domain].failedTagIds
+            : [...state.advancedDatasetsByDomain[domain].failedTagIds, uniqueId]
+        }
+      }
+    })),
+  failAdvancedBuildSession: (message: string) =>
+    set({
+      homeMode: 'normal',
+      advancedBuildSessionId: null,
+      advancedBuildProgress: {
+        stage: 'error',
+        completed: 0,
+        total: 0,
+        message
+      },
+      error: message
+    }),
+  exitAdvancedMode: () =>
+    set({
+      homeMode: 'normal',
+      advancedBuildSessionId: null,
+      advancedBuildProgress: defaultBuildProgress()
+    }),
+  applyAdvancedFilters: (page = 1, sortField = 'resource_update_time', sortOrder = 'desc') => {
+    const state = get();
+    const domain = state.activeNsfwDomain;
+    const dataset = state.advancedDatasetsByDomain[domain];
+    const filtered = applyAdvancedPredicate(dataset.resources, state.advancedFilterDraft);
+    const sorted = sortAdvancedResources(filtered, sortField, sortOrder);
+    const paged = paginateAdvancedResources(sorted, page);
+
+    set({
+      resources: paged,
+      totalResources: sorted.length,
+      currentPage: page,
+      homeMode: dataset.resources.length > 0 ? 'advanced_ready' : state.homeMode
+    });
+  },
+  enterAdvancedMode: async (sortField = 'resource_update_time', sortOrder = 'desc') => {
+    const initialState = get();
+    const domain: NsfwDomain = initialState.advancedFilterDraft.nsfwMode;
+    const sessionId = createSessionId();
+
+    initialState.startAdvancedBuildSession(sessionId, domain, {
+      stage: 'catalog',
+      completed: 0,
+      total: 0,
+      message: 'Loading full homepage catalog...'
+    });
+
+    try {
+      const baseQuery = {
+        nsfwMode: domain === 'nsfw' ? 'nsfw' : domain === 'all' ? 'all' : 'safe',
+        selectedPlatform: 'all',
+        sortField,
+        sortOrder
+      };
+
+      const firstPage = await TouchGalClient.fetchGalgameResources(1, ADVANCED_PAGE_SIZE, baseQuery);
+      if (get().advancedBuildSessionId !== sessionId) {
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(firstPage.total / ADVANCED_PAGE_SIZE));
+      const remainingPages = Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => index + 2);
+      let completedPages = 1;
+
+      get().updateAdvancedBuildProgress({
+        stage: 'catalog',
+        completed: completedPages,
+        total: totalPages,
+        message: `Loading full homepage catalog... ${completedPages}/${totalPages}`
+      });
+
+      const remainingResults = await runBounded(
+        remainingPages,
+        ADVANCED_CATALOG_CONCURRENCY,
+        async (pageNumber) => {
+          const response = await TouchGalClient.fetchGalgameResources(pageNumber, ADVANCED_PAGE_SIZE, baseQuery);
+          completedPages += 1;
+          if (get().advancedBuildSessionId === sessionId) {
+            get().updateAdvancedBuildProgress({
+              stage: 'catalog',
+              completed: completedPages,
+              total: totalPages,
+              message: `Loading full homepage catalog... ${completedPages}/${totalPages}`
+            });
+          }
+          return response.list;
+        }
+      );
+
+      if (get().advancedBuildSessionId !== sessionId) {
+        return;
+      }
+
+      const mergedCatalog = uniqueById([
+        ...firstPage.list,
+        ...remainingResults.flat()
+      ]).map((resource, index) => ({
+        ...toAdvancedResourceRecord(resource),
+        __catalogIndex: index
+      }));
+
+      set((state: TouchGalState) => ({
+        homeMode: 'advanced_ready',
+        activeNsfwDomain: domain,
+        advancedDatasetsByDomain: {
+          ...state.advancedDatasetsByDomain,
+          [domain]: {
+            resources: mergedCatalog,
+            total: mergedCatalog.length,
+            hydratedTagIds: [],
+            failedTagIds: [],
+            lastBuiltAt: Date.now()
+          }
+        },
+        advancedEnrichmentFailuresByDomain: {
+          ...state.advancedEnrichmentFailuresByDomain,
+          [domain]: []
+        },
+        advancedBuildProgress: {
+          stage: 'enrichment',
+          completed: 0,
+          total: mergedCatalog.length,
+          message: `Hydrating tags... 0/${mergedCatalog.length}`
+        }
+      }));
+
+      get().applyAdvancedFilters(1, sortField, sortOrder);
+
+      let hydratedCount = 0;
+
+      void runBounded(
+        mergedCatalog,
+        ADVANCED_TAG_CONCURRENCY,
+        async (resource) => {
+          try {
+            const intro = await TouchGalClient.getPatchIntroduction(resource.uniqueId);
+            if (get().advancedBuildSessionId !== sessionId && get().homeMode === 'normal') {
+              return;
+            }
+
+            hydratedCount += 1;
+            set((state: TouchGalState) => {
+              const currentDataset = state.advancedDatasetsByDomain[domain];
+              const nextResources = currentDataset.resources.map((item: AdvancedResourceRecord) =>
+                item.uniqueId === resource.uniqueId
+                  ? {
+                      ...item,
+                      fullTags: intro.tags?.length ? intro.tags : item.fullTags,
+                      releasedDate: intro.releasedDate ?? item.releasedDate,
+                      normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear,
+                      tagsHydrated: true
+                    }
+                  : item
+              );
+
+              const hydratedTagIds = currentDataset.hydratedTagIds.includes(resource.uniqueId)
+                ? currentDataset.hydratedTagIds
+                : [...currentDataset.hydratedTagIds, resource.uniqueId];
+
+              return {
+                advancedDatasetsByDomain: {
+                  ...state.advancedDatasetsByDomain,
+                  [domain]: {
+                    ...currentDataset,
+                    resources: nextResources,
+                    hydratedTagIds
+                  }
+                },
+                advancedBuildProgress: {
+                  stage: hydratedCount >= mergedCatalog.length ? 'ready' : 'enrichment',
+                  completed: hydratedCount,
+                  total: mergedCatalog.length,
+                  message:
+                    hydratedCount >= mergedCatalog.length
+                      ? 'Advanced filter dataset ready.'
+                      : `Hydrating tags... ${hydratedCount}/${mergedCatalog.length}`
+                }
+              };
+            });
+
+            const latestState = get();
+            if (latestState.homeMode !== 'normal') {
+              latestState.applyAdvancedFilters(latestState.currentPage, sortField, sortOrder);
+            }
+          } catch (err) {
+            hydratedCount += 1;
+            get().reportAdvancedEnrichmentFailure(domain, resource.uniqueId);
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn('[Advanced Filter] Failed to hydrate tags for', resource.uniqueId, err);
+            }
+            if (get().homeMode !== 'normal') {
+              get().updateAdvancedBuildProgress({
+                stage: hydratedCount >= mergedCatalog.length ? 'ready' : 'enrichment',
+                completed: hydratedCount,
+                total: mergedCatalog.length,
+                message:
+                  hydratedCount >= mergedCatalog.length
+                    ? 'Advanced filter dataset ready with partial tag failures.'
+                    : `Hydrating tags... ${hydratedCount}/${mergedCatalog.length}`
+              });
+            }
+          }
+        }
+      );
+    } catch (err: any) {
+      console.error('[Store] Advanced Mode Build Error:', err);
+      get().failAdvancedBuildSession(err.message || 'Failed to build advanced filter dataset');
+    }
+  },
 
   fetchUserProfile: async () => {
     set({ isLoading: true });
@@ -284,4 +858,39 @@ export const useTouchGalStore = create<TouchGalState>()(
       set({ error: err.message, isLoading: false });
     }
   }
-})));
+} as TouchGalState)),
+  {
+    name: 'touchgal-home-viewmodel',
+    storage: createJSONStorage(() => localStorage),
+    partialize: (state) => ({
+      advancedFilterDraft: state.advancedFilterDraft,
+      selectedTags: state.selectedTags,
+      activeNsfwDomain: state.activeNsfwDomain,
+      lastHomeQuery: state.lastHomeQuery
+    }),
+    merge: (persistedState, currentState): TouchGalState => {
+      const persisted = (persistedState as Partial<TouchGalState>) ?? {};
+      const mergedDraft = {
+        ...defaultAdvancedFilterDraft(),
+        ...(persisted.advancedFilterDraft ?? {}),
+        yearConstraints: Array.isArray(persisted.advancedFilterDraft?.yearConstraints)
+          ? persisted.advancedFilterDraft?.yearConstraints
+          : [],
+        selectedTags: Array.isArray(persisted.advancedFilterDraft?.selectedTags)
+          ? persisted.advancedFilterDraft?.selectedTags
+          : []
+      };
+
+      return {
+        ...currentState,
+        ...persisted,
+        advancedFilterDraft: mergedDraft,
+        selectedTags: Array.isArray(persisted.selectedTags)
+          ? persisted.selectedTags
+          : mergedDraft.selectedTags,
+        activeNsfwDomain: persisted.activeNsfwDomain ?? mergedDraft.nsfwMode,
+        lastHomeQuery: persisted.lastHomeQuery ?? {}
+      };
+    }
+  })
+);
