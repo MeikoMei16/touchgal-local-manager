@@ -5,6 +5,60 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 
+// Tag library with usage counts sourced from TouchGal
+const TAG_LIBRARY: { name: string; count: number }[] = [
+  { name: '冒险游戏（ADV）', count: 7258 }, { name: '男性主人公', count: 6570 },
+  { name: 'ADV', count: 5734 }, { name: 'Galgame', count: 5383 },
+  { name: 'PC', count: 4665 }, { name: 'GAL', count: 3257 },
+  { name: '大胸女主角', count: 3284 }, { name: '多分支结局', count: 2855 },
+  { name: '高中生女主角', count: 2798 }, { name: 'galgame', count: 2704 },
+  { name: '纯爱', count: 2273 }, { name: '巨乳/爆乳', count: 2346 },
+  { name: 'AVG', count: 2471 }, { name: '游戏', count: 2439 },
+  { name: '主人公露过正脸', count: 2069 }, { name: '全处女主角', count: 1873 },
+  { name: 'R18', count: 1931 }, { name: '学生女主角', count: 1857 },
+  { name: '拔作', count: 1846 }, { name: '恋爱', count: 1828 },
+  { name: '裸体立绘', count: 1735 }, { name: '内射/中出', count: 1462 },
+  { name: '黄油', count: 1610 }, { name: '奇幻', count: 1680 },
+  { name: '双马尾女主角', count: 1393 }, { name: '主人公的幼驯染女主角', count: 1420 },
+  { name: '喜剧', count: 1396 }, { name: '其他人视角', count: 1354 },
+  { name: '单女主角', count: 1301 }, { name: '成人女主角', count: 1296 },
+  { name: '萝莉女主角', count: 1284 }, { name: '眼镜娘女主角', count: 1165 },
+  { name: '巨乳', count: 1159 }, { name: '同居', count: 1115 },
+  { name: '羞辱', count: 1078 }, { name: '萝', count: 1049 },
+  { name: '后宫', count: 1042 }, { name: '有过性经验的女主角', count: 1009 },
+  { name: '学校/学园', count: 1009 }, { name: '制服', count: 1025 },
+  { name: '动漫', count: 995 }, { name: '高中', count: 975 },
+  { name: '分支剧情', count: 969 }, { name: '成人主人公', count: 954 },
+  { name: '学生主人公', count: 947 }, { name: '高中生主人公', count: 906 },
+  { name: '怀孕', count: 890 }, { name: '女性主人公', count: 873 },
+  { name: '悬疑', count: 860 }, { name: 'STEAM', count: 841 },
+  { name: '处女', count: 834 }, { name: '单人', count: 827 },
+  { name: '视觉小说', count: 828 }, { name: '主人公可命名', count: 824 },
+  { name: '同人', count: 826 }, { name: '妹', count: 824 },
+  { name: '坏结局', count: 797 }, { name: '大小姐女主角', count: 815 },
+  { name: '傲娇女主角', count: 809 }, { name: '有绝对领域的女主角', count: 787 },
+  { name: 'RPG', count: 792 }, { name: '口交', count: 778 },
+  { name: '教师女主角', count: 740 }, { name: '选项少', count: 736 },
+  { name: '马尾女主角', count: 732 }, { name: '萝莉', count: 733 },
+  { name: '沉迷于性的女主角', count: 730 }, { name: '色情内容', count: 728 },
+  { name: 'SLG', count: 724 }, { name: '着衣/穿衣', count: 721 },
+  { name: '含有 SD CG', count: 713 }, { name: '文本框旁副立绘', count: 712 },
+  { name: '贫乳女主角(非萝莉)', count: 714 }, { name: '巨乳女主角', count: 709 },
+  { name: '亲吻场景', count: 703 }, { name: '多P/乱交', count: 694 },
+  { name: '现代日本', count: 677 }, { name: '有配音的主人公', count: 676 },
+  { name: '异种X', count: 682 }, { name: '无色情内容', count: 672 },
+  { name: 'NTR', count: 667 }, { name: '触手', count: 661 },
+  { name: '娇羞女主角', count: 659 }, { name: '已婚女主角', count: 640 },
+  { name: '废萌', count: 642 }, { name: '全年龄', count: 648 },
+  { name: '后宫结局', count: 647 }, { name: '冒险', count: 640 },
+  { name: '视觉小说(无选项)', count: 640 }, { name: '裸露', count: 631 },
+  { name: '地图移动', count: 605 }, { name: '主人公的妹妹女主角', count: 612 },
+  { name: '乳交', count: 599 }, { name: '假小子女主角', count: 594 },
+  { name: '休闲', count: 592 }, { name: '音乐欣赏', count: 585 },
+  { name: '汉化', count: 579 }, { name: '主人公的学妹/后辈女主角', count: 577 },
+  { name: '兄控女主角', count: 572 },
+];
+
 interface FilterBarProps {
   onFilterChange: (filters: any) => void;
   onSubmit?: (filters: any) => void;
@@ -27,17 +81,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   const [yearConstraints, setYearConstraints] = useState<Array<{op: string, val: number}>>([]);
   
   const [tagSearchInput, setTagSearchInput] = useState('');
-  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
-  const [isSearchingTags, setIsSearchingTags] = useState(false);
+  const [tagSuggestions, setTagSuggestions] = useState<{ name: string; count: number }[]>([]);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
 
-  // Popular tags for quick selection (also fallback while API is wired up)
-  const POPULAR_TAGS = [
-    '萌系', '学园', '恋爱', '奇幻', '日常', '催泪',
-    '冒险', '战斗', '悬疑', '推理', '百合', '乙女',
-    '科幻', '历史', '音乐', '机器人', '吸血鬼', '魔法少女',
-  ];
-  
   // Stats
   const [minRatingCount, setMinRatingCount] = useState(0);
   const [minRatingScore, setMinRatingScore] = useState(0);
@@ -88,6 +134,20 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
     setMinRatingScore(advancedFilterDraft.minRatingScore);
     setMinCommentCount(advancedFilterDraft.minCommentCount);
   }, [advancedFilterDraft]);
+
+  // Tag search — filter TAG_LIBRARY locally, no API call needed
+  useEffect(() => {
+    const q = tagSearchInput.trim().toLowerCase();
+    if (!q) { setTagSuggestions([]); return; }
+    const timer = setTimeout(() => {
+      const matches = TAG_LIBRARY
+        .filter(t => t.name.toLowerCase().includes(q))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 12);
+      setTagSuggestions(matches);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [tagSearchInput]);
 
   // --- Helpers ---
   const emitChange = (overrides: any = {}) => {
@@ -147,40 +207,18 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
     }
   };
 
-  useEffect(() => {
-    const search = async () => {
-      const q = tagSearchInput.trim().toLowerCase();
-      if (!q) {
-        setTagSuggestions([]);
-        return;
-      }
-      setIsSearchingTags(true);
-      let results: string[] = [];
-      try {
-        const apiResults = await (window.api as any).searchTags?.(tagSearchInput);
-        if (apiResults?.length) {
-          results = apiResults.map((t: any) => t.name);
-        }
-      } catch { /* API not yet wired — fall through to local */ }
-      // Always supplement with popular tags matching the query
-      const localMatches = POPULAR_TAGS.filter(t => t.toLowerCase().includes(q) && !results.includes(t));
-      setTagSuggestions([...results, ...localMatches].slice(0, 12));
-      setIsSearchingTags(false);
-    };
-    const timer = setTimeout(search, 200);
-    return () => clearTimeout(timer);
-  }, [tagSearchInput]);
-
   const handleAddTag = (tag: string) => {
+    if (selectedTags.includes(tag)) return;
     addTagFilter(tag);
     setTagSearchInput('');
     setTagSuggestions([]);
-    publishChange({ selectedTags: selectedTags.includes(tag) ? selectedTags : [...selectedTags, tag] });
+    setIsSuggestionsOpen(false);
+    publishChange({ selectedTags: [...selectedTags, tag] });
   };
 
   return (
     <div
-      className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-100/50 mb-8 overflow-hidden"
+      className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-100/50 mb-8 overflow-visible"
       onKeyDown={(event) => {
         const target = event.target as HTMLElement;
         if (event.key !== 'Enter') return;
@@ -315,49 +353,59 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
           </div>
         </div>
 
-        {/* Right Column: Tag Management Area (The 50% whitespace usage) */}
-        <div className="flex flex-col bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200 p-8 min-h-[320px] relative overflow-hidden group">
+        {/* Right Column: Tag Management */}
+        <div className="flex flex-col bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200 p-8 min-h-[320px] relative group">
           
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-blue-600">
-                <Tag size={24} />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">标签检索</h3>
-                <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">Advanced Tag Selection</p>
-              </div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-blue-600">
+              <Tag size={24} />
             </div>
-            
-            <div className={`relative flex items-center gap-2 px-4 py-2.5 bg-white border-2 rounded-2xl transition-all shadow-sm ${tagSearchInput ? 'border-blue-400 ring-4 ring-blue-50 w-full' : 'border-slate-200 w-48 hover:border-slate-400'}`}>
-               <Search size={18} className={`text-slate-400 shrink-0 ${isSearchingTags ? 'animate-spin' : ''}`} />
-               <input 
-                 type="text" 
-                 placeholder="寻找并添加标签..." 
-                 className="bg-transparent border-none outline-none font-bold text-sm text-slate-700 placeholder:text-slate-400 w-full"
-                 value={tagSearchInput}
-                 data-submit-mode="skip"
-                 onChange={e => { setTagSearchInput(e.target.value); setIsSuggestionsOpen(true); }}
-                 onFocus={() => setIsSuggestionsOpen(true)}
-                 onBlur={() => setTimeout(() => setIsSuggestionsOpen(false), 150)}
-               />
-               {isSuggestionsOpen && tagSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-[60] mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 max-h-60 overflow-y-auto animate-in slide-in-from-top-2">
-                     {tagSuggestions.map(tag => (
-                        <div 
-                          key={tag} 
-                          className="px-4 py-3 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between group/tip"
-                          onMouseDown={e => { e.preventDefault(); handleAddTag(tag); }}
-                        >
-                           <span className="font-bold text-slate-600 group-hover/tip:text-blue-700">{tag}</span>
-                           <Plus size={16} className="text-slate-300 group-hover/tip:text-blue-500" />
-                        </div>
-                     ))}
-                  </div>
-               )}
+            <div>
+              <h3 className="text-lg font-black text-slate-800">标签检索</h3>
+              <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">Advanced Tag Selection</p>
             </div>
           </div>
 
+          {/* Search input — full width, outside justify-between to avoid layout conflicts */}
+          <div className="relative mb-5">
+            <div className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl shadow-sm focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-50 transition-all">
+              <Search size={18} className="text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="输入标签名称，如「纯爱」「奇幻」..."
+                className="flex-1 bg-transparent border-none outline-none font-bold text-sm text-slate-700 placeholder:text-slate-400"
+                value={tagSearchInput}
+                data-submit-mode="skip"
+                onChange={e => { setTagSearchInput(e.target.value); setIsSuggestionsOpen(true); }}
+                onFocus={() => setIsSuggestionsOpen(true)}
+                onBlur={() => setTimeout(() => setIsSuggestionsOpen(false), 150)}
+              />
+              {tagSearchInput && (
+                <X size={16} className="text-slate-300 hover:text-slate-500 cursor-pointer shrink-0" onClick={() => { setTagSearchInput(''); setTagSuggestions([]); }} />
+              )}
+            </div>
+
+            {/* Dropdown — positioned relative to the input wrapper, overflow-visible on parent */}
+            {isSuggestionsOpen && tagSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-[100] mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-1.5 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
+                {tagSuggestions.map(tag => (
+                  <div
+                    key={tag.name}
+                    className="px-4 py-2.5 rounded-xl hover:bg-blue-50 cursor-pointer flex items-center justify-between group/tip"
+                    onMouseDown={e => { e.preventDefault(); handleAddTag(tag.name); }}
+                  >
+                    <span className="font-bold text-slate-700 group-hover/tip:text-blue-700">{tag.name}</span>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-[10px] font-bold text-slate-400 group-hover/tip:text-blue-400">{tag.count.toLocaleString()} 个</span>
+                      <Plus size={14} className="text-slate-300 group-hover/tip:text-blue-500" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Selected tags */}
           <div className="flex-1 flex flex-col justify-start">
              {selectedTags.length > 0 ? (
                 <div className="flex flex-wrap content-start gap-3 w-full">
@@ -382,7 +430,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
                    </div>
                    <div className="max-w-[240px]">
                       <p className="text-sm font-extrabold text-slate-500">此区域用于管理您关注的标签内容</p>
-                      <p className="text-xs font-semibold text-slate-400 mt-1">输入上方搜索框开始添加过滤标签...</p>
+                      <p className="text-xs font-semibold text-slate-400 mt-1">在上方搜索框输入标签名称...</p>
                    </div>
                 </div>
              )}
@@ -402,7 +450,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
             const { resetAdvancedFilterDraft, clearTags } = useUIStore.getState();
             resetAdvancedFilterDraft();
             clearTags();
-            // Local state sync
             setNsfwMode('safe');
             setPlatform('all');
             setYearConstraints([]);
