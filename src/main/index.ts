@@ -41,9 +41,19 @@ const normalizeTokenInput = (rawToken: string) => {
 
 const buildAuthCookie = (token: string) => `kun-galgame-patch-moe-token=${token}`
 
-const buildRequestCookie = () => {
+const normalizeNsfwCookieValue = (value: unknown) => {
+  if (value === 'nsfw') return 'nsfw'
+  if (value === 'all') return 'all'
+  return 'sfw'
+}
+
+const buildNsfwCookie = (nsfwMode: unknown) =>
+  `kun-patch-setting-store|state|data|kunNsfwEnable=${normalizeNsfwCookieValue(nsfwMode)}`
+
+const buildRequestCookie = (nsfwMode?: unknown) => {
   const cookies: string[] = []
   if (currentToken) cookies.push(buildAuthCookie(currentToken))
+  cookies.push(buildNsfwCookie(nsfwMode))
   return cookies.join('; ')
 }
 
@@ -578,7 +588,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     minRatingCount: query.minRatingCount ?? 0
   };
 
-  const cookieString = buildRequestCookie();
+  const cookieString = buildRequestCookie(query.nsfwMode);
 
   log.info('[API] GET /galgame params:', apiParams);
   try {
@@ -601,7 +611,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
 
 handleWithLog('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
   const body = { ...buildSearchBody(keyword, page, limit), ...options }
-  const cookieString = buildRequestCookie();
+  const cookieString = buildRequestCookie(options?.nsfwMode);
 
   const response = await API_CLIENT.post('/search', body, {
     headers: cookieString ? { 'Cookie': cookieString } : undefined
