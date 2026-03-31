@@ -57,6 +57,7 @@ Session handling notes:
 - the main process stores the TouchGal token under Electron `userData`
 - token input is normalized before persistence so legacy `Bearer ...`, full cookie strings, and whitespace-polluted values do not poison request headers
 - upstream browse/search requests only attach a `Cookie` header when there is a valid normalized auth cookie to send
+- logout is finalized in the main process by clearing the in-memory token and removing persisted token files through `tg-logout`
 
 ### Preload
 
@@ -108,6 +109,7 @@ Renderer persistence notes:
 
 - homepage UI state is persisted through Zustand in renderer `localStorage`
 - auth UI state is persisted separately from the encrypted token managed by the main process
+- renderer logout must clear both layers: renderer auth state and the main-process token
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
 - hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
 - `uiStore.ts` owns the persistence configuration, but action implementations are delegated to `uiActions/*`
@@ -164,6 +166,13 @@ Login and captcha flow:
 2. Captcha verification failures fetch a fresh captcha and surface a retry error.
 3. Credential failures after a successful captcha solve clear the captcha UI and return the user to the login form with an error, rather than immediately chaining into another captcha prompt.
 4. Successful login clears captcha UI state while token/session handling remains in the main process.
+5. Logout clears the persisted TouchGal token in the main process in addition to resetting renderer auth state.
+
+Profile loading:
+
+1. Renderer resolves the self identity through `getUserStatusSelf()`.
+2. If a usable `uid` or `id` is present, renderer fetches the full profile with `getUserStatus(uid)`.
+3. If self-status resolves without a usable id, profile loading must still settle back to a non-loading state instead of hanging the screen.
 
 Detail loading:
 

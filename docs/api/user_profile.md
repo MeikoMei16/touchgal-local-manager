@@ -20,6 +20,10 @@ Cookie used by upstream:
 
 - `kun-galgame-patch-moe-token=<JWT_TOKEN>`
 
+Session note:
+
+- renderer logout now clears the persisted TouchGal token through the main-process `tg-logout` relay
+
 ## Currently Used Endpoints
 
 ### `GET /user/status/info`
@@ -45,6 +49,11 @@ Purpose:
 Current main-process relay:
 
 - `tg-get-user-status-self`
+
+Renderer behavior:
+
+- the renderer uses this endpoint to resolve the current user id before requesting the full profile payload
+- if the response does not contain a usable `uid` or `id`, profile loading must settle instead of staying in a loading state
 
 ### `GET /user/profile/comment`
 
@@ -122,4 +131,5 @@ The renderer currently consumes these methods:
 ## Notes
 
 - This file is intentionally implementation-focused, not a full upstream API reference.
+- profile summary counts in the renderer prefer `_count.patch_favorite` for favorite-folder totals, with fallback handling for older payload shapes
 - If new user endpoints are added to `window.api`, update this document in the same change.

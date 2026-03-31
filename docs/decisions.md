@@ -22,11 +22,13 @@ Rule:
 - sanitize and normalize persisted auth token input before using it in upstream headers
 - build upstream auth cookies in the main process instead of concatenating raw renderer/user-provided strings
 - do not send a `Cookie` header at all when there is no valid auth cookie to send
+- renderer logout must call back into the main process so the persisted token is actually cleared
 
 Reason:
 
 - prevents invalid header content from poisoning upstream browse/search requests
 - keeps legacy token formats and migrated disk state from breaking the app on startup
+- avoids renderer-only logout that leaves upstream requests authenticated
 
 ## Advanced Filtering
 
@@ -214,6 +216,16 @@ Reason:
 
 - avoids trapping the user in a repeated captcha loop when the real problem is bad credentials
 - matches expected desktop-login behavior more closely
+
+### Profile loading must settle even when self identity is incomplete
+
+Rule:
+
+- if `getUserStatusSelf()` returns without a usable `uid` or `id`, the renderer must still clear profile loading state
+
+Reason:
+
+- prevents the profile screen from getting stuck in a spinner on partial or shape-drifted upstream responses
 
 ## Build / Tooling
 
