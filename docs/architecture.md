@@ -27,7 +27,8 @@ src/preload/
 src/renderer/src/
   components/     UI
   data/           TouchGalClient window.api wrapper
-  store/          Zustand state and advanced-filter pipeline
+  store/          Zustand stores, type boundaries, compatibility bridge, action modules
+  features/       query logic, advanced-filter helpers, detail normalization
   schemas/        Zod schemas
   types/          Shared renderer-side types
 ```
@@ -77,8 +78,14 @@ Owns:
 - advanced-filter orchestration
 - detail overlay lifecycle
 - detail header composition and rating histogram presentation
+- renderer-side feature module composition
 
-Homepage state currently lives in [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts).
+Renderer state implementation is now split:
+
+- [`src/renderer/src/store/authStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/authStore.ts): auth UI state
+- [`src/renderer/src/store/uiStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiStore.ts): UI store assembly and persistence
+- [`src/renderer/src/store/uiActions/`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiActions): browse, detail, and advanced action modules
+- [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts): compatibility bridge only
 
 Key frontend state split:
 
@@ -90,12 +97,20 @@ Key frontend state split:
 - auth modal state: captcha payloads, login errors, and session-expired UI state
 - detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
 
+Renderer code split:
+
+- homepage query rules and controller: [`src/renderer/src/features/home/homeQuery.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/home/homeQuery.ts), [`src/renderer/src/features/home/useHomeQueryController.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/home/useHomeQueryController.ts)
+- advanced-filter pure helpers: [`src/renderer/src/features/home/advancedDataset.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/home/advancedDataset.ts)
+- detail normalization helpers: [`src/renderer/src/features/detail/detailResource.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/detail/detailResource.ts)
+- detail overlay subcomponents: [`src/renderer/src/components/detail/`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/components/detail)
+
 Renderer persistence notes:
 
 - homepage UI state is persisted through Zustand in renderer `localStorage`
 - auth UI state is persisted separately from the encrypted token managed by the main process
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
 - hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
+- `uiStore.ts` owns the persistence configuration, but action implementations are delegated to `uiActions/*`
 
 Important note:
 
@@ -103,6 +118,7 @@ Important note:
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
 - normal homepage refresh should restore sort key, sort order, upstream filters, and current page from persisted state
 - upstream homepage controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) are rendered directly in the homepage top bar, left of `高级筛选`
+- `useTouchGalStore.ts` should be treated as a compatibility layer, not as the place to add new state logic
 
 ## Data Flow
 
@@ -152,11 +168,11 @@ Login and captcha flow:
 Detail loading:
 
 1. Renderer selects a card.
-2. Store opens an immediate detail shell from the selected homepage card when available.
-3. Store fetches the normalized detail payload first.
-4. Store derives the final patch id from the resolved detail payload, then fetches comments and ratings with that id.
+2. UI-store detail actions open an immediate detail shell from the selected homepage card when available.
+3. UI-store detail actions fetch the normalized detail payload first.
+4. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
 5. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
-6. Detail overlay renders normalized merged data.
+6. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
 
 Detail header layout:
 
@@ -164,6 +180,7 @@ Detail header layout:
 - primary game metadata, tags, and actions stay in the left header column
 - the compact `RatingHistogram` widget occupies the spare right-side header space on desktop
 - company/date and aggregate counters render in a dedicated footer strip under the header content
+- info/links/board/evaluation tab bodies are now modularized as separate detail components rather than living inline in `DetailOverlay`
 
 ## Local Persistence
 
@@ -200,6 +217,9 @@ Status note:
 - Detail overlay with introduction, comments, and ratings
 - Guarded detail loading that resolves comments/ratings from the final detail id
 - Modular detail rating histogram component in the header
+- Split renderer stores with compatibility bridge for legacy imports
+- Split UI-store action modules for browse, detail, and advanced pipelines
+- Modular detail overlay composition
 - Advanced filtering with local multi-stage pipeline
 - Basic SQLite bootstrap
 - Basic download queue persistence and link parsing scaffold

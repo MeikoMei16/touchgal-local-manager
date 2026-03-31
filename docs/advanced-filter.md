@@ -75,7 +75,18 @@ That means selected tags are combined with set-containment semantics:
 
 ## Store Model
 
-The main implementation lives in [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts).
+This is now split across dedicated renderer store modules:
+
+- [`src/renderer/src/store/uiStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiStore.ts): UI-store assembly and persistence config
+- [`src/renderer/src/store/uiActions/browseActions.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiActions/browseActions.ts): normal browse actions
+- [`src/renderer/src/store/uiActions/advancedActions.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiActions/advancedActions.ts): advanced pipeline actions
+- [`src/renderer/src/store/uiStoreTypes.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiStoreTypes.ts): shared UI-store boundary types
+
+Compatibility note:
+
+- [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts) is no longer the implementation source of truth
+- it remains as a compatibility bridge that re-exports the split stores for older imports
+- new frontend state work should target `uiStore.ts` / `authStore.ts` and the action modules directly
 
 Key state:
 
@@ -96,6 +107,7 @@ Query model:
 - hydration must complete before normal-mode homepage fetch effects run
 - normal homepage refresh is expected to restore sort key, sort order, upstream filters, and current page
 - `nsfwMode`, `selectedPlatform`, and `minRatingCount` are edited from homepage chrome instead of the advanced panel
+- homepage query control logic is no longer embedded in `Home.tsx`; it lives in `features/home/homeQuery.ts` and `features/home/useHomeQueryController.ts`
 
 Draft model:
 
@@ -133,6 +145,8 @@ Modes:
 - Homepage top bar now splits responsibilities clearly:
   upstream controls live in chrome
   the advanced panel owns only midstream and downstream constraints
+- advanced-mode implementation is now modularized:
+  browse actions, detail actions, and advanced actions are separate modules under `src/renderer/src/store/uiActions/`
 
 ## Caching
 

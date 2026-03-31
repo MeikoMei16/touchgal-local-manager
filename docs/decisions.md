@@ -64,6 +64,19 @@ Do not re-apply Stage 1 fields inside the local predicate.
 
 ## UI / Interaction
 
+### Split store modules are now the source of truth
+
+Rule:
+
+- new renderer state logic should be added to `authStore.ts`, `uiStore.ts`, `uiStoreTypes.ts`, or `uiActions/*`
+- do not treat `useTouchGalStore.ts` as the implementation source of truth anymore
+- `useTouchGalStore.ts` exists only as a compatibility bridge for older imports
+
+Reason:
+
+- the previous single-file store mixed auth, browse, detail loading, and advanced pipeline logic in one place
+- the split store layout reduces coupling and makes future refactors safer
+
 ### Homepage query state is store-owned
 
 Rule:
@@ -78,6 +91,18 @@ Reason:
 - avoids split-brain state between React local state and persisted browse state
 - keeps normal-mode fetches and advanced-mode transitions consistent
 - prevents refresh from silently falling back to page `1` and default sort before persisted state is available
+
+### Homepage query orchestration belongs in feature modules, not page components
+
+Rule:
+
+- homepage query merge rules, advanced-mode decisions, and draft synchronization should live in `features/home/*`
+- `Home.tsx` should remain a page container that composes toolbar, pagination, and result UI
+
+Reason:
+
+- reduces coupling between visible homepage UI and non-trivial query semantics
+- keeps state transitions testable and reusable without page-component churn
 
 ### Upstream homepage filters belong in homepage chrome
 
@@ -109,7 +134,7 @@ Reason:
 Rule:
 
 - merge detail payloads into a normalized `selectedResource` shape before rendering
-- avoid using repeated `as any` field fallbacks inside `DetailOverlay`
+- avoid using repeated `as any` field fallbacks inside detail presentation components
 
 Reason:
 
@@ -127,6 +152,18 @@ Reason:
 
 - isolates chart rendering from the rest of the overlay logic
 - keeps the detail header visually balanced while preserving the main tab content area
+
+### Detail overlay should be a composition root, not a monolith
+
+Rule:
+
+- `DetailOverlay.tsx` should compose dedicated subcomponents for header, tabs, info, links, board, evaluation, and image-viewer concerns
+- do not move large blocks of tab-specific rendering logic back into the overlay container
+
+Reason:
+
+- keeps detail presentation changes localized
+- avoids mixing tab UI, session gating, and content-specific markup in one large component
 
 ### Advanced tag state has one source of truth
 
