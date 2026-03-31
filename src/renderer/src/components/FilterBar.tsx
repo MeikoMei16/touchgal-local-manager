@@ -3,6 +3,7 @@ import {
   ChevronDown, Calendar, Star, MessageSquare, Tag, X, Plus, Search
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
+import { HomeQueryState } from '../features/home/homeState';
 
 // Tag library with usage counts sourced from TouchGal
 const TAG_LIBRARY: { name: string; count: number }[] = [
@@ -59,8 +60,8 @@ const TAG_LIBRARY: { name: string; count: number }[] = [
 ];
 
 interface FilterBarProps {
-  onFilterChange: (filters: any) => void;
-  onSubmit?: (filters: any) => void;
+  onFilterChange: (filters: Partial<HomeQueryState>) => void;
+  onSubmit?: (filters: Partial<HomeQueryState>) => void;
   isLoading?: boolean;
 }
 

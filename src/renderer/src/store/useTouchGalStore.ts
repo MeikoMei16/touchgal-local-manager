@@ -2,286 +2,37 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { TouchGalResource, TouchGalDetail } from '../types';
 import { TouchGalClient } from '../data/TouchGalClient';
-
-// --- TYPES ---
-export type HomeMode = 'normal' | 'advanced_building' | 'advanced_ready';
-export type NsfwDomain = 'sfw' | 'nsfw' | 'all';
-
-export interface AdvancedFilterDraft {
-  nsfwMode: NsfwDomain;
-  selectedPlatform: string;
-  yearConstraints: Array<{ op: string; val: number }>;
-  minRatingCount: number;
-  minRatingScore: number;
-  minCommentCount: number;
-  selectedTags: string[];
-}
-
-export interface AdvancedBuildProgress {
-  stage: 'idle' | 'catalog' | 'enrichment' | 'ready' | 'error';
-  completed: number;
-  total: number;
-  message: string;
-}
-
-export interface AdvancedResourceRecord extends TouchGalResource {
-  fullTags: string[];
-  normalizedYear: number | null;
-  tagsHydrated: boolean;
-}
-
-export interface AdvancedDatasetCache {
-  resources: AdvancedResourceRecord[];
-  total: number;
-  hydratedTagIds: string[];
-  failedTagIds: string[];
-  lastBuiltAt: number | null;
-  upstreamKey: string | null;
-}
-
-export type HomeSortField =
-  | 'resource_update_time'
-  | 'created'
-  | 'rating'
-  | 'view'
-  | 'download'
-  | 'favorite';
-
-export type HomeSortOrder = 'asc' | 'desc';
-
-export interface HomeQueryState {
-  nsfwMode: 'safe' | 'nsfw' | 'all';
-  selectedPlatform: string;
-  yearConstraints: Array<{ op: string; val: number }>;
-  minRatingCount: number;
-  minRatingScore: number;
-  minCommentCount: number;
-  selectedTags: string[];
-  sortField: HomeSortField;
-  sortOrder: HomeSortOrder;
-}
-
-export const defaultAdvancedFilterDraft = (): AdvancedFilterDraft => ({
-  nsfwMode: 'sfw',
-  selectedPlatform: 'all',
-  yearConstraints: [],
-  minRatingCount: 0,
-  minRatingScore: 0,
-  minCommentCount: 0,
-  selectedTags: []
-});
-
-const defaultBuildProgress = (): AdvancedBuildProgress => ({
-  stage: 'idle',
-  completed: 0,
-  total: 0,
-  message: ''
-});
-
-const defaultAdvancedDatasetCache = (): AdvancedDatasetCache => ({
-  resources: [],
-  total: 0,
-  hydratedTagIds: [],
-  failedTagIds: [],
-  lastBuiltAt: null,
-  upstreamKey: null
-});
-
-export const defaultHomeQuery = (): HomeQueryState => ({
-  nsfwMode: 'safe',
-  selectedPlatform: 'all',
-  yearConstraints: [],
-  minRatingCount: 0,
-  minRatingScore: 0,
-  minCommentCount: 0,
-  selectedTags: [],
-  sortField: 'created',
-  sortOrder: 'desc'
-});
-
-const normalizeSortField = (value: unknown): HomeSortField => {
-  if (value === 'visit') return 'view';
-  if (value === 'resource_update_time' || value === 'created' || value === 'rating' || value === 'view' || value === 'download' || value === 'favorite') {
-    return value;
-  }
-  return 'created';
-};
-
-const normalizeSortOrder = (value: unknown): HomeSortOrder => (value === 'asc' ? 'asc' : 'desc');
-
-const normalizePage = (value: unknown): number => {
-  const page = Number(value);
-  return Number.isInteger(page) && page > 0 ? page : 1;
-};
-
-const normalizeHomeQuery = (query: Partial<HomeQueryState> | null | undefined): HomeQueryState => ({
-  ...defaultHomeQuery(),
-  ...query,
-  nsfwMode: query?.nsfwMode === 'nsfw' || query?.nsfwMode === 'all' ? query.nsfwMode : 'safe',
-  selectedPlatform: query?.selectedPlatform ?? 'all',
-  yearConstraints: Array.isArray(query?.yearConstraints) ? query.yearConstraints : [],
-  minRatingCount: Number(query?.minRatingCount ?? 0) || 0,
-  minRatingScore: Number(query?.minRatingScore ?? 0) || 0,
-  minCommentCount: Number(query?.minCommentCount ?? 0) || 0,
-  selectedTags: Array.isArray(query?.selectedTags) ? query.selectedTags : [],
-  sortField: normalizeSortField(query?.sortField),
-  sortOrder: normalizeSortOrder(query?.sortOrder)
-});
-
-const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
-  ...resource,
-  introduction: null,
-  company: null,
-  vndbId: null,
-  bangumiId: null,
-  steamId: null,
-  contentLimit: null,
-  screenshots: [],
-  pvUrl: null,
-  downloads: []
-});
-
-const mergeDetailResource = (
-  detail: TouchGalDetail,
-  fallback?: TouchGalResource | null
-): TouchGalDetail => ({
-  ...(fallback ? toDetailShell(fallback) : {}),
-  ...detail,
-  id: detail.id || fallback?.id || 0,
-  introduction: detail.introduction ?? null,
-  company: detail.company ?? null,
-  vndbId: detail.vndbId ?? null,
-  bangumiId: detail.bangumiId ?? null,
-  steamId: detail.steamId ?? null,
-  contentLimit:
-    typeof detail.contentLimit === 'string'
-      ? detail.contentLimit
-      : typeof (fallback as TouchGalDetail | null | undefined)?.contentLimit === 'string'
-        ? (fallback as TouchGalDetail | null | undefined)?.contentLimit ?? null
-        : null,
-  screenshots: Array.isArray(detail.screenshots) ? detail.screenshots : [],
-  pvUrl: detail.pvUrl ?? null,
-  downloads: Array.isArray(detail.downloads) ? detail.downloads : [],
-  alias: Array.isArray(detail.alias) ? detail.alias : [],
-  tags: Array.isArray(detail.tags) ? detail.tags : []
-});
-
-// --- HELPERS (Copied from old store) ---
-const ADVANCED_PAGE_SIZE = 24;
-const ADVANCED_CATALOG_CONCURRENCY = 4;
-const ADVANCED_TAG_CONCURRENCY = 6;
-
-const uniqueById = <T extends { uniqueId: string }>(items: T[]): T[] => {
-  const seen = new Set<string>();
-  const result: T[] = [];
-  for (const item of items) {
-    if (!item.uniqueId || seen.has(item.uniqueId)) continue;
-    seen.add(item.uniqueId);
-    result.push(item);
-  }
-  return result;
-};
-
-const normalizeYear = (resource: TouchGalResource): number | null => {
-  const rawDate = resource.releasedDate || (resource as any).released || (resource as any).created || null;
-  if (!rawDate) return null;
-  const directMatch = String(rawDate).match(/\b(19|20)\d{2}\b/);
-  if (directMatch) return Number(directMatch[0]);
-  const parsed = new Date(rawDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.getFullYear();
-};
-
-const toAdvancedResourceRecord = (resource: TouchGalResource): AdvancedResourceRecord => ({
-  ...resource,
-  fullTags: Array.isArray(resource.tags) ? resource.tags : [],
-  normalizedYear: normalizeYear(resource),
-  tagsHydrated: false
-});
-
-const compareConstraint = (year: number, op: string, value: number): boolean => {
-  if (op === '=') return year === value;
-  if (op === '>=') return year >= value;
-  if (op === '<=') return year <= value;
-  if (op === '>') return year > value;
-  if (op === '<') return year < value;
-  return true;
-};
-
-// applyAdvancedPredicate re-filters the in-memory candidate set.
-// Stage 1 fields (platform, minRatingCount) are server-side — not re-applied here.
-const applyAdvancedPredicate = (resources: AdvancedResourceRecord[], draft: AdvancedFilterDraft): AdvancedResourceRecord[] =>
-  resources.filter((resource) => {
-    // Midstream: year constraints
-    if (draft.yearConstraints.length > 0) {
-      if (resource.normalizedYear == null) return false;
-      if (!draft.yearConstraints.every(c => compareConstraint(resource.normalizedYear as number, c.op, c.val))) return false;
-    }
-    // Midstream: minimum rating score
-    if (draft.minRatingScore > 0 && (resource.averageRating || 0) < draft.minRatingScore) return false;
-    // Midstream: minimum comment count
-    if (draft.minCommentCount > 0 && (resource.commentCount || (resource as any).comments || 0) < draft.minCommentCount) return false;
-    // Downstream: strict tag filtering — cards must be hydrated before they can match.
-    if (draft.selectedTags.length > 0) {
-      if (!resource.tagsHydrated) return false;
-      const tagSet = new Set(resource.fullTags);
-      if (!draft.selectedTags.every(tag => tagSet.has(tag))) return false;
-    }
-    return true;
-  });
-
-const getSortableValue = (resource: AdvancedResourceRecord, sortField: string, originalIndex: number) => {
-  if (sortField === 'rating') return resource.averageRating || 0;
-  if (sortField === 'view' || sortField === 'visit') return resource.viewCount || (resource as any).view || 0;
-  if (sortField === 'download') return resource.downloadCount || (resource as any).download || 0;
-  if (sortField === 'favorite') return resource.favoriteCount || 0;
-  if (sortField === 'created') {
-    const created = (resource as any).created ? new Date((resource as any).created).getTime() : 0;
-    return isNaN(created) ? 0 : created;
-  }
-  return originalIndex;
-};
-
-const sortAdvancedResources = (resources: AdvancedResourceRecord[], sortField: string, sortOrder: string): AdvancedResourceRecord[] => {
-  const direction = sortOrder === 'asc' ? 1 : -1;
-  return [...resources].sort((left, right) => {
-    const lIdx = (left as any).__catalogIndex ?? 0;
-    const rIdx = (right as any).__catalogIndex ?? 0;
-    const lVal = getSortableValue(left, sortField, lIdx);
-    const rVal = getSortableValue(right, sortField, rIdx);
-    return lVal === rVal ? lIdx - rIdx : (lVal > rVal ? direction : -direction);
-  });
-};
-
-const paginateAdvancedResources = (
-  resources: AdvancedResourceRecord[],
-  page: number
-): AdvancedResourceRecord[] => {
-  const start = (page - 1) * ADVANCED_PAGE_SIZE;
-  return resources.slice(start, start + ADVANCED_PAGE_SIZE);
-};
-
-const createSessionId = () => `adv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-const getAdvancedUpstreamKey = (draft: AdvancedFilterDraft, domain: NsfwDomain) =>
-  JSON.stringify({
-    domain,
-    selectedPlatform: draft.selectedPlatform ?? 'all',
-    minRatingCount: draft.minRatingCount ?? 0
-  });
-
-async function runBounded<TInput, TOutput>(items: TInput[], limit: number, worker: (item: TInput, index: number) => Promise<TOutput>): Promise<TOutput[]> {
-  const results = new Array<TOutput>(items.length);
-  let cursor = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const idx = cursor++;
-      results[idx] = await worker(items[idx], idx);
-    }
-  });
-  await Promise.all(runners);
-  return results;
-}
+import { mergeDetailResource, toDetailShell } from '../features/detail/detailResource';
+import {
+  ADVANCED_CATALOG_CONCURRENCY,
+  ADVANCED_PAGE_SIZE,
+  ADVANCED_TAG_CONCURRENCY,
+  applyAdvancedPredicate,
+  createAdvancedSessionId,
+  getAdvancedUpstreamKey,
+  normalizeYear,
+  paginateAdvancedResources,
+  runBounded,
+  sortAdvancedResources,
+  toAdvancedResourceRecord,
+  uniqueById,
+  compareConstraint
+} from '../features/home/advancedDataset';
+import {
+  AdvancedBuildProgress,
+  AdvancedDatasetCache,
+  AdvancedFilterDraft,
+  AdvancedResourceRecord,
+  defaultAdvancedDatasetCache,
+  defaultAdvancedFilterDraft,
+  defaultBuildProgress,
+  defaultHomeQuery,
+  HomeMode,
+  HomeQueryState,
+  NsfwDomain,
+  normalizeHomeQuery,
+  normalizePage
+} from '../features/home/homeState';
 
 let activeDetailRequestKey: string | null = null;
 
@@ -573,7 +324,7 @@ export const useUIStore = create<UIState>()(
          */
         const draft = get().advancedFilterDraft;
         const domain = get().activeNsfwDomain;
-        const sessionId = createSessionId();
+        const sessionId = createAdvancedSessionId();
         const upstreamKey = getAdvancedUpstreamKey(draft, domain);
         set({ homeMode: 'advanced_building', advancedBuildSessionId: sessionId, error: null });
 
