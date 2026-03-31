@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
   fetchCaptcha: () => ipcRenderer.invoke('tg-fetch-captcha'),
   verifyCaptcha: (sessionId: string, selectedIds: string[]) => ipcRenderer.invoke('tg-verify-captcha', sessionId, selectedIds),
   login: (username: string, password: string, captcha: string) => ipcRenderer.invoke('tg-login', username, password, captcha),
+  logout: () => ipcRenderer.invoke('tg-logout'),
 
   searchTags: (keyword: string) =>
     ipcRenderer.invoke('tg-search-tags', keyword),

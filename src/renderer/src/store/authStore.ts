@@ -15,7 +15,7 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (username: string, password: string, captcha: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setIsLoginOpen: (isOpen: boolean) => void;
   setSessionError: (error: 'SESSION_EXPIRED' | null) => void;
   clearAuthUi: () => void;
@@ -84,7 +84,26 @@ export const useAuthStore = create<AuthState>()(
           set({ error: formatAuthError(err), isLoading: false, captchaUrl: null, captchaChallenge: null });
         }
       },
-      logout: () => set({ user: null, userProfile: null, sessionError: null, captchaUrl: null, captchaChallenge: null, error: null }),
+      logout: async () => {
+        try {
+          await window.api.logout();
+        } catch (err) {
+          console.error('Failed to clear main-process session token:', err);
+        } finally {
+          set({
+            user: null,
+            userProfile: null,
+            userComments: [],
+            userRatings: [],
+            userCollections: [],
+            sessionError: null,
+            captchaUrl: null,
+            captchaChallenge: null,
+            error: null,
+            isLoading: false
+          });
+        }
+      },
       setIsLoginOpen: (isOpen) => set({ isLoginOpen: isOpen }),
       setSessionError: (error) => set({ sessionError: error }),
       clearAuthUi: () => set({ error: null, captchaUrl: null, captchaChallenge: null, isLoading: false }),
@@ -118,7 +137,9 @@ export const useAuthStore = create<AuthState>()(
             const uid = selfStatus.uid || selfStatus.id;
             const profileDetail = await window.api.getUserStatus(uid);
             set({ userProfile: profileDetail, user: { ...get().user, id: uid, uid }, isLoading: false });
+            return;
           }
+          set({ isLoading: false });
         } catch (err: any) {
           set({ error: err.message, isLoading: false });
         }

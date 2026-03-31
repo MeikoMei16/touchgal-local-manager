@@ -19,6 +19,7 @@ export interface ElectronAPI {
   fetchCaptcha: () => Promise<any>;
   verifyCaptcha: (sessionId: string, selectedIds: string[]) => Promise<any>;
   login: (username: string, password: string, captcha: string) => Promise<any>;
+  logout: () => Promise<{ success: boolean }>;
   searchTags: (keyword: string) => Promise<any>;
   getUserStatus: (id: number) => Promise<any>;
   getUserStatusSelf: () => Promise<any>;

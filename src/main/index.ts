@@ -73,6 +73,27 @@ const saveToken = (token: string) => {
   }
 }
 
+const clearToken = () => {
+  currentToken = ''
+
+  try {
+    if (fs.existsSync(tokenPath)) {
+      fs.unlinkSync(tokenPath)
+    }
+  } catch (e) {
+    log.warn('Failed to remove persisted token:', e)
+  }
+
+  try {
+    const oldCookiePath = join(app.getPath('userData'), 'session_cookies.txt')
+    if (fs.existsSync(oldCookiePath)) {
+      fs.unlinkSync(oldCookiePath)
+    }
+  } catch (e) {
+    log.warn('Failed to remove legacy cookie file:', e)
+  }
+}
+
 const loadToken = () => {
   try {
     if (fs.existsSync(tokenPath)) {
@@ -643,7 +664,7 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
     try {
       const dlResponse = await API_CLIENT.get('/patch/download', { params: { uniqueId } })
       downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
-    } catch (e) {
+    } catch {
       log.warn('Failed to fetch downloads for', uniqueId)
     }
 
@@ -855,6 +876,11 @@ handleWithLog('tg-verify-captcha', async (_event, sessionId: string, selectedIds
 handleWithLog('tg-login', async (_event, username: string, password: string, captcha: string) => {
   const response = await API_CLIENT.post('/auth/login', { name: username, password, captcha })
   return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-logout', async () => {
+  clearToken()
+  return { success: true }
 })
 
 handleWithLog('tg-search-tags', async (_event, keyword: string) => {

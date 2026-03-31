@@ -122,7 +122,7 @@ const ProfileView: React.FC = () => {
               <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl w-fit mb-4">
                 <Package size={24} />
               </div>
-              <div className="text-3xl font-black text-on-surface">{counts.favorite_folder || userCollections.length || 0}</div>
+              <div className="text-3xl font-black text-on-surface">{counts.patch_favorite || counts.favorite_folder || userCollections.length || 0}</div>
               <div className="text-sm text-on-surface-variant font-bold">Collections</div>
             </div>
           </div>
