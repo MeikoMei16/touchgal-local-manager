@@ -167,6 +167,31 @@ Reason:
 - keeps detail presentation changes localized
 - avoids mixing tab UI, session gating, and content-specific markup in one large component
 
+### Detail media should be extracted from introduction HTML before rendering
+
+Rule:
+
+- screenshot and PV blocks embedded inside upstream introduction HTML should be normalized into dedicated renderer fields
+- the introduction body shown in the info tab should strip those embedded media blocks instead of duplicating them inline
+
+Reason:
+
+- upstream detail data currently hides screenshots and PV links inside introduction HTML fragments
+- dedicated components provide better layout control, image viewing, and video fallback behavior than raw inline HTML
+
+### Detail resource links should be sourced from `/patch/resource` and grouped by trust level
+
+Rule:
+
+- detail resource cards should be built from `/patch/resource?patchId=...`, not `/patch/download`
+- the links tab should present official resources and community resources in separate grouped containers
+- resource cards should surface user identity and resource metadata rather than collapsing everything to a raw URL list
+
+Reason:
+
+- `/patch/resource` is the API shape used by the reference TouchGal web architecture for downloadable resources
+- the grouped presentation gives users the same trust and provenance cues as the upstream product
+
 ### Advanced tag state has one source of truth
 
 Rule:

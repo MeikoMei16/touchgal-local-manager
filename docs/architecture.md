@@ -178,18 +178,31 @@ Detail loading:
 
 1. Renderer selects a card.
 2. UI-store detail actions open an immediate detail shell from the selected homepage card when available.
-3. UI-store detail actions fetch the normalized detail payload first.
-4. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
-5. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
-6. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
+3. Main process resolves detail data from upstream API endpoints, not by scraping the public detail page URL.
+4. `tg-get-patch-detail` currently aggregates:
+   - `GET /patch?uniqueId=...` for core patch metadata
+   - `GET /patch/introduction?uniqueId=...` for introduction HTML and auxiliary ids/tags/company data
+   - `GET /patch/resource?patchId=...` for resource-link cards
+5. Main-process normalization extracts screenshot URLs and PV URLs from introduction HTML so the renderer can present them as dedicated sections instead of inline HTML fragments.
+6. UI-store detail actions fetch the normalized detail payload first.
+7. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
+8. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
+9. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
 
 Detail header layout:
 
-- the detail header uses a two-column desktop layout inside the right panel
+- the detail header only switches to the side-by-side desktop layout at wider breakpoints so mid-width windows do not crush the banner and metadata area
 - primary game metadata, tags, and actions stay in the left header column
 - the compact `RatingHistogram` widget occupies the spare right-side header space on desktop
 - company/date and aggregate counters render in a dedicated footer strip under the header content
 - info/links/board/evaluation tab bodies are now modularized as separate detail components rather than living inline in `DetailOverlay`
+
+Detail info and links presentation:
+
+- screenshots are rendered through a dedicated horizontal strip component instead of being left inside sanitized introduction HTML
+- PV links are rendered through a dedicated panel that supports direct video URLs and common embedded-player URLs
+- resource links are rendered from `/patch/resource` data and grouped into official versus community sections
+- resource cards surface section/type/language/platform chips, note text, user identity, and one or more download links
 
 ## Local Persistence
 
@@ -226,6 +239,8 @@ Status note:
 - Detail overlay with introduction, comments, and ratings
 - Guarded detail loading that resolves comments/ratings from the final detail id
 - Modular detail rating histogram component in the header
+- Introduction-media extraction for dedicated screenshot and PV panels
+- Grouped detail resource links sourced from `/patch/resource`
 - Split renderer stores with compatibility bridge for legacy imports
 - Split UI-store action modules for browse, detail, and advanced pipelines
 - Modular detail overlay composition

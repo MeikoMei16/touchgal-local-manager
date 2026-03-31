@@ -12,9 +12,9 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
   const { ratingSummary } = resource;
 
   return (
-    <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3">
+    <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 grid grid-cols-1 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
       <div
-        className={`md:col-span-1 aspect-video md:aspect-auto relative bg-slate-100 overflow-hidden ${resource.banner ? 'cursor-zoom-in' : ''}`}
+        className={`relative aspect-[16/10] sm:aspect-[5/3] xl:min-h-full xl:aspect-auto bg-slate-100 overflow-hidden ${resource.banner ? 'cursor-zoom-in' : ''}`}
         onClick={() => {
           if (resource.banner) onImageClick?.(resource.banner)
         }}
@@ -33,8 +33,8 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
         </div>
       </div>
 
-      <div className="md:col-span-2 p-6 md:p-8 flex flex-col gap-4">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+      <div className="p-6 md:p-8 flex flex-col gap-4">
+        <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_280px] 2xl:items-start">
           <div className="flex min-w-0 flex-col gap-5">
             <div className="flex flex-col gap-2">
               <h1 className="m-0 text-2xl md:text-3xl font-black text-slate-900 leading-tight tracking-tight">{resource.name}</h1>
@@ -79,7 +79,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
           </div>
 
           {ratingSummary && (
-            <div className="xl:justify-self-end xl:w-[280px] xl:pt-0.5">
+            <div className="2xl:justify-self-end 2xl:w-[280px] 2xl:pt-0.5">
               <RatingHistogram ratingSummary={ratingSummary} compact />
             </div>
           )}

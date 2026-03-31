@@ -243,13 +243,29 @@ interface RawResource {
 interface RawDownload {
   id?: number
   name?: string
+  section?: string | null
   size?: string | null
   content?: string | null
   url?: string | null
   storage?: string | null
+  type?: string | string[] | null
+  language?: string | string[] | null
   code?: string | null
   password?: string | null
+  note?: string | null
+  hash?: string | null
   platform?: string | string[] | null
+  likeCount?: number | null
+  download?: number | null
+  created?: string | null
+  userId?: number | null
+  user?: {
+    id?: number | null
+    name?: string | null
+    avatar?: string | null
+    role?: number | null
+    patchCount?: number | null
+  } | null
 }
 
 const asArray = (value: string[] | string | null | undefined): string[] => {
@@ -440,13 +456,32 @@ const normalizeResource = (resource: any) => {
 const normalizeDownloads = (downloads: RawDownload[]) =>
   downloads.map((download) => ({
     id: download.id ?? 0,
-    name: download.name ?? 'Unnamed resource',
+    name: download.name ?? '',
+    section: download.section ?? null,
     size: download.size ?? null,
     url: download.url ?? download.content ?? null,
+    content: download.content ?? download.url ?? null,
     storage: download.storage ?? null,
+    type: asArray(download.type),
+    language: asArray(download.language),
     code: download.code ?? null,
     password: download.password ?? null,
+    note: download.note ?? null,
+    hash: download.hash ?? null,
     platform: asArray(download.platform),
+    likeCount: download.likeCount ?? 0,
+    downloadCount: download.download ?? 0,
+    created: download.created ?? null,
+    userId: download.userId ?? download.user?.id ?? null,
+    user: download.user
+      ? {
+          id: download.user.id ?? 0,
+          name: download.user.name ?? 'Unknown',
+          avatar: download.user.avatar ?? null,
+          role: download.user.role ?? 0,
+          patchCount: download.user.patchCount ?? 0,
+        }
+      : null,
   }))
 
 const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: number }) => {
@@ -760,8 +795,10 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
 
     let downloads: any[] = []
     try {
-      const dlResponse = await API_CLIENT.get('/patch/download', { params: { uniqueId } })
-      downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
+      if (detail.id) {
+        const dlResponse = await API_CLIENT.get('/patch/resource', { params: { patchId: detail.id } })
+        downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
+      }
     } catch {
       log.warn('Failed to fetch downloads for', uniqueId)
     }

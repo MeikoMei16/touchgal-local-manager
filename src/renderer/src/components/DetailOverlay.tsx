@@ -88,7 +88,7 @@ export const DetailOverlay: React.FC = () => {
                 />
               )}
 
-              {activeTab === 'links' && <DetailLinksPanel />}
+              {activeTab === 'links' && <DetailLinksPanel resource={selectedResource} />}
 
               {activeTab === 'board' && (
                 <DetailBoardPanel

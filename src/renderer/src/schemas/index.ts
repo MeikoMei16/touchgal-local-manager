@@ -1,14 +1,33 @@
 import { z } from 'zod';
 
+const TouchGalDownloadUserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  avatar: z.string().nullable(),
+  role: z.number().default(0),
+  patchCount: z.number().default(0),
+}).passthrough();
+
 export const TouchGalDownloadSchema = z.object({
   id: z.number(),
   name: z.string(),
+  section: z.string().nullable().default(null),
   size: z.string().nullable(),
   url: z.string().nullable(),
+  content: z.string().nullable().default(null),
   storage: z.string().nullable(),
+  type: z.array(z.string()).default([]),
+  language: z.array(z.string()).default([]),
   code: z.string().nullable(),
   password: z.string().nullable(),
+  note: z.string().nullable().default(null),
+  hash: z.string().nullable().default(null),
   platform: z.array(z.string()).default([]),
+  likeCount: z.number().default(0),
+  downloadCount: z.number().default(0),
+  created: z.string().nullable().default(null),
+  userId: z.number().nullable().default(null),
+  user: TouchGalDownloadUserSchema.nullable().default(null),
 }).passthrough();
 
 export const RatingSummarySchema = z.object({
