@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Download,
+  ExternalLink,
   Globe,
   HardDrive,
   Heart,
@@ -27,6 +28,10 @@ const STORAGE_LABELS: Record<string, string> = {
   onedrive: 'OneDrive',
   user: '社区资源',
 };
+
+type ResourceBucket = 'galgame' | 'patch';
+const KUN_PATCH_WEBSITE_URL = 'https://www.moyu.moe/';
+const KUN_PATCH_WEBSITE_API = 'https://www.moyu.moe/api/hikari';
 
 const getLinks = (download: TouchGalDownload) =>
   (download.content ?? download.url ?? '')
@@ -67,8 +72,22 @@ const formatRelative = (value: string | null) => {
   return '刚刚';
 };
 
+const formatDate = (value: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+};
+
 const isOfficial = (download: TouchGalDownload) =>
   (download.user?.role ?? 0) > 2 || download.storage === 'touchgal' || download.storage === 's3';
+
+const toBucket = (download: TouchGalDownload): ResourceBucket =>
+  download.section === 'patch' ? 'patch' : 'galgame';
 
 const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) => {
   const links = getLinks(download);
@@ -206,7 +225,8 @@ const GroupCard: React.FC<{
   description: string;
   avatarSrc: string;
   resources: TouchGalDownload[];
-}> = ({ title, description, avatarSrc, resources }) => (
+  resourceUpdateTime?: string | null;
+}> = ({ title, description, avatarSrc, resources, resourceUpdateTime }) => (
   <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
       <div className="h-12 w-12 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
@@ -215,6 +235,11 @@ const GroupCard: React.FC<{
       <div>
         <div className="text-xl font-black text-slate-900">{title}</div>
         <div className="text-sm font-medium text-slate-500">{description}</div>
+        {resourceUpdateTime && (
+          <div className="mt-1 text-xs font-bold text-slate-400">
+            资源更新时间 {resourceUpdateTime}
+          </div>
+        )}
       </div>
     </div>
 
@@ -227,6 +252,7 @@ const GroupCard: React.FC<{
 );
 
 export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) => {
+  const [selectedBucket, setSelectedBucket] = React.useState<ResourceBucket>('galgame');
   const downloads = Array.isArray(resource.downloads)
     ? resource.downloads.filter((item) => getLinks(item).length > 0)
     : [];
@@ -241,17 +267,78 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
     );
   }
 
-  const official = downloads.filter(isOfficial);
-  const community = downloads.filter((download) => !isOfficial(download));
+  const bucketed = downloads.filter((download) => toBucket(download) === selectedBucket);
+  const official = bucketed.filter(isOfficial);
+  const community = bucketed.filter((download) => !isOfficial(download));
+  const galgameCount = downloads.filter((download) => toBucket(download) === 'galgame').length;
+  const patchCount = downloads.filter((download) => toBucket(download) === 'patch').length;
+  const resourceUpdatedAt = formatDate(resource.resourceUpdateTime ?? null);
+  const kunPatchLink = resource.vndbId ? `${KUN_PATCH_WEBSITE_API}?vndb_id=${resource.vndbId}` : KUN_PATCH_WEBSITE_URL;
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="inline-flex w-fit rounded-2xl bg-slate-100 p-1 shadow-inner">
+        <button
+          className={`rounded-xl px-5 py-2.5 text-sm font-black transition-colors ${
+            selectedBucket === 'galgame' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          }`}
+          onClick={() => setSelectedBucket('galgame')}
+        >
+          Galgame 资源
+        </button>
+        <button
+          className={`rounded-xl px-5 py-2.5 text-sm font-black transition-colors ${
+            selectedBucket === 'patch' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          }`}
+          onClick={() => setSelectedBucket('patch')}
+        >
+          Galgame 补丁
+        </button>
+      </div>
+
+      {selectedBucket === 'patch' && (
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+                <img
+                  src="https://api.dicebear.com/7.x/icons/svg?seed=kun-patch"
+                  alt="鲲 Galgame 补丁"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div>
+                <div className="text-xl font-black text-slate-900">鲲 Galgame 补丁</div>
+                <div className="text-sm font-medium text-slate-500">这是外部补丁站入口，不计入当前 TouchGal 资源列表。</div>
+                {resource.vndbId && (
+                  <div className="mt-1 text-xs font-bold text-slate-400">VNDB ID: {resource.vndbId}</div>
+                )}
+              </div>
+            </div>
+            <a
+              href={kunPatchLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-black text-white hover:bg-slate-800"
+            >
+              <span>打开外部链接</span>
+              <ExternalLink size={16} />
+            </a>
+          </div>
+        </section>
+      )}
+
       {official.length > 0 && (
         <GroupCard
-          title="TouchGal 官方（推荐下载）"
-          description="TouchGal 官方提供的 Galgame 下载资源"
-          avatarSrc="/favicon.ico"
+          title={selectedBucket === 'patch' ? 'TouchGal 官方补丁资源' : 'TouchGal 官方（推荐下载）'}
+          description={
+            selectedBucket === 'patch'
+              ? '来自 TouchGal 的官方补丁资源'
+              : 'TouchGal 官方提供的 Galgame 下载资源'
+          }
+          avatarSrc={selectedBucket === 'patch' ? 'https://api.dicebear.com/7.x/icons/svg?seed=kun-patch' : '/favicon.ico'}
           resources={official}
+          resourceUpdateTime={resourceUpdatedAt}
         />
       )}
 
@@ -261,7 +348,20 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
           description="来自 TouchGal 用户自行发布的下载资源"
           avatarSrc="https://api.dicebear.com/7.x/bottts/svg?seed=touchgal-community"
           resources={community}
+          resourceUpdateTime={resourceUpdatedAt}
         />
+      )}
+
+      {official.length === 0 && community.length === 0 && (
+        <div className="bg-white rounded-[2rem] p-12 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center gap-4">
+          <Globe size={64} className="text-slate-200" />
+          <h2 className="text-xl font-black text-slate-800">
+            {selectedBucket === 'patch' ? 'Galgame 补丁' : 'Galgame 资源'}
+          </h2>
+          <p className="text-slate-500 font-medium">
+            当前分类下还没有可用内容。总计：资源 {galgameCount} 条，补丁 {patchCount} 条。
+          </p>
+        </div>
       )}
     </div>
   );

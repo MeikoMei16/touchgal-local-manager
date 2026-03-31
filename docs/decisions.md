@@ -179,18 +179,22 @@ Reason:
 - upstream detail data currently hides screenshots and PV links inside introduction HTML fragments
 - dedicated components provide better layout control, image viewing, and video fallback behavior than raw inline HTML
 
-### Detail resource links should be sourced from `/patch/resource` and grouped by trust level
+### Detail resource links should be sourced from `/patch/resource` and sectioned before grouping
 
 Rule:
 
 - detail resource cards should be built from `/patch/resource?patchId=...`, not `/patch/download`
-- the links tab should present official resources and community resources in separate grouped containers
+- the links tab should first split resources by upstream `section` (`galgame` versus `patch`)
+- each section view should then present official resources and community resources in separate grouped containers
+- the external 鲲补丁入口 should be rendered as its own external-link card in the patch section, not merged into the TouchGal `/patch/resource` list
 - resource cards should surface user identity and resource metadata rather than collapsing everything to a raw URL list
+- `resourceUpdateTime` should be carried through from `/patch/introduction` and shown at the grouped-resource level when present
 
 Reason:
 
 - `/patch/resource` is the API shape used by the reference TouchGal web architecture for downloadable resources
-- the grouped presentation gives users the same trust and provenance cues as the upstream product
+- the reference web UI uses section tabs before trust-level grouping
+- the grouped presentation gives users the same trust and provenance cues as the upstream product without conflating TouchGal-hosted data and external patch-site navigation
 
 ### Advanced tag state has one source of truth
 

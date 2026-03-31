@@ -7,6 +7,7 @@ export const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
   vndbId: null,
   bangumiId: null,
   steamId: null,
+  resourceUpdateTime: null,
   contentLimit: null,
   screenshots: [],
   pvUrl: null,
@@ -25,6 +26,7 @@ export const mergeDetailResource = (
   vndbId: detail.vndbId ?? null,
   bangumiId: detail.bangumiId ?? null,
   steamId: detail.steamId ?? null,
+  resourceUpdateTime: detail.resourceUpdateTime ?? null,
   contentLimit:
     typeof detail.contentLimit === 'string'
       ? detail.contentLimit

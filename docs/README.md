@@ -18,7 +18,7 @@ Current cross-cutting topics covered here:
 - main-process auth token normalization and upstream header/cookie rules
 - current login and captcha interaction constraints
 - guarded detail loading and current detail-overlay composition rules
-- detail media extraction from introduction HTML and grouped resource-link presentation via `/patch/resource`
+- detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
 
 ## API Notes
 

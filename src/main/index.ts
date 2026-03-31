@@ -503,6 +503,7 @@ const normalizeIntroduction = (payload: any) => {
   return {
     introduction: introductionHtml ? stripEmbeddedMediaFromIntroduction(introductionHtml) : null,
     releasedDate: payload.released ?? null,
+    resourceUpdateTime: payload.resourceUpdateTime ?? null,
     alias: payload.alias ?? [],
     tags: (payload.tag ?? []).map((item: any) => item?.tag?.name ?? item?.name).filter((tag: any): tag is string => Boolean(tag)),
     company:

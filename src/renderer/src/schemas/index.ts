@@ -86,6 +86,7 @@ export const TouchGalDetailSchema = TouchGalResourceSchema.extend({
   vndbId: z.string().nullable().default(null),
   bangumiId: z.number().nullable().default(null),
   steamId: z.string().nullable().default(null),
+  resourceUpdateTime: z.string().nullable().default(null),
   contentLimit: z.string().nullable().default(null),
   screenshots: z.array(z.string()).default([]),
   pvUrl: z.string().nullable().default(null),
@@ -108,6 +109,7 @@ export const TouchGalFeedResponseSchema = z.object({
 export const PatchIntroductionSchema = z.object({
   introduction: z.string().nullable().default(null),
   releasedDate: z.string().nullable().default(null),
+  resourceUpdateTime: z.string().nullable().default(null),
   alias: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
   company: z.union([z.string(), z.array(z.any())]).nullable().optional().transform(val => {
