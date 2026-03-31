@@ -21,6 +21,7 @@ import {
   defaultBuildProgress,
   defaultHomeQuery
 } from '../../features/home/homeState';
+import { mapNsfwModeToDomain } from '../../features/home/homeQuery';
 import type { UIGetState, UISetState } from '../uiStoreTypes';
 
 export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
@@ -303,12 +304,26 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
   exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),
   clearAdvancedSearch: () => {
     const currentQuery = get().lastHomeQuery;
-    const resetQuery = { ...defaultHomeQuery(), sortField: currentQuery.sortField, sortOrder: currentQuery.sortOrder };
+    const resetQuery = {
+      ...defaultHomeQuery(),
+      nsfwMode: currentQuery.nsfwMode,
+      selectedPlatform: currentQuery.selectedPlatform,
+      minRatingCount: currentQuery.minRatingCount,
+      sortField: currentQuery.sortField,
+      sortOrder: currentQuery.sortOrder
+    };
+    const resetDomain = mapNsfwModeToDomain(currentQuery.nsfwMode);
+    const resetDraft = {
+      ...defaultAdvancedFilterDraft(),
+      nsfwMode: resetDomain,
+      selectedPlatform: currentQuery.selectedPlatform,
+      minRatingCount: currentQuery.minRatingCount
+    };
 
     set({
       homeMode: 'normal',
-      activeNsfwDomain: 'sfw',
-      advancedFilterDraft: defaultAdvancedFilterDraft(),
+      activeNsfwDomain: resetDomain,
+      advancedFilterDraft: resetDraft,
       advancedBuildSessionId: null,
       advancedBuildProgress: defaultBuildProgress(),
       currentPage: 1,
