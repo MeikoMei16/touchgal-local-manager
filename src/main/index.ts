@@ -258,6 +258,83 @@ const asArray = (value: string[] | string | null | undefined): string[] => {
   return []
 }
 
+const uniqueUrls = (values: Array<string | null | undefined>) => {
+  const seen = new Set<string>()
+  const urls: string[] = []
+
+  for (const value of values) {
+    if (!value || typeof value !== 'string') continue
+    const url = value.trim()
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    urls.push(url)
+  }
+
+  return urls
+}
+
+const decodeHtmlEntities = (value: string) =>
+  value
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+
+const normalizeUrlCandidate = (value: string | null | undefined) => {
+  if (!value || typeof value !== 'string') return null
+  const decoded = decodeHtmlEntities(value).trim()
+  if (!decoded) return null
+  if (decoded.startsWith('//')) return `https:${decoded}`
+  return decoded
+}
+
+const extractImageUrlsFromHtml = (html: string) => {
+  const matches = Array.from(
+    html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi),
+    (match) => match[1]
+  )
+  return uniqueUrls(matches)
+}
+
+const extractPvUrlFromHtml = (html: string) => {
+  const taggedCandidates = [
+    ...Array.from(html.matchAll(/<source[^>]+src=["']([^"']+)["'][^>]*>/gi), (match) => match[1]),
+    ...Array.from(html.matchAll(/<iframe[^>]+src=["']([^"']+)["'][^>]*>/gi), (match) => match[1]),
+    ...Array.from(html.matchAll(/<video[^>]+src=["']([^"']+)["'][^>]*>/gi), (match) => match[1]),
+    ...Array.from(html.matchAll(/data-src=["']([^"']+)["']/gi), (match) => match[1]),
+    ...Array.from(html.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>/gi), (match) => match[1])
+  ]
+    .map(normalizeUrlCandidate)
+    .filter((value): value is string => Boolean(value))
+
+  const taggedMatch = taggedCandidates.find((candidate) =>
+    /(youtube\.com|youtu\.be|bilibili\.com|player\.bilibili\.com|\.mp4(?:\?|$)|\.webm(?:\?|$)|\.ogg(?:\?|$)|\.mov(?:\?|$)|\.m3u8(?:\?|$)|\.flv(?:\?|$))/i.test(candidate)
+  )
+  if (taggedMatch) return taggedMatch
+
+  const plainUrlMatches = Array.from(
+    html.matchAll(/https?:\/\/[^\s"'<>]+/gi),
+    (match) => normalizeUrlCandidate(match[0])
+  ).filter((value): value is string => Boolean(value))
+
+  return plainUrlMatches.find((candidate) =>
+    /(youtube\.com|youtu\.be|bilibili\.com|player\.bilibili\.com|\.mp4(?:\?|$)|\.webm(?:\?|$)|\.ogg(?:\?|$)|\.mov(?:\?|$)|\.m3u8(?:\?|$)|\.flv(?:\?|$))/i.test(candidate)
+  ) ?? null
+}
+
+const stripEmbeddedMediaFromIntroduction = (html: string) =>
+  html
+    .replace(/<section[^>]*>\s*(?:<h\d[^>]*>)?\s*(?:游戏截图|PV鉴赏|支持正版)[\s\S]*?<\/section>/gi, '')
+    .replace(/<h\d[^>]*>\s*游戏截图\s*<\/h\d>\s*<div[^>]*data-kun-img-container[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<h\d[^>]*>\s*PV鉴赏\s*<\/h\d>\s*<div[^>]*data-video-player[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<h\d[^>]*>\s*支持正版\s*<\/h\d>\s*<div[^>]*data-kun-link[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<(img|video|source|iframe)[^>]*>/gi, '')
+    .replace(/<(\/video|\/iframe)>/gi, '')
+    .replace(/<p[^>]*>\s*(?:游戏截图|PV鉴赏|支持正版)\s*<\/p>/gi, '')
+    .replace(/<(h\d)[^>]*>\s*(?:游戏截图|PV鉴赏|支持正版)\s*<\/\1>/gi, '')
+    .trim()
+
 const extractTags = (resource: RawResource): string[] => {
   if (Array.isArray(resource.tags) && resource.tags.length > 0) {
     return resource.tags.filter(Boolean)
@@ -332,6 +409,10 @@ const normalizeResource = (resource: any) => {
 
   // Preserve detail structure if present (e.g. from /patch)
   const detail = raw.detail ?? null
+  const screenshots = uniqueUrls([
+    ...(Array.isArray(raw.fullScreenshotUrls) ? raw.fullScreenshotUrls : []),
+    ...(Array.isArray(raw.screenshots) ? raw.screenshots : [])
+  ])
 
   return {
     id: raw.id ?? raw.patchId ?? raw.patch_id ?? raw.galgameId ?? raw.galgame_id ?? 0,
@@ -349,6 +430,7 @@ const normalizeResource = (resource: any) => {
     releasedDate,
     company,
     pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
+    screenshots,
     detail, // Critical for screenshots
     alias: raw.alias ?? [],
     vndbId: raw.vndbId ?? raw.vndb_id ?? null,
@@ -376,21 +458,37 @@ const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: numb
   }
 }
 
-const normalizeIntroduction = (payload: any) => ({
-  introduction: payload.introduction ?? null,
-  releasedDate: payload.released ?? null,
-  alias: payload.alias ?? [],
-  tags: (payload.tag ?? []).map((item: any) => item?.tag?.name ?? item?.name).filter((tag: any): tag is string => Boolean(tag)),
-  company:
-    typeof payload.company === 'string'
-      ? payload.company
-      : Array.isArray(payload.company)
-        ? payload.company.map((item: any) => item?.name).filter(Boolean).join(', ') || null
-        : null,
-  vndbId: payload.vndbId ?? null,
-  bangumiId: payload.bangumiId ?? null,
-  steamId: payload.steamId != null ? String(payload.steamId) : null,
-})
+const normalizeIntroduction = (payload: any) => {
+  const introductionHtml = typeof payload.introduction === 'string' ? payload.introduction : ''
+  const screenshots = uniqueUrls([
+    ...(Array.isArray(payload.fullScreenshotUrls) ? payload.fullScreenshotUrls : []),
+    ...extractImageUrlsFromHtml(introductionHtml)
+  ])
+
+  return {
+    introduction: introductionHtml ? stripEmbeddedMediaFromIntroduction(introductionHtml) : null,
+    releasedDate: payload.released ?? null,
+    alias: payload.alias ?? [],
+    tags: (payload.tag ?? []).map((item: any) => item?.tag?.name ?? item?.name).filter((tag: any): tag is string => Boolean(tag)),
+    company:
+      typeof payload.company === 'string'
+        ? payload.company
+        : Array.isArray(payload.company)
+          ? payload.company.map((item: any) => item?.name).filter(Boolean).join(', ') || null
+          : null,
+    vndbId: payload.vndbId ?? null,
+    bangumiId: payload.bangumiId ?? null,
+    steamId: payload.steamId != null ? String(payload.steamId) : null,
+    screenshots,
+    pvUrl:
+      normalizeUrlCandidate(payload.pvVideoUrl) ??
+      normalizeUrlCandidate(payload.pv_video_url) ??
+      normalizeUrlCandidate(payload.pvUrl) ??
+      normalizeUrlCandidate(payload.pv_url) ??
+      extractPvUrlFromHtml(introductionHtml) ??
+      null,
+  }
+}
 
 const buildSearchBody = (keyword: string, page: number, limit: number) => ({
   queryString: JSON.stringify([{ type: 'keyword', name: keyword }]),

@@ -60,14 +60,14 @@ export const RatingHistogram: React.FC<{ ratingSummary: RatingSummary; compact?:
     : [];
 
   return (
-    <div className={`bg-white border border-slate-100 flex flex-col ${compact ? 'rounded-[1.25rem] p-5 gap-4 shadow-lg shadow-slate-200/50' : 'rounded-[2rem] p-8 gap-5 shadow-sm'}`}>
+    <div className={`bg-white border border-slate-100 flex flex-col ${compact ? 'rounded-[1.25rem] p-4 gap-3 shadow-lg shadow-slate-200/50' : 'rounded-[2rem] p-8 gap-5 shadow-sm'}`}>
       <div className="flex items-end gap-3">
         <h2 className={`${compact ? 'text-lg' : 'text-2xl'} font-black text-slate-900 tracking-tight`}>评分分布图</h2>
         <span className={`${compact ? 'text-xs' : 'text-sm'} font-bold text-slate-400`}>共 {ratingSummary.count.toLocaleString()} 人评分</span>
       </div>
 
-      <div className={`grid grid-cols-[32px_1fr] ${compact ? 'gap-3' : 'gap-4'}`}>
-        <div className={`relative ${compact ? 'h-56' : 'h-64'}`}>
+      <div className={`grid grid-cols-[28px_1fr] ${compact ? 'gap-2.5' : 'gap-4'}`}>
+        <div className={`relative ${compact ? 'h-44' : 'h-64'}`}>
           {guideValues.map((value, index) => (
             <span
               key={`${value}-${index}`}
@@ -78,7 +78,7 @@ export const RatingHistogram: React.FC<{ ratingSummary: RatingSummary; compact?:
             </span>
           ))}
         </div>
-        <div className={`relative ${compact ? 'h-56' : 'h-64'}`}>
+        <div className={`relative ${compact ? 'h-44' : 'h-64'}`}>
           {guideValues.map((_, index) => (
             <div
               key={index}
@@ -86,13 +86,13 @@ export const RatingHistogram: React.FC<{ ratingSummary: RatingSummary; compact?:
               style={{ top: `${(index / guideSteps) * 100}%` }}
             />
           ))}
-          <div className={`absolute inset-x-0 bottom-0 grid h-full grid-cols-10 ${compact ? 'gap-1.5' : 'gap-2'} px-1`}>
+          <div className={`absolute inset-x-0 bottom-0 grid h-full grid-cols-10 ${compact ? 'gap-1' : 'gap-2'} px-1`}>
             {sorted.map((item) => (
-              <div key={item.score} className={`flex h-full flex-col items-center justify-end ${compact ? 'gap-1.5' : 'gap-2'}`}>
+              <div key={item.score} className={`flex h-full flex-col items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
                 <div className={`${compact ? 'text-[11px]' : 'text-xs'} font-bold text-slate-500`}>{item.count}</div>
                 <div className="flex h-full w-full items-end justify-center">
                   <div
-                    className={`${barColor(item.score)} w-full ${compact ? 'max-w-[14px]' : 'max-w-[22px]'} rounded-t-[8px] transition-all duration-700`}
+                    className={`${barColor(item.score)} w-full ${compact ? 'max-w-[12px]' : 'max-w-[22px]'} rounded-t-[8px] transition-all duration-700`}
                     style={{ height: `${Math.max((item.count / maxCount) * 100, item.count > 0 ? 8 : 0)}%` }}
                   />
                 </div>
@@ -105,12 +105,12 @@ export const RatingHistogram: React.FC<{ ratingSummary: RatingSummary; compact?:
 
       {recommendPills.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className={`${compact ? 'text-xs' : 'text-xs'} font-black text-slate-400 uppercase tracking-widest mb-1`}>推荐倾向</div>
+          <div className={`${compact ? 'text-[11px]' : 'text-xs'} font-black text-slate-400 uppercase tracking-widest mb-1`}>推荐倾向</div>
           <div className={`flex flex-wrap ${compact ? 'gap-1.5' : 'gap-2'}`}>
             {recommendPills.map((pill) => (
               <span
                 key={pill.key}
-                className={`rounded-2xl ${compact ? 'px-3 py-1.5 text-xs' : 'px-3 py-2 text-sm'} font-black ${pill.tone}`}
+                className={`rounded-2xl ${compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-2 text-sm'} font-black ${pill.tone}`}
               >
                 {pill.label} {pill.value}
               </span>

@@ -75,7 +75,7 @@ export const DetailOverlay: React.FC = () => {
           className="flex-1 overflow-y-auto scroll-smooth outline-none focus:ring-0 p-4 md:p-8"
         >
           <div className="max-w-6xl mx-auto flex flex-col gap-6">
-            <DetailHeader resource={selectedResource} />
+            <DetailHeader resource={selectedResource} onImageClick={setSelectedImage} />
             <DetailTabs activeTab={activeTab} onChange={setActiveTab} />
 
             {/* Tab Content */}

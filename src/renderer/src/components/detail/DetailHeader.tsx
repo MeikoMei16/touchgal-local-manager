@@ -5,14 +5,20 @@ import { RatingHistogram } from '../RatingHistogram';
 
 interface DetailHeaderProps {
   resource: TouchGalDetail;
+  onImageClick?: (url: string) => void;
 }
 
-export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource }) => {
+export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageClick }) => {
   const { ratingSummary } = resource;
 
   return (
     <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3">
-      <div className="md:col-span-1 aspect-video md:aspect-auto relative bg-slate-100 overflow-hidden">
+      <div
+        className={`md:col-span-1 aspect-video md:aspect-auto relative bg-slate-100 overflow-hidden ${resource.banner ? 'cursor-zoom-in' : ''}`}
+        onClick={() => {
+          if (resource.banner) onImageClick?.(resource.banner)
+        }}
+      >
         {resource.banner && (
           <img
             src={resource.banner}
@@ -27,8 +33,8 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource }) => {
         </div>
       </div>
 
-      <div className="md:col-span-2 p-6 md:p-10 flex flex-col gap-5">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+      <div className="md:col-span-2 p-6 md:p-8 flex flex-col gap-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
           <div className="flex min-w-0 flex-col gap-5">
             <div className="flex flex-col gap-2">
               <h1 className="m-0 text-2xl md:text-3xl font-black text-slate-900 leading-tight tracking-tight">{resource.name}</h1>
@@ -73,13 +79,13 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource }) => {
           </div>
 
           {ratingSummary && (
-            <div className="xl:justify-self-end xl:w-[320px] xl:pt-1">
+            <div className="xl:justify-self-end xl:w-[280px] xl:pt-0.5">
               <RatingHistogram ratingSummary={ratingSummary} compact />
             </div>
           )}
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="pt-3 border-t border-slate-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
               <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${resource.company || 'P'}`} alt="User" />

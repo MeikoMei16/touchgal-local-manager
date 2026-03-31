@@ -1,7 +1,8 @@
 import React from 'react';
 import { FileText, Globe } from 'lucide-react';
 import { TouchGalDetail } from '../../types';
-import { ScreenshotGallery } from '../ScreenshotGallery';
+import { DetailScreenshotStrip } from './DetailScreenshotStrip';
+import { DetailPvPanel } from './DetailPvPanel';
 
 interface DetailInfoPanelProps {
   resource: TouchGalDetail;
@@ -36,15 +37,10 @@ export const DetailInfoPanel: React.FC<DetailInfoPanelProps> = ({
           />
         </section>
 
-        <ScreenshotGallery screenshots={screenshots} onImageClick={onImageClick} />
+        <DetailScreenshotStrip screenshots={screenshots} onImageClick={onImageClick} />
 
         {pvUrl && (
-          <section className="flex flex-col gap-4">
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">PV鉴赏</h2>
-            <div className="rounded-3xl overflow-hidden bg-black aspect-video relative shadow-2xl border border-slate-800">
-              <video controls src={pvUrl} poster={resource.banner || ''} className="w-full h-full" />
-            </div>
-          </section>
+          <DetailPvPanel pvUrl={pvUrl} />
         )}
 
         <section className="flex flex-col gap-6 pt-8 border-t border-slate-100">

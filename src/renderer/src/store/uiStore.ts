@@ -15,6 +15,25 @@ import type { UIState } from './uiStoreTypes';
 
 export type { UIState } from './uiStoreTypes';
 
+const coerceLegacyHomepageDefaults = (query: Partial<UIState['lastHomeQuery']> | undefined) => {
+  const normalized = normalizeHomeQuery(query);
+
+  const looksLikeLegacyDefault =
+    normalized.minRatingCount === 10 &&
+    normalized.nsfwMode === 'safe' &&
+    normalized.selectedPlatform === 'all' &&
+    normalized.yearConstraints.length === 0 &&
+    normalized.minRatingScore === 0 &&
+    normalized.minCommentCount === 0 &&
+    normalized.selectedTags.length === 0 &&
+    normalized.sortField === 'rating' &&
+    normalized.sortOrder === 'desc';
+
+  return looksLikeLegacyDefault
+    ? { ...normalized, minRatingCount: 0 }
+    : normalized;
+};
+
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
@@ -64,7 +83,7 @@ export const useUIStore = create<UIState>()(
           ...persistedSlice,
           hasHydratedUi: true,
           currentPage: normalizePage(persistedSlice?.currentPage),
-          lastHomeQuery: normalizeHomeQuery(persistedQuery)
+          lastHomeQuery: coerceLegacyHomepageDefaults(persistedQuery)
         };
       }
     }
