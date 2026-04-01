@@ -11,6 +11,7 @@ import {
 import { createBrowseActions } from './uiActions/browseActions';
 import { createDetailActions } from './uiActions/detailActions';
 import { createAdvancedActions } from './uiActions/advancedActions';
+import { createRatingCatalogActions } from './uiActions/ratingCatalogActions';
 import type { UIState } from './uiStoreTypes';
 
 export type { UIState } from './uiStoreTypes';
@@ -57,10 +58,14 @@ export const useUIStore = create<UIState>()(
         nsfw: defaultAdvancedDatasetCache(),
         all: defaultAdvancedDatasetCache()
       },
+      ratingCatalogsByKey: {},
+      ratingBuildSessionId: null,
+      ratingBuildProgress: defaultBuildProgress(),
       lastHomeQuery: defaultHomeQuery(),
       ...createBrowseActions(set, get),
       ...createDetailActions(set, get),
-      ...createAdvancedActions(set, get)
+      ...createAdvancedActions(set, get),
+      ...createRatingCatalogActions(set, get)
     }),
     {
       name: 'touchgal-ui-storage',
