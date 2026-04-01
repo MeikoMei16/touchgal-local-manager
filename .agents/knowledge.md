@@ -32,6 +32,7 @@ Short project facts for future agents working in this repository.
 - Homepage tag filtering is strict local filtering.
 - Do not rely on `/search` for homepage tag correctness.
 - Homepage upstream controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) live in the top bar, not inside the advanced panel.
+- Rating sort is handled by the advanced local-catalog pipeline because upstream rating pagination is unstable.
 
 ## Useful Pointers
 

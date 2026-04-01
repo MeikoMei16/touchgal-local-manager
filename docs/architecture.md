@@ -117,6 +117,7 @@ Renderer persistence notes:
 Important note:
 
 - sorting for the homepage is store-owned, not component-local
+- `sortField === 'rating'` is treated as an advanced-mode trigger because upstream rating pagination is unstable
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
 - normal homepage refresh should restore sort key, sort order, upstream filters, and current page from persisted state
 - upstream homepage controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) are rendered directly in the homepage top bar, left of `高级筛选`
@@ -143,22 +144,25 @@ Normal homepage refresh behavior:
 Advanced homepage browsing:
 
 1. Renderer keeps the active homepage query in `lastHomeQuery`.
-2. Entering advanced mode builds or reuses a domain-scoped local candidate dataset.
-3. Stage 2 and Stage 3 filtering are applied locally against that dataset.
-4. Local sorting and pagination update the same result view state used by normal mode.
+2. Queries that require local correctness — including `sortField === 'rating'` — enter advanced mode instead of trusting upstream pagination.
+3. Entering advanced mode builds or reuses a domain-scoped local candidate dataset using only upstream coarse filters.
+4. Stage 2 and Stage 3 filtering are applied locally against that dataset.
+5. Local sorting and pagination update the same result view state used by normal mode.
 
 Homepage top bar behavior:
 
 1. Sort controls remain on the left side of the homepage toolbar.
 2. Upstream browse controls live on the right side, immediately to the left of `高级筛选`.
 3. Those controls still write into `lastHomeQuery`, so they participate in the same persistence and refresh-restore path as all other homepage query fields.
+4. Choosing rating sort routes the homepage through the same local advanced pipeline used by advanced filtering; there is no separate rating-only mode.
 
 Exiting advanced search:
 
 1. Renderer clears advanced constraints and advanced-mode UI state.
 2. Homepage returns to `normal` mode.
-3. The reset query preserves the current top-level sort field and sort order.
-4. A fresh normal-mode fetch is triggered from the reset homepage query.
+3. The reset query currently preserves the current top-level sort field and sort order.
+4. If the preserved query still requires local correctness — notably `sortField === 'rating'` — the controller immediately re-enters the advanced local-catalog path instead of staying on normal API pagination.
+5. Otherwise, a fresh normal-mode fetch is triggered from the reset homepage query.
 
 Login and captcha flow:
 
@@ -248,6 +252,7 @@ Status note:
 - Split UI-store action modules for browse, detail, and advanced pipelines
 - Modular detail overlay composition
 - Advanced filtering with local multi-stage pipeline
+- Rating-sort stabilization through the same local advanced dataset pipeline
 - Basic SQLite bootstrap
 - Basic download queue persistence and link parsing scaffold
 

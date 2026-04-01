@@ -13,7 +13,7 @@ Current cross-cutting topics covered here:
 
 - renderer store split and compatibility-bridge status
 - homepage query ownership, persistence, and hydration
-- advanced search pipeline, cache reuse, and exit behavior
+- advanced search and rating-sort pipeline, cache reuse, and current exit behavior
 - homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
 - main-process auth token normalization and upstream header/cookie rules
 - current login and captcha interaction constraints

@@ -8,7 +8,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - normalized session/token handling in the main-process relay
 - React renderer with Zustand state
 - persisted homepage browse state with hydration-aware refresh restore
-- advanced homepage filtering with local tag enrichment
+- advanced homepage filtering and rating sorting with a local catalog pipeline
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, and comments
 - early local SQLite and download-manager scaffolding
 
@@ -57,4 +57,4 @@ Platform builds:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for the homepage state refactor, advanced-filter behavior, main-process session relay rules, and the current detail-overlay data flow.
+The docs set is current for the homepage state refactor, advanced-filter behavior, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow.

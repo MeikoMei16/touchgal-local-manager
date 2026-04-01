@@ -118,6 +118,20 @@ Reason:
 - these three fields are upstream API inputs, not local advanced-processing inputs
 - separating them from the advanced panel makes the browse model easier to understand and reduces unnecessary advanced-mode mental overhead
 
+### Rating sort uses the local advanced pipeline
+
+Rule:
+
+- treat `sortField === 'rating'` as an advanced-mode trigger
+- do not rely on upstream `rating asc/desc` pagination as the source of truth for page ordering
+- build or reuse the advanced candidate catalog, then sort and paginate locally
+
+Reason:
+
+- upstream rating pages can duplicate or reshuffle items across page boundaries
+- the advanced pipeline already provides bounded page fetches, dataset reuse, stale-session cancellation, and local pagination
+- keeping rating sort inside the advanced pipeline avoids a second competing mode with overlapping cache/session behavior
+
 ### Detail data must be resolved from the final patch id
 
 Rule:
@@ -212,7 +226,7 @@ Reason:
 Rule:
 
 - the advanced-mode exit action must clear advanced constraints, reset advanced-mode UI state, and trigger a normal homepage refresh
-- preserving sort field and sort order is allowed; preserving advanced constraints is not
+- preserving sort field and sort order is allowed only if the resulting query no longer requires advanced mode; preserving `sortField === 'rating'` will intentionally route back into the local advanced pipeline
 
 Reason:
 
