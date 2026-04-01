@@ -6,8 +6,7 @@ import type {
   AdvancedFilterDraft,
   HomeMode,
   HomeQueryState,
-  NsfwDomain,
-  RatingCatalogCache
+  NsfwDomain
 } from '../features/home/homeState';
 
 export interface UIState {
@@ -27,9 +26,6 @@ export interface UIState {
   advancedBuildSessionId: string | null;
   advancedBuildProgress: AdvancedBuildProgress;
   advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
-  ratingCatalogsByKey: Record<string, RatingCatalogCache>;
-  ratingBuildSessionId: string | null;
-  ratingBuildProgress: AdvancedBuildProgress;
   lastHomeQuery: HomeQueryState;
   fetchResources: (page?: number, query?: Partial<HomeQueryState>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: any) => Promise<void>;
@@ -45,9 +41,6 @@ export interface UIState {
   removeTagFilter: (tag: string) => void;
   clearTags: () => void;
   resetAdvancedFilterDraft: () => void;
-  buildRatingCatalog: (sortOrder: string) => Promise<void>;
-  applyRatingSort: (page: number, sortOrder: string) => void;
-  exitRatingMode: () => void;
   setLastHomeQuery: (query: Partial<HomeQueryState>) => void;
   setCurrentPage: (page: number) => void;
   setHasHydratedUi: (hydrated: boolean) => void;

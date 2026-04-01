@@ -24,15 +24,13 @@ export const useHomeQueryController = () => {
     enterAdvancedMode,
     applyAdvancedFilters,
     exitAdvancedMode,
-    buildRatingCatalog,
-    applyRatingSort,
-    exitRatingMode
+    clearAdvancedSearch
   } = useUIStore();
 
   const sortField = lastHomeQuery.sortField;
   const sortOrder = lastHomeQuery.sortOrder;
 
-  const isRatingMode = homeMode === 'rating_building' || homeMode === 'rating_ready';
+  const isAdvancedMode = homeMode === 'advanced_building' || homeMode === 'advanced_ready';
 
   const syncDraftFromQuery = (query: HomeQueryState) => {
     const nextDomain = mapNsfwModeToDomain(query.nsfwMode ?? 'safe');
@@ -46,14 +44,14 @@ export const useHomeQueryController = () => {
     syncDraftFromQuery(lastHomeQuery);
   }, [hasHydratedUi, lastHomeQuery, setActiveNsfwDomain, updateAdvancedFilterDraft]);
 
-  // Normal/rating fetch effect: fires when query or page changes
+  // Fetch effect: routes to normal fetch or triggers advanced mode build
   useEffect(() => {
     if (!hasHydratedUi) return;
 
-    if (lastHomeQuery.sortField === 'rating') {
-      // Only trigger a fresh build if not already in a rating mode (e.g., on first load)
+    if (requiresAdvancedMode(lastHomeQuery)) {
+      // Advanced mode handles its own fetching; only trigger a build from 'normal'
       if (homeMode === 'normal') {
-        buildRatingCatalog(lastHomeQuery.sortOrder);
+        enterAdvancedMode(lastHomeQuery.sortField, lastHomeQuery.sortOrder);
       }
       return;
     }
@@ -64,7 +62,7 @@ export const useHomeQueryController = () => {
       nsfwMode: lastHomeQuery.nsfwMode || activeNsfwDomain || 'safe',
       sortOrder
     });
-  }, [hasHydratedUi, fetchResources, homeMode, lastHomeQuery, currentPage, sortOrder, activeNsfwDomain, buildRatingCatalog]);
+  }, [hasHydratedUi, fetchResources, homeMode, lastHomeQuery, currentPage, sortOrder, activeNsfwDomain, enterAdvancedMode]);
 
   const commitFilterDraft = (filters: Partial<HomeQueryState>) => {
     const newQuery = buildHomeQuery(lastHomeQuery, filters);
@@ -74,63 +72,45 @@ export const useHomeQueryController = () => {
   };
 
   const handleFilterChange = (filters: Partial<HomeQueryState>) => {
-    const { newQuery, nextDomain } = commitFilterDraft(filters);
+    const { newQuery } = commitFilterDraft(filters);
 
-    // Switching away from rating sort exits rating mode
-    if (filters.sortField !== undefined && filters.sortField !== 'rating' && isRatingMode) {
-      exitRatingMode();
+    if (!requiresAdvancedMode(newQuery)) {
+      if (isAdvancedMode) exitAdvancedMode();
       return;
     }
 
-    // Coarse filter changes while in rating mode trigger a rebuild
+    // Coarse filters (domain, platform, minRatingCount) or sort field change → rebuild
     const coarseFilterChanged =
       filters.nsfwMode !== undefined ||
       filters.selectedPlatform !== undefined ||
-      filters.minRatingCount !== undefined;
-
-    if (newQuery.sortField === 'rating') {
-      if (coarseFilterChanged || homeMode === 'normal') {
-        void buildRatingCatalog(newQuery.sortOrder);
-      }
-      return;
-    }
-
-    if (!requiresAdvancedMode(newQuery)) {
-      if (homeMode !== 'normal') {
-        if (isRatingMode) exitRatingMode();
-        else exitAdvancedMode();
-      }
-      return;
-    }
+      filters.minRatingCount !== undefined ||
+      filters.sortField !== undefined;
 
     const domainChanged =
-      filters.nsfwMode !== undefined && mapNsfwModeToDomain(filters.nsfwMode) !== activeNsfwDomain;
-    const platformChanged = filters.selectedPlatform !== undefined;
+      filters.nsfwMode !== undefined &&
+      mapNsfwModeToDomain(filters.nsfwMode) !== activeNsfwDomain;
 
-    if (homeMode === 'advanced_ready' && !domainChanged && !platformChanged) {
+    if (homeMode === 'advanced_ready' && !domainChanged && !coarseFilterChanged) {
       applyAdvancedFilters(currentPage, newQuery.sortField, newQuery.sortOrder);
+      return;
     }
 
-    void nextDomain;
+    // Let the fetch effect handle the build trigger if homeMode was normal,
+    // or kick off a rebuild for coarse changes in advanced mode
+    if (isAdvancedMode && coarseFilterChanged) {
+      void enterAdvancedMode(newQuery.sortField, newQuery.sortOrder);
+    }
   };
 
   const handleAdvancedSubmit = async (filters: Partial<HomeQueryState>) => {
     const { newQuery } = commitFilterDraft(filters);
 
-    if (newQuery.sortField === 'rating') {
-      await buildRatingCatalog(newQuery.sortOrder);
-      return true;
-    }
-
     if (!requiresAdvancedMode(newQuery)) {
-      if (homeMode !== 'normal') {
-        if (isRatingMode) exitRatingMode();
-        else exitAdvancedMode();
-      }
+      if (isAdvancedMode) clearAdvancedSearch();
       return false;
     }
 
-    await enterAdvancedMode(sortField, sortOrder);
+    await enterAdvancedMode(newQuery.sortField, newQuery.sortOrder);
     return true;
   };
 
@@ -138,32 +118,26 @@ export const useHomeQueryController = () => {
     handleAdvancedSubmit(buildQueryFromAdvancedDraft(advancedFilterDraft, overrides));
 
   const updateSort = (field: HomeQueryState['sortField'], order: HomeQueryState['sortOrder']) => {
-    setLastHomeQuery({ ...lastHomeQuery, sortField: field, sortOrder: order });
+    const newQuery = buildHomeQuery(lastHomeQuery, { sortField: field, sortOrder: order });
+    setLastHomeQuery(newQuery);
 
-    if (field === 'rating') {
-      // If already in rating mode, just flip the local sort direction
-      if (isRatingMode) {
-        applyRatingSort(currentPage, order);
-      }
-      // Otherwise the effect above will fire buildRatingCatalog
+    if (!requiresAdvancedMode(newQuery)) {
+      if (isAdvancedMode) exitAdvancedMode();
       return;
     }
 
-    // Switching away from rating to another sort
-    if (isRatingMode) {
-      exitRatingMode();
+    // In advanced_ready mode, a sort-order flip is local-only; no rebuild needed
+    if (homeMode === 'advanced_ready' && field === sortField) {
+      applyAdvancedFilters(currentPage, field, order);
       return;
     }
 
-    if (homeMode !== 'normal') applyAdvancedFilters(currentPage, field, order);
+    // Sort field changed or entering advanced for the first time → build
+    void enterAdvancedMode(field, order);
   };
 
   const goToPage = (page: number) => {
-    if (homeMode === 'normal') return false;
-    if (isRatingMode) {
-      applyRatingSort(page, sortOrder);
-      return true;
-    }
+    if (!isAdvancedMode) return false;
     applyAdvancedFilters(page, sortField, sortOrder);
     return true;
   };

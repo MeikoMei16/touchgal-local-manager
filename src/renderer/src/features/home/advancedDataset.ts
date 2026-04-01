@@ -101,11 +101,6 @@ export const paginateAdvancedResources = (
 
 export const createAdvancedSessionId = () => `adv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-export const createRatingSessionId = () => `rat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-export const getRatingCatalogKey = (domain: NsfwDomain, selectedPlatform: string, minRatingCount: number) =>
-  JSON.stringify({ domain, selectedPlatform: selectedPlatform ?? 'all', minRatingCount: minRatingCount ?? 0 });
-
 export const getAdvancedUpstreamKey = (draft: AdvancedFilterDraft, domain: NsfwDomain) =>
   JSON.stringify({
     domain,

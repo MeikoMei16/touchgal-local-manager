@@ -1,6 +1,6 @@
 import { TouchGalResource } from '../../types';
 
-export type HomeMode = 'normal' | 'advanced_building' | 'advanced_ready' | 'rating_building' | 'rating_ready';
+export type HomeMode = 'normal' | 'advanced_building' | 'advanced_ready';
 export type NsfwDomain = 'sfw' | 'nsfw' | 'all';
 
 export interface AdvancedFilterDraft {
@@ -72,20 +72,6 @@ export const defaultBuildProgress = (): AdvancedBuildProgress => ({
   completed: 0,
   total: 0,
   message: ''
-});
-
-export interface RatingCatalogCache {
-  resources: AdvancedResourceRecord[];
-  total: number;
-  upstreamKey: string | null;
-  lastBuiltAt: number | null;
-}
-
-export const defaultRatingCatalogCache = (): RatingCatalogCache => ({
-  resources: [],
-  total: 0,
-  upstreamKey: null,
-  lastBuiltAt: null
 });
 
 export const defaultAdvancedDatasetCache = (): AdvancedDatasetCache => ({

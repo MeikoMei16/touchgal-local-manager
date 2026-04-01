@@ -14,7 +14,7 @@ export const Home: React.FC = () => {
     fetchResources, selectResource,
     removeTagFilter, clearTags, advancedFilterDraft,
     homeMode, activeNsfwDomain, advancedBuildProgress, clearAdvancedSearch,
-    advancedDatasetsByDomain, ratingBuildProgress, exitRatingMode,
+    advancedDatasetsByDomain,
     lastHomeQuery, setCurrentPage
   } = useUIStore();
   const {
@@ -137,7 +137,7 @@ export const Home: React.FC = () => {
         <div className="flex items-center justify-between gap-4 px-4 py-3 mb-2 rounded-3xl border border-amber-200 bg-amber-50 text-amber-900 shadow-sm">
           <div className="flex flex-col gap-1">
             <span className="text-sm font-black uppercase tracking-wide">
-              {homeMode === 'advanced_building' ? '高级筛选构建中' : '高级筛选已就绪'}
+              {homeMode === 'advanced_building' ? (lastHomeQuery.sortField === 'rating' ? '评分目录构建中' : '高级筛选构建中') : (lastHomeQuery.sortField === 'rating' ? '评分排序已就绪' : '高级筛选已就绪')}
             </span>
             <span className="text-sm font-semibold">
               当前数据域: {activeNsfwDomain.toUpperCase()} · {advancedBuildProgress.message || '本地高级筛选数据已切换为独立模式'}
@@ -153,26 +153,6 @@ export const Home: React.FC = () => {
             onClick={handleExitAdvancedMode}
           >
             退出高级模式
-          </button>
-        </div>
-      )}
-
-
-      {(homeMode === 'rating_building' || homeMode === 'rating_ready') && (
-        <div className="flex items-center justify-between gap-4 px-4 py-3 mb-2 rounded-3xl border border-blue-200 bg-blue-50 text-blue-900 shadow-sm">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-black uppercase tracking-wide">
-              {homeMode === 'rating_building' ? '评分目录构建中' : '评分排序已就绪'}
-            </span>
-            <span className="text-sm font-semibold">
-              {ratingBuildProgress.message || '正在本地构建评分目录以确保分页稳定'}
-            </span>
-          </div>
-          <button
-            className="px-4 py-2 rounded-full border border-blue-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-blue-100"
-            onClick={exitRatingMode}
-          >
-            退出评分模式
           </button>
         </div>
       )}
