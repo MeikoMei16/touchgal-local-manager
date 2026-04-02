@@ -254,6 +254,14 @@ Status note:
 
 - The schema is broader than currently shipped UI features.
 - Some tables support planned local-first capabilities that are only partially wired today.
+- Database-backed resource persistence is intentionally deferred for now; the app still treats upstream API responses as the source of truth for homepage browsing and detail loading.
+- Do not treat the presence of a table as a requirement to persist that upstream resource yet.
+- Near-term persistence should stay narrow and local-first:
+  renderer UI restore state
+  main-process auth/session artifacts
+  download queue state
+  local installation/link metadata
+  explicitly user-authored local metadata once that UI is implemented
 
 ## Current Feature Status
 
@@ -281,6 +289,7 @@ Status note:
 - Local metadata cache usage is still limited
 - Downloader is scaffolded, not full end-to-end
 - Offline-first search is not yet the main browse path
+- Deciding which upstream resource payloads deserve durable SQLite storage is still deferred work, not a settled requirement
 
 ## Important Constraints
 

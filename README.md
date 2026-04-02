@@ -92,6 +92,12 @@ Still in progress:
 - downloader flow beyond the current scaffold / persistence layer
 - more complete local-first and offline-friendly browsing flows
 
+Persistence status note:
+
+- SQLite exists today as schema/bootstrap groundwork, not as the primary source of truth for browse/detail data
+- database-backed resource persistence is intentionally deferred until the UI and local-first flows that consume it are defined more concretely
+- for now, only persist data with a clear local ownership story such as renderer UI restore state, auth/session artifacts managed by the main process, download tasks, local file links, and future user-authored metadata
+
 ## Documentation
 
 - [docs/README.md](docs/README.md)

@@ -265,6 +265,31 @@ Reason:
 
 - users expect “退出高级模式” to return to ordinary browsing immediately, not only flip an internal mode flag
 
+## Local Persistence
+
+### SQLite scope is intentionally deferred
+
+Rule:
+
+- do not assume every upstream resource or detail payload should be persisted just because a schema/table exists
+- upstream TouchGal browse/detail responses remain the source of truth for now
+- add durable SQLite persistence only when a concrete local consumer is defined, such as offline browse, cache invalidation, download orchestration, local library linking, or user-authored metadata
+- when in doubt, prefer not persisting a resource payload yet
+
+For now, safe persistence targets are:
+
+- renderer UI restore state such as homepage query/page and interaction preferences
+- main-process auth/session artifacts
+- download tasks and related local execution state
+- local file/library links
+- future personal notes, play state, and other user-authored metadata
+
+Reason:
+
+- the current database layer is broader than the shipped product surface
+- persisting upstream resource payloads prematurely creates schema obligations, sync questions, and invalidation work before the app has a settled local-first read path
+- narrowing persistence scope keeps the current implementation aligned with the actual product state
+
 ### Advanced filter execution is button-driven
 
 Rule:
