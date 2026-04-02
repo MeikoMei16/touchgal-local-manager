@@ -353,20 +353,20 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
   exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),
   clearAdvancedSearch: () => {
     const currentQuery = get().lastHomeQuery;
+    // Reset rating sort on exit so the fetch effect does not immediately re-enter advanced mode.
+    const safeSortField = currentQuery.sortField === 'rating' ? 'created' : currentQuery.sortField;
     const resetQuery = {
       ...defaultHomeQuery(),
       nsfwMode: currentQuery.nsfwMode,
       selectedPlatform: currentQuery.selectedPlatform,
-      minRatingCount: currentQuery.minRatingCount,
-      sortField: currentQuery.sortField,
+      sortField: safeSortField,
       sortOrder: currentQuery.sortOrder
     };
     const resetDomain = mapNsfwModeToDomain(currentQuery.nsfwMode);
     const resetDraft = {
       ...defaultAdvancedFilterDraft(),
       nsfwMode: resetDomain,
-      selectedPlatform: currentQuery.selectedPlatform,
-      minRatingCount: currentQuery.minRatingCount
+      selectedPlatform: currentQuery.selectedPlatform
     };
 
     set({
