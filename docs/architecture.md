@@ -84,10 +84,10 @@ Owns:
 
 Renderer state implementation is now split:
 
-- [`src/renderer/src/store/authStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/authStore.ts): auth UI state
-- [`src/renderer/src/store/uiStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiStore.ts): UI store assembly and persistence
-- [`src/renderer/src/store/uiActions/`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiActions): browse, detail, and advanced action modules
-- [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts): compatibility bridge only
+- [`src/renderer/src/store/authStore.ts`](../src/renderer/src/store/authStore.ts): auth UI state
+- [`src/renderer/src/store/uiStore.ts`](../src/renderer/src/store/uiStore.ts): UI store assembly and persistence
+- [`src/renderer/src/store/uiActions/`](../src/renderer/src/store/uiActions): browse, detail, and advanced action modules
+- [`src/renderer/src/store/useTouchGalStore.ts`](../src/renderer/src/store/useTouchGalStore.ts): compatibility bridge only
 
 Key frontend state split:
 
@@ -102,10 +102,10 @@ Key frontend state split:
 
 Renderer code split:
 
-- homepage query rules and controller: [`src/renderer/src/features/home/homeQuery.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/home/homeQuery.ts), [`src/renderer/src/features/home/useHomeQueryController.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/home/useHomeQueryController.ts)
-- advanced-filter pure helpers: [`src/renderer/src/features/home/advancedDataset.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/home/advancedDataset.ts)
-- detail normalization helpers: [`src/renderer/src/features/detail/detailResource.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/features/detail/detailResource.ts)
-- detail overlay subcomponents: [`src/renderer/src/components/detail/`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/components/detail)
+- homepage query rules and controller: [`src/renderer/src/features/home/homeQuery.ts`](../src/renderer/src/features/home/homeQuery.ts), [`src/renderer/src/features/home/useHomeQueryController.ts`](../src/renderer/src/features/home/useHomeQueryController.ts)
+- advanced-filter pure helpers: [`src/renderer/src/features/home/advancedDataset.ts`](../src/renderer/src/features/home/advancedDataset.ts)
+- detail normalization helpers: [`src/renderer/src/features/detail/detailResource.ts`](../src/renderer/src/features/detail/detailResource.ts)
+- detail overlay subcomponents: [`src/renderer/src/components/detail/`](../src/renderer/src/components/detail)
 
 Renderer persistence notes:
 
@@ -231,7 +231,7 @@ Detail info and links presentation:
 
 ## Local Persistence
 
-SQLite is initialized in [`src/main/db.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/main/db.ts).
+SQLite is initialized in [`src/main/db.ts`](../src/main/db.ts).
 
 Current schema areas include:
 

@@ -96,14 +96,14 @@ Reason:
 
 This is now split across dedicated renderer store modules:
 
-- [`src/renderer/src/store/uiStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiStore.ts): UI-store assembly and persistence config
-- [`src/renderer/src/store/uiActions/browseActions.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiActions/browseActions.ts): normal browse actions
-- [`src/renderer/src/store/uiActions/advancedActions.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiActions/advancedActions.ts): advanced pipeline actions
-- [`src/renderer/src/store/uiStoreTypes.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/uiStoreTypes.ts): shared UI-store boundary types
+- [`src/renderer/src/store/uiStore.ts`](../src/renderer/src/store/uiStore.ts): UI-store assembly and persistence config
+- [`src/renderer/src/store/uiActions/browseActions.ts`](../src/renderer/src/store/uiActions/browseActions.ts): normal browse actions
+- [`src/renderer/src/store/uiActions/advancedActions.ts`](../src/renderer/src/store/uiActions/advancedActions.ts): advanced pipeline actions
+- [`src/renderer/src/store/uiStoreTypes.ts`](../src/renderer/src/store/uiStoreTypes.ts): shared UI-store boundary types
 
 Compatibility note:
 
-- [`src/renderer/src/store/useTouchGalStore.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/store/useTouchGalStore.ts) is no longer the implementation source of truth
+- [`src/renderer/src/store/useTouchGalStore.ts`](../src/renderer/src/store/useTouchGalStore.ts) is no longer the implementation source of truth
 - it remains as a compatibility bridge that re-exports the split stores for older imports
 - new frontend state work should target `uiStore.ts` / `authStore.ts` and the action modules directly
 

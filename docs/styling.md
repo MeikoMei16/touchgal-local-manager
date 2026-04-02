@@ -1,6 +1,6 @@
 # Styling
 
-Renderer styling is built with Tailwind CSS 4 and theme tokens defined in [`src/renderer/src/index.css`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/index.css).
+Renderer styling is built with Tailwind CSS 4 and theme tokens defined in [`src/renderer/src/index.css`](../src/renderer/src/index.css).
 
 ## Tooling
 

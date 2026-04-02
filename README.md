@@ -1,3 +1,6 @@
+[![English](https://img.shields.io/badge/Language-English-blue?style=for-the-badge)](./README.md)
+[![中文](https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E4%B8%AD%E6%96%87-lightgrey?style=for-the-badge)](./README.zh-CN.md)
+
 # TouchGal Local Manager
 
 Electron desktop client for browsing TouchGal resources with a local-state-heavy UX, advanced homepage filtering, and room for future local-first features.
@@ -49,6 +52,45 @@ Platform builds:
 
 - `pnpm build:win`
 - `pnpm build:linux`
+
+## Build Locally
+
+For local development:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+For a production build:
+
+```bash
+pnpm exec electron-vite build
+```
+
+For a Windows 64-bit installer:
+
+```bash
+pnpm build:win
+```
+
+The current Windows target is an NSIS `x64` installer `.exe`, generated under `release/0.0.0/`.
+
+## Roadmap
+
+Implemented or active:
+
+- homepage browsing and refresh persistence
+- main-process auth/session relay
+- advanced homepage filtering and local rating-sort pipeline
+- detail overlay with comments, ratings, screenshots, PV extraction, and sectioned resource links
+- settings-backed detail right-click behavior
+
+Still in progress:
+
+- broader use of the local metadata cache
+- downloader flow beyond the current scaffold / persistence layer
+- more complete local-first and offline-friendly browsing flows
 
 ## Documentation
 

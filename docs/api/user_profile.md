@@ -8,9 +8,9 @@ These endpoints are relayed by the Electron main process and exposed to the rend
 
 Relevant implementation points:
 
-- [`src/main/index.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/main/index.ts)
-- [`src/preload/index.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/preload/index.ts)
-- [`src/renderer/src/data/TouchGalClient.ts`](/home/may/Documents/term3/project/touchgal-local-manager/src/renderer/src/data/TouchGalClient.ts)
+- [`src/main/index.ts`](../../src/main/index.ts)
+- [`src/preload/index.ts`](../../src/preload/index.ts)
+- [`src/renderer/src/data/TouchGalClient.ts`](../../src/renderer/src/data/TouchGalClient.ts)
 
 ## Authentication
 
