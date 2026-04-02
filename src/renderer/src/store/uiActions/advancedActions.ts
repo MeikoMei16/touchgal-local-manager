@@ -36,6 +36,21 @@ const buildEnrichmentMessage = (completed: number, total: number, needsTagHydrat
   return `正在补全资源信息 (${completed}/${total})...`;
 };
 
+const getPendingIntroResources = (
+  resources: AdvancedResourceRecord[],
+  failedTagIds: string[],
+  needsTagHydration: boolean
+) =>
+  resources.filter((resource) => {
+    if (failedTagIds.includes(resource.uniqueId)) return false;
+    if (!resource.introHydrated) return true;
+    if (needsTagHydration && !resource.tagsHydrated) return true;
+    return false;
+  });
+
+const toCatalogIndex = (pageNum: number, itemIndex: number) =>
+  (pageNum - 1) * ADVANCED_PAGE_SIZE + itemIndex;
+
 export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
   updateAdvancedFilterDraft: (draft: any) => set((s) => ({ advancedFilterDraft: { ...s.advancedFilterDraft, ...draft } })),
   setActiveNsfwDomain: (domain: any) => set((s) => ({ activeNsfwDomain: domain, advancedFilterDraft: { ...s.advancedFilterDraft, nsfwMode: domain } })),
@@ -67,28 +82,27 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
 
       if (canReuseCatalog) {
         if (needsIntroHydration) {
-          const pendingResources = existingDataset.resources.filter(
-            (resource) => {
-              if (existingDataset.failedTagIds.includes(resource.uniqueId)) return false;
-              if (!resource.introHydrated) return true;
-              if (needsTagHydration && !resource.tagsHydrated) return true;
-              return false;
-            }
+          const pendingResources = getPendingIntroResources(
+            existingDataset.resources,
+            existingDataset.failedTagIds,
+            needsTagHydration
           );
+          const totalTargets = existingDataset.resources.length - existingDataset.failedTagIds.length;
+          const completedAtStart = Math.max(0, totalTargets - pendingResources.length);
 
           if (pendingResources.length > 0) {
             set({
               homeMode: 'advanced_building',
               advancedBuildProgress: {
                 stage: 'enrichment',
-                completed: 0,
-                total: pendingResources.length,
-                message: buildEnrichmentMessage(0, pendingResources.length, needsTagHydration, needsReleaseHydration)
+                completed: completedAtStart,
+                total: totalTargets,
+                message: buildEnrichmentMessage(completedAtStart, totalTargets, needsTagHydration, needsReleaseHydration)
               }
             });
-            get().applyAdvancedFilters(1, sortField, sortOrder);
+            get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
 
-            let hydrated = 0;
+            let hydrated = completedAtStart;
             await runBounded(pendingResources, ADVANCED_TAG_CONCURRENCY, async (resource) => {
               if (get().advancedBuildSessionId !== sessionId) return;
               try {
@@ -121,6 +135,9 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                       [domain]: {
                         ...ds,
                         resources: next,
+                        enrichmentCompletedIds: ds.enrichmentCompletedIds.includes(resource.uniqueId)
+                          ? ds.enrichmentCompletedIds
+                          : [...ds.enrichmentCompletedIds, resource.uniqueId],
                         hydratedTagIds: ds.hydratedTagIds.includes(resource.uniqueId)
                           ? ds.hydratedTagIds
                           : [...ds.hydratedTagIds, resource.uniqueId]
@@ -156,8 +173,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                 ...s.advancedBuildProgress,
                 stage: 'ready',
                 message: needsTagHydration
-                  ? (needsReleaseHydration ? `标签与发售时间补全完成，${hydrated} 个` : `标签富化完成，${hydrated} 个`)
-                  : `发售时间补全完成，${hydrated} 个`
+                  ? (needsReleaseHydration ? `标签与发售时间补全完成，${hydrated}/${totalTargets}` : `标签富化完成，${hydrated}/${totalTargets}`)
+                  : `发售时间补全完成，${hydrated}/${totalTargets}`
               }
             }));
             get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
@@ -171,7 +188,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                 message: `复用已缓存目录，${existingDataset.resources.length} 个候选`
               }
             });
-            get().applyAdvancedFilters(1, sortField, sortOrder);
+            get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
           }
         } else {
           set({
@@ -183,7 +200,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
               message: `复用已缓存目录，${existingDataset.resources.length} 个候选`
             }
           });
-          get().applyAdvancedFilters(1, sortField, sortOrder);
+          get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
         }
         return;
       }
@@ -207,6 +224,12 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       if (get().advancedBuildSessionId !== sessionId) return;
 
       const totalPages = Math.max(1, Math.ceil(firstPage.total / ADVANCED_PAGE_SIZE));
+      const addToPool = (pageList: any[], pageNum: number) =>
+        pageList
+          .map((r, i) => ({ ...toAdvancedResourceRecord(r), __catalogIndex: toCatalogIndex(pageNum, i) }))
+          .filter(midstreamPass);
+
+      const candidates = addToPool(firstPage.list, 1);
       set((s) => ({
         advancedBuildProgress: {
           ...s.advancedBuildProgress,
@@ -216,18 +239,18 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
         },
         advancedDatasetsByDomain: {
           ...s.advancedDatasetsByDomain,
-          [domain]: { ...s.advancedDatasetsByDomain[domain], catalogTotalPages: totalPages }
+          [domain]: {
+            ...s.advancedDatasetsByDomain[domain],
+            resources: candidates,
+            total: candidates.length,
+            upstreamKey,
+            catalogTotalPages: totalPages,
+            catalogCompletedPages: [1]
+          }
         }
       }));
+      get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
 
-      let globalIndex = 0;
-      const addToPool = (pageList: any[]) => {
-        const start = globalIndex;
-        globalIndex += pageList.length;
-        return pageList.map((r, i) => ({ ...toAdvancedResourceRecord(r), __catalogIndex: start + i })).filter(midstreamPass);
-      };
-
-      const candidates = addToPool(firstPage.list);
       const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
       await runBounded(remainingPages, ADVANCED_CATALOG_CONCURRENCY, async (pageNum) => {
         if (get().advancedBuildSessionId !== sessionId) return;
@@ -241,7 +264,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
         }
         if (get().advancedBuildSessionId !== sessionId) return;
 
-        const pageCandidates = addToPool(page.list);
+        const pageCandidates = addToPool(page.list, pageNum);
         candidates.push(...pageCandidates);
 
         set((s) => {
@@ -250,10 +273,20 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
           const merged = uniqueById([...ds.resources, ...pageCandidates]);
           return {
             advancedBuildProgress: { ...s.advancedBuildProgress, completed, message: `正在拉取目录 (${completed}/${totalPages})...` },
-            advancedDatasetsByDomain: { ...s.advancedDatasetsByDomain, [domain]: { ...ds, resources: merged, total: merged.length } }
+            advancedDatasetsByDomain: {
+              ...s.advancedDatasetsByDomain,
+              [domain]: {
+                ...ds,
+                resources: merged,
+                total: merged.length,
+                catalogCompletedPages: ds.catalogCompletedPages.includes(pageNum)
+                  ? ds.catalogCompletedPages
+                  : [...ds.catalogCompletedPages, pageNum].sort((left, right) => left - right)
+              }
+            }
           };
         });
-        get().applyAdvancedFilters(1, sortField, sortOrder);
+        get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
       });
 
       if (get().advancedBuildSessionId !== sessionId) return;
@@ -273,12 +306,15 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
               hydratedTagIds: [],
               failedTagIds: [],
               lastBuiltAt: Date.now(),
-              upstreamKey
+              upstreamKey,
+              catalogTotalPages: totalPages,
+              catalogCompletedPages: Array.from({ length: totalPages }, (_, index) => index + 1),
+              enrichmentCompletedIds: []
             }
           }
         };
       });
-      get().applyAdvancedFilters(1, sortField, sortOrder);
+      get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
 
       if (!needsIntroHydration) return;
       let hydrated = 0;
@@ -312,7 +348,16 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
               },
               advancedDatasetsByDomain: {
                 ...s.advancedDatasetsByDomain,
-                [domain]: { ...ds, resources: next, hydratedTagIds: [...ds.hydratedTagIds, resource.uniqueId] }
+                [domain]: {
+                  ...ds,
+                  resources: next,
+                  enrichmentCompletedIds: ds.enrichmentCompletedIds.includes(resource.uniqueId)
+                    ? ds.enrichmentCompletedIds
+                    : [...ds.enrichmentCompletedIds, resource.uniqueId],
+                  hydratedTagIds: ds.hydratedTagIds.includes(resource.uniqueId)
+                    ? ds.hydratedTagIds
+                    : [...ds.hydratedTagIds, resource.uniqueId]
+                }
               }
             };
           });
@@ -357,77 +402,64 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
   exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),
   pauseAdvancedBuild: () => {
     if (get().homeMode !== 'advanced_building') return;
-    // Save catalog progress into the dataset so resumeAdvancedBuild knows where to continue from.
-    const progress = get().advancedBuildProgress;
-    const domain = get().activeNsfwDomain;
-    set((s) => ({
+    set({
       advancedBuildSessionId: null,
-      homeMode: 'advanced_ready',
-      advancedDatasetsByDomain: progress.stage === 'catalog'
-        ? {
-            ...s.advancedDatasetsByDomain,
-            [domain]: { ...s.advancedDatasetsByDomain[domain], catalogTotalPages: progress.total }
-          }
-        : s.advancedDatasetsByDomain
-    }));
+      homeMode: 'advanced_ready'
+    });
   },
   resumeAdvancedBuild: async (sortField: string, sortOrder: string) => {
     if (get().homeMode !== 'advanced_ready') return;
     const draft = get().advancedFilterDraft;
     const domain = get().activeNsfwDomain;
     const ds = get().advancedDatasetsByDomain[domain];
-    // Only resumable when catalog is incomplete (lastBuiltAt null means catalog never finished)
-    // and we have a partial dataset with known total pages.
-    const catalogIncomplete = ds.lastBuiltAt === null && ds.resources.length > 0 && ds.catalogTotalPages !== null;
-    const enrichmentIncomplete = ds.lastBuiltAt !== null && ds.resources.some((r) => !r.introHydrated);
-    if (!catalogIncomplete && !enrichmentIncomplete) return;
-    // Delegate to enterAdvancedMode which already handles both resume paths:
-    // - canReuseCatalog + needsIntroHydration => enrichment resume
-    // - catalog incomplete => detected below via catalogTotalPages
-    if (enrichmentIncomplete) {
-      get().enterAdvancedMode(sortField, sortOrder);
-      return;
-    }
-    // Catalog resume: continue from the next unfinished page
-    const sessionId = createAdvancedSessionId();
-    const upstreamKey = getAdvancedUpstreamKey(draft, domain);
-    const upstreamQuery = {
-      nsfwMode: domain === 'all' ? undefined : domain,
-      platform: draft.selectedPlatform !== 'all' ? draft.selectedPlatform : undefined,
-      selectedPlatform: draft.selectedPlatform ?? 'all'
-    };
-    if (draft.minRatingCount > 0) (upstreamQuery as any).minRatingCount = draft.minRatingCount;
+    const catalogIncomplete =
+      ds.catalogTotalPages !== null &&
+      ds.catalogCompletedPages.length > 0 &&
+      ds.catalogCompletedPages.length < ds.catalogTotalPages;
     const needsTagHydration = draft.selectedTags.length > 0;
     const needsReleaseHydration = draft.yearConstraints.length > 0;
     const needsIntroHydration = needsTagHydration || needsReleaseHydration;
+    const pendingEnrichment = needsIntroHydration
+      ? getPendingIntroResources(ds.resources, ds.failedTagIds, needsTagHydration)
+      : [];
+    const enrichmentIncomplete = ds.catalogTotalPages !== null && !catalogIncomplete && pendingEnrichment.length > 0;
+    if (!catalogIncomplete && !enrichmentIncomplete) return;
+    if (enrichmentIncomplete) {
+      await get().enterAdvancedMode(sortField, sortOrder);
+      return;
+    }
+    const sessionId = createAdvancedSessionId();
+    const upstreamKey = getAdvancedUpstreamKey(draft, domain);
+    const upstreamQuery = {
+      nsfwMode: domain === 'all' ? 'all' : domain === 'nsfw' ? 'nsfw' : 'safe',
+      selectedPlatform: draft.selectedPlatform ?? 'all'
+    };
+    if (draft.minRatingCount > 0) (upstreamQuery as any).minRatingCount = draft.minRatingCount;
     const midstreamPass = (record: AdvancedResourceRecord): boolean => {
       if (draft.minRatingScore > 0 && (record.averageRating || 0) < draft.minRatingScore) return false;
       if (draft.minCommentCount > 0 && (record.commentCount || (record as any).comments || 0) < draft.minCommentCount) return false;
       return true;
     };
     const totalPages = ds.catalogTotalPages!;
-    const resumeFromPage = ds.resources.length > 0
-      ? Math.floor(ds.resources.length / 30) + 1  // rough estimate; uniqueById handles overlaps
-      : 2;
+    const completedPages = new Set(ds.catalogCompletedPages);
+    const remainingPages = Array.from({ length: totalPages }, (_, index) => index + 1)
+      .filter((pageNum) => !completedPages.has(pageNum));
     set({
       homeMode: 'advanced_building',
       advancedBuildSessionId: sessionId,
       error: null,
       advancedBuildProgress: {
         stage: 'catalog',
-        completed: resumeFromPage - 1,
+        completed: ds.catalogCompletedPages.length,
         total: totalPages,
-        message: `继续拉取目录 (${resumeFromPage - 1}/${totalPages})...`
+        message: `继续拉取目录 (${ds.catalogCompletedPages.length}/${totalPages})...`
       }
     });
     try {
-      let globalIndex = ds.resources.length;
-      const addToPool = (pageList: any[]) => {
-        const start = globalIndex;
-        globalIndex += pageList.length;
-        return pageList.map((r: any, i: number) => ({ ...toAdvancedResourceRecord(r), __catalogIndex: start + i })).filter(midstreamPass);
-      };
-      const remainingPages = Array.from({ length: totalPages - (resumeFromPage - 1) }, (_, i) => resumeFromPage + i);
+      const addToPool = (pageList: any[], pageNum: number) =>
+        pageList
+          .map((r: any, i: number) => ({ ...toAdvancedResourceRecord(r), __catalogIndex: toCatalogIndex(pageNum, i) }))
+          .filter(midstreamPass);
       await runBounded(remainingPages, ADVANCED_CATALOG_CONCURRENCY, async (pageNum) => {
         if (get().advancedBuildSessionId !== sessionId) return;
         let page;
@@ -438,17 +470,28 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
           throw new Error(message, { cause: error });
         }
         if (get().advancedBuildSessionId !== sessionId) return;
-        const pageCandidates = addToPool(page.list);
+        const pageCandidates = addToPool(page.list, pageNum);
         set((s) => {
           const completed = s.advancedBuildProgress.completed + 1;
           const currentDs = s.advancedDatasetsByDomain[domain];
           const merged = uniqueById([...currentDs.resources, ...pageCandidates]);
           return {
             advancedBuildProgress: { ...s.advancedBuildProgress, completed, message: `继续拉取目录 (${completed}/${totalPages})...` },
-            advancedDatasetsByDomain: { ...s.advancedDatasetsByDomain, [domain]: { ...currentDs, resources: merged, total: merged.length } }
+            advancedDatasetsByDomain: {
+              ...s.advancedDatasetsByDomain,
+              [domain]: {
+                ...currentDs,
+                resources: merged,
+                total: merged.length,
+                upstreamKey,
+                catalogCompletedPages: currentDs.catalogCompletedPages.includes(pageNum)
+                  ? currentDs.catalogCompletedPages
+                  : [...currentDs.catalogCompletedPages, pageNum].sort((left, right) => left - right)
+              }
+            }
           };
         });
-        get().applyAdvancedFilters(1, sortField, sortOrder);
+        get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
       });
       if (get().advancedBuildSessionId !== sessionId) return;
       const finalDs = get().advancedDatasetsByDomain[domain];
@@ -465,14 +508,15 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
             resources: finalCandidates,
             total: finalCandidates.length,
             lastBuiltAt: Date.now(),
-            upstreamKey
+            upstreamKey,
+            catalogTotalPages: totalPages,
+            catalogCompletedPages: Array.from({ length: totalPages }, (_, index) => index + 1)
           }
         }
       }));
-      get().applyAdvancedFilters(1, sortField, sortOrder);
+      get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
       if (!needsIntroHydration) return;
-      // Enrichment phase: reuse enterAdvancedMode which handles pending resources
-      get().enterAdvancedMode(sortField, sortOrder);
+      await get().enterAdvancedMode(sortField, sortOrder);
     } catch (e: any) {
       const message = toErrorMessage(e);
       console.error('[advanced] resumeAdvancedBuild failed', { domain, error: e });

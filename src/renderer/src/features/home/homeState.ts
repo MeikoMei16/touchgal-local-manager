@@ -35,6 +35,8 @@ export interface AdvancedDatasetCache {
   lastBuiltAt: number | null;
   upstreamKey: string | null;
   catalogTotalPages: number | null;
+  catalogCompletedPages: number[];
+  enrichmentCompletedIds: string[];
 }
 
 export type HomeSortField =
@@ -83,7 +85,9 @@ export const defaultAdvancedDatasetCache = (): AdvancedDatasetCache => ({
   failedTagIds: [],
   lastBuiltAt: null,
   upstreamKey: null,
-  catalogTotalPages: null
+  catalogTotalPages: null,
+  catalogCompletedPages: [],
+  enrichmentCompletedIds: []
 });
 
 export const defaultHomeQuery = (): HomeQueryState => ({

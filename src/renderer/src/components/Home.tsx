@@ -37,9 +37,22 @@ export const Home: React.FC = () => {
   const [jumpPage, setJumpPage] = useState(String(currentPage));
   const activeAdvancedDataset = advancedDatasetsByDomain[activeNsfwDomain];
   const failedTagCount = activeAdvancedDataset?.failedTagIds.length ?? 0;
+  const needsIntroHydration = advancedFilterDraft.selectedTags.length > 0 || advancedFilterDraft.yearConstraints.length > 0;
   const canResume = homeMode === 'advanced_ready' && activeAdvancedDataset != null && (
-    (activeAdvancedDataset.lastBuiltAt === null && activeAdvancedDataset.catalogTotalPages !== null && activeAdvancedDataset.resources.length > 0) ||
-    (activeAdvancedDataset.lastBuiltAt !== null && activeAdvancedDataset.resources.some((r) => !r.introHydrated))
+    (
+      activeAdvancedDataset.catalogTotalPages !== null &&
+      activeAdvancedDataset.catalogCompletedPages.length > 0 &&
+      activeAdvancedDataset.catalogCompletedPages.length < activeAdvancedDataset.catalogTotalPages
+    ) ||
+    (
+      needsIntroHydration &&
+      activeAdvancedDataset.catalogTotalPages !== null &&
+      activeAdvancedDataset.resources.some((resource) => {
+        if (activeAdvancedDataset.failedTagIds.includes(resource.uniqueId)) return false;
+        if (!resource.introHydrated) return true;
+        return advancedFilterDraft.selectedTags.length > 0 && !resource.tagsHydrated;
+      })
+    )
   );
   const showAdvancedStatus = homeMode === 'advanced_building' || homeMode === 'advanced_ready' || advancedBuildProgress.stage === 'error';
   const advancedStatusTone = advancedBuildProgress.stage === 'error'

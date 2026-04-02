@@ -150,6 +150,10 @@ Modes:
 - Late results from stale sessions are ignored.
 - Datasets are isolated by domain.
 - Rating sort and advanced filters share the same build session, cache, and local pagination path.
+- Pausing an advanced build is implemented as session cancellation plus dataset checkpoint retention, not as language-level coroutine suspension.
+- Resuming an advanced build uses checkpoint-based continuation:
+  catalog fetching resumes from the set of unfinished pages
+  introduction/tag enrichment resumes from the set of unfinished resources
 - Exiting advanced mode returns homepage behavior to normal API pagination.
 - Clearing advanced search resets advanced constraints while preserving the current top-level sort order.
 - Clearing advanced search preserves Stage 1 upstream controls such as `nsfwMode`, `selectedPlatform`, and `minRatingCount`.
@@ -167,6 +171,7 @@ Modes:
 - Rating sort is applied locally against the advanced dataset rather than delegated to unstable upstream page ordering.
 - When coarse upstream inputs (`nsfwMode`, `selectedPlatform`, `minRatingCount`) stay the same, switching between rating sort and other advanced constraints reuses the same candidate catalog.
 - Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
+- While advanced catalog/enrichment work is still running, background result refreshes now re-apply against the user's current advanced page instead of forcing the view back to page `1`.
 - Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
 - Catalog-page fetch failures are surfaced in both console logs and the advanced-mode status UI so users can see which build step failed.
 - The advanced-mode exit button clears advanced constraints; if the current sort is `rating`, the exit action rewrites it to `created` before returning to normal mode.

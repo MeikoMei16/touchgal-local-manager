@@ -149,6 +149,33 @@ Reason:
 - the advanced pipeline already provides bounded page fetches, dataset reuse, stale-session cancellation, and local pagination
 - keeping rating sort inside the advanced pipeline avoids a second competing mode with overlapping cache/session behavior
 
+### Advanced resume is checkpoint-based, not coroutine-based
+
+Rule:
+
+- pausing an advanced build should cancel the active session, not attempt to suspend a JavaScript call stack
+- dataset caches should retain explicit progress checkpoints for unfinished advanced work
+- catalog resume should continue from unfinished page numbers
+- enrichment resume should continue from unfinished resource ids
+
+Reason:
+
+- the advanced pipeline is a bounded-concurrency async task graph, not a single resumable coroutine
+- explicit checkpoints are easier to reason about, test, and persist than trying to emulate stack suspension semantics in renderer code
+- this keeps resume behavior accurate without requiring a separate worker/job-engine rewrite yet
+
+### In-progress advanced rendering must respect the user's current page
+
+Rule:
+
+- background advanced-build progress updates must re-apply filters/sort against the current advanced page, not force the result view back to page `1`
+- only clamp the page when the filtered result size makes the current page invalid
+
+Reason:
+
+- advanced mode intentionally renders incrementally while the catalog or enrichment pipeline is still running
+- snapping back to page `1` defeats the purpose of incremental rendering and breaks user navigation during long builds
+
 ### Detail data must be resolved from the final patch id
 
 Rule:

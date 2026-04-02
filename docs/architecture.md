@@ -95,6 +95,7 @@ Key frontend state split:
 - persisted homepage page index: `currentPage`
 - advanced draft state: `advancedFilterDraft`
 - advanced datasets and progress: `advancedDatasetsByDomain`, `advancedBuildProgress`
+- advanced checkpoint state inside each dataset cache: `catalogTotalPages`, `catalogCompletedPages`, `enrichmentCompletedIds`
 - current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
 - auth modal state: captcha payloads, login errors, and session-expired UI state
 - detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
@@ -152,9 +153,24 @@ Advanced homepage browsing:
 1. Renderer keeps the active homepage query in `lastHomeQuery`.
 2. Queries that require local correctness — including `sortField === 'rating'` — enter advanced mode instead of trusting upstream pagination.
 3. Entering advanced mode builds or reuses a domain-scoped local candidate dataset using only upstream coarse filters.
-4. If strict tags or release-year constraints need authoritative introduction data, the renderer hydrates `/patch/introduction` for those candidates before final local filtering.
-5. Stage 2 and Stage 3 filtering are then applied locally against that dataset.
-6. Local sorting and pagination update the same result view state used by normal mode.
+4. Catalog progress is checkpointed per dataset, including the known total pages and the set of finished catalog pages.
+5. If strict tags or release-year constraints need authoritative introduction data, the renderer hydrates `/patch/introduction` for those candidates before final local filtering.
+6. Enrichment progress is also checkpointed per dataset via the finished resource ids and failed enrichment ids.
+7. Stage 2 and Stage 3 filtering are then applied locally against that dataset.
+8. Local sorting and pagination update the same result view state used by normal mode.
+
+Advanced pause / resume behavior:
+
+1. Pausing an advanced build invalidates the active session id so in-flight async work can no longer write back into store state.
+2. Already collected catalog pages and already enriched resources remain in the domain dataset cache as checkpoints.
+3. Resuming an advanced build continues from the unfinished catalog pages when catalog fetch is incomplete.
+4. If catalog fetch is already complete, resume continues from the unfinished introduction/tag enrichment set instead of rebuilding the whole dataset.
+5. This is checkpoint-based continuation, not language-level coroutine suspension.
+
+Advanced in-progress pagination behavior:
+
+1. Advanced build progress updates re-apply local filters/sort against the user's current page instead of forcing page `1`.
+2. Page clamping still applies if the currently selected page becomes invalid after filtering.
 
 Homepage top bar behavior:
 
@@ -280,6 +296,7 @@ Status note:
 - Split UI-store action modules for browse, detail, and advanced pipelines
 - Modular detail overlay composition
 - Advanced filtering with local multi-stage pipeline
+- Checkpoint-based advanced-build resume for catalog and enrichment phases
 - Rating-sort stabilization through the same local advanced dataset pipeline
 - Basic SQLite bootstrap
 - Basic download queue persistence and link parsing scaffold
