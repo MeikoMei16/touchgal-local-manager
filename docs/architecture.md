@@ -56,7 +56,8 @@ Session handling notes:
 
 - the main process stores the TouchGal token under Electron `userData`
 - token input is normalized before persistence so legacy `Bearer ...`, full cookie strings, and whitespace-polluted values do not poison request headers
-- upstream browse/search requests only attach a `Cookie` header when there is a valid normalized auth cookie to send
+- upstream browse/search requests attach a `Cookie` header for the NSFW preference cookie even when there is no auth token
+- the auth cookie segment is attached only when there is a valid normalized auth token to send
 - logout is finalized in the main process by clearing the in-memory token and removing persisted token files through `tg-logout`
 
 ### Preload

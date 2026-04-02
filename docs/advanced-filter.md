@@ -148,8 +148,9 @@ Modes:
 - Late results from stale sessions are ignored.
 - Datasets are isolated by domain.
 - Rating sort and advanced filters share the same build session, cache, and local pagination path.
-- Exiting advanced mode returns homepage behavior to normal API pagination only when the reset query no longer requires advanced mode.
-- Clearing advanced search resets advanced constraints while preserving the current top-level sort field and sort order.
+- Exiting advanced mode returns homepage behavior to normal API pagination.
+- Clearing advanced search resets advanced constraints while preserving the current top-level sort order.
+- If the current sort field is `rating`, the exit action rewrites it to `created` so the homepage does not immediately re-enter the advanced local-catalog path.
 - Clearing advanced search currently resets the homepage page index back to `1`.
 - Persisted homepage query state auto-enters advanced mode on mount whenever the restored query still requires local handling, including `sortField === 'rating'`.
 
@@ -165,7 +166,7 @@ Modes:
 - Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
 - Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
 - Catalog-page fetch failures are surfaced in both console logs and the advanced-mode status UI so users can see which build step failed.
-- The advanced-mode exit button clears advanced constraints; if the preserved sort is still `rating`, the controller currently re-enters the local advanced path on the next cycle.
+- The advanced-mode exit button clears advanced constraints; if the current sort is `rating`, the exit action rewrites it to `created` before returning to normal mode.
 - Normal-mode page navigation updates persisted page state first; the resulting fetch is driven by the homepage effect, not by direct button-triggered fetch calls.
 - Normal-mode sort changes keep the current page instead of forcing a page reset.
 - Pressing `Enter` inside the release-year input only records the constraint chip; it must not launch the advanced build.

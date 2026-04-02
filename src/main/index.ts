@@ -6,6 +6,11 @@ import { spawn } from 'node:child_process'
 import axios from 'axios'
 import log from 'electron-log'
 import { initDb, getDb } from './db'
+import {
+  buildTouchGalBaseHeaders,
+  defaultHttpConfigState,
+  resolveHttpProfile
+} from './httpProfile'
 import { cleanFolderName, discoverExecutables } from './utils'
 import { downloadManager } from './downloader'
 
@@ -138,14 +143,18 @@ process.on('unhandledRejection', (reason, promise) => {
 
 log.info('App starting...')
 
+const httpConfig = defaultHttpConfigState()
+const activeHttpProfile = resolveHttpProfile(httpConfig)
+
+log.info('Active HTTP profile:', {
+  mode: httpConfig.mode,
+  profileId: activeHttpProfile.id,
+  label: activeHttpProfile.label
+})
+
 const API_CLIENT = axios.create({
   baseURL: 'https://www.touchgal.top/api',
-  headers: {
-    'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    Referer: 'https://www.touchgal.top/',
-    Origin: 'https://www.touchgal.top'
-  },
+  headers: buildTouchGalBaseHeaders(activeHttpProfile),
   timeout: 30000,
 })
 

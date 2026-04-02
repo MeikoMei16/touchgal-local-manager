@@ -21,7 +21,8 @@ Rule:
 
 - sanitize and normalize persisted auth token input before using it in upstream headers
 - build upstream auth cookies in the main process instead of concatenating raw renderer/user-provided strings
-- do not send a `Cookie` header at all when there is no valid auth cookie to send
+- keep upstream auth-cookie construction in the main process and attach that segment only when there is a valid normalized auth token
+- browse/search requests may still send a `Cookie` header without auth when upstream behavior depends on non-auth preference cookies such as TouchGal NSFW mode
 - renderer logout must call back into the main process so the persisted token is actually cleared
 
 Reason:
@@ -240,7 +241,8 @@ Reason:
 Rule:
 
 - the advanced-mode exit action must clear advanced constraints, reset advanced-mode UI state, and trigger a normal homepage refresh
-- preserving sort field and sort order is allowed only if the resulting query no longer requires advanced mode; preserving `sortField === 'rating'` will intentionally route back into the local advanced pipeline
+- preserving sort order is allowed on exit
+- if the current sort field is `rating`, exit should rewrite it to a normal-mode-safe field such as `created` instead of immediately routing back into the local advanced pipeline
 
 Reason:
 
