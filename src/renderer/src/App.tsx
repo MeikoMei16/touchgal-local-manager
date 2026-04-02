@@ -5,6 +5,7 @@ import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
 import { LoginModal } from './components/LoginModal';
 import ProfileView from './components/ProfileView';
+import SettingsView from './components/SettingsView';
 import { useAuthStore } from './store/useTouchGalStore';
 
 const App: React.FC = () => {
@@ -24,6 +25,10 @@ const App: React.FC = () => {
     window.addEventListener('nav-to-profile', handleNav);
     return () => window.removeEventListener('nav-to-profile', handleNav);
   }, []);
+
+  const activeLabel = activeTab === 'settings'
+    ? 'Settings'
+    : navItems.find((item) => item.id === activeTab)?.label ?? 'Home';
 
   return (
     <div className="flex h-screen bg-surface text-on-surface">
@@ -48,7 +53,14 @@ const App: React.FC = () => {
         </div>
 
         <div className="mt-auto pt-5 border-t border-outline-variant w-full flex justify-center">
-          <div className="flex flex-col items-center justify-center gap-1 cursor-pointer text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container w-14 h-14 rounded-2xl transition-all">
+          <div
+            className={`flex flex-col items-center justify-center gap-1 cursor-pointer w-14 h-14 rounded-2xl transition-all ${
+              activeTab === 'settings'
+                ? 'bg-primary-container text-on-primary-container font-bold'
+                : 'text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container'
+            }`}
+            onClick={() => setActiveTab('settings')}
+          >
             <Settings size={22} />
             <span className="text-[10px] font-medium">Settings</span>
           </div>
@@ -57,7 +69,7 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 px-6 flex items-center justify-between border-b border-outline-variant bg-white/80 backdrop-blur-md sticky top-0 z-10">
-          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">{navItems.find(i => i.id === activeTab)?.label}</h2>
+          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">{activeLabel}</h2>
           <div className="top-bar-actions">
             {/* UserMenu moved back to Home.tsx action bar */}
           </div>
@@ -69,6 +81,7 @@ const App: React.FC = () => {
           {activeTab === 'library' && <Library />}
           {activeTab === 'favorites' && <Home />}
           {activeTab === 'profile' && <ProfileView />}
+          {activeTab === 'settings' && <SettingsView />}
         </section>
       </main>
 

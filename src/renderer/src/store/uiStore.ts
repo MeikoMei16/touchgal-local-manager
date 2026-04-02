@@ -11,9 +11,12 @@ import {
 import { createBrowseActions } from './uiActions/browseActions';
 import { createDetailActions } from './uiActions/detailActions';
 import { createAdvancedActions } from './uiActions/advancedActions';
-import type { UIState } from './uiStoreTypes';
+import type { DetailSecondaryClickAction, UIState } from './uiStoreTypes';
 
 export type { UIState } from './uiStoreTypes';
+
+const normalizeDetailSecondaryClickAction = (value: unknown): DetailSecondaryClickAction =>
+  value === 'native' ? 'native' : 'back';
 
 const coerceLegacyHomepageDefaults = (query: Partial<UIState['lastHomeQuery']> | undefined) => {
   const normalized = normalizeHomeQuery(query);
@@ -47,6 +50,7 @@ export const useUIStore = create<UIState>()(
       selectedResource: null,
       patchComments: [],
       patchRatings: [],
+      detailSecondaryClickAction: 'back',
       homeMode: 'normal',
       activeNsfwDomain: 'sfw',
       advancedFilterDraft: defaultAdvancedFilterDraft(),
@@ -58,6 +62,7 @@ export const useUIStore = create<UIState>()(
         all: defaultAdvancedDatasetCache()
       },
       lastHomeQuery: defaultHomeQuery(),
+      setDetailSecondaryClickAction: (action) => set({ detailSecondaryClickAction: normalizeDetailSecondaryClickAction(action) }),
       ...createBrowseActions(set, get),
       ...createDetailActions(set, get),
       ...createAdvancedActions(set, get)
@@ -67,7 +72,8 @@ export const useUIStore = create<UIState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         currentPage: state.currentPage,
-        lastHomeQuery: state.lastHomeQuery
+        lastHomeQuery: state.lastHomeQuery,
+        detailSecondaryClickAction: state.detailSecondaryClickAction
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydratedUi(true);
@@ -83,7 +89,8 @@ export const useUIStore = create<UIState>()(
           ...persistedSlice,
           hasHydratedUi: true,
           currentPage: normalizePage(persistedSlice?.currentPage),
-          lastHomeQuery: coerceLegacyHomepageDefaults(persistedQuery)
+          lastHomeQuery: coerceLegacyHomepageDefaults(persistedQuery),
+          detailSecondaryClickAction: normalizeDetailSecondaryClickAction(persistedSlice?.detailSecondaryClickAction)
         };
       }
     }

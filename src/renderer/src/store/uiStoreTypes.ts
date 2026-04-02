@@ -9,6 +9,8 @@ import type {
   NsfwDomain
 } from '../features/home/homeState';
 
+export type DetailSecondaryClickAction = 'back' | 'native';
+
 export interface UIState {
   hasHydratedUi: boolean;
   resources: TouchGalResource[];
@@ -20,6 +22,7 @@ export interface UIState {
   selectedResource: TouchGalDetail | null;
   patchComments: any[];
   patchRatings: any[];
+  detailSecondaryClickAction: DetailSecondaryClickAction;
   homeMode: HomeMode;
   activeNsfwDomain: NsfwDomain;
   advancedFilterDraft: AdvancedFilterDraft;
@@ -43,6 +46,7 @@ export interface UIState {
   removeTagFilter: (tag: string) => void;
   clearTags: () => void;
   resetAdvancedFilterDraft: () => void;
+  setDetailSecondaryClickAction: (action: DetailSecondaryClickAction) => void;
   setLastHomeQuery: (query: Partial<HomeQueryState>) => void;
   setCurrentPage: (page: number) => void;
   setHasHydratedUi: (hydrated: boolean) => void;

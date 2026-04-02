@@ -8,11 +8,17 @@ import { DetailInfoPanel } from './detail/DetailInfoPanel';
 import { DetailLinksPanel } from './detail/DetailLinksPanel';
 import { DetailBoardPanel } from './detail/DetailBoardPanel';
 import { DetailEvaluationPanel } from './detail/DetailEvaluationPanel';
+import type { DetailSecondaryClickAction } from '../store/uiStoreTypes';
+
+const shouldIgnoreSecondaryBack = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('a, button, input, textarea, select, option, label, [contenteditable="true"], [data-allow-context-menu="true"]'));
+};
 
 export const DetailOverlay: React.FC = () => {
   const {
     selectedResource, clearSelected, addTagFilter,
-    isDetailLoading, patchComments, patchRatings
+    isDetailLoading, patchComments, patchRatings, detailSecondaryClickAction
   } = useUIStore();
   const { user, sessionError, setIsLoginOpen } = useAuthStore();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -34,11 +40,23 @@ export const DetailOverlay: React.FC = () => {
     clearSelected();
   };
 
+  const handleSecondaryBack = (
+    event: React.MouseEvent<HTMLElement>,
+    action: () => void,
+    { allowInteractiveTarget = true }: { allowInteractiveTarget?: boolean } = {}
+  ) => {
+    if (detailSecondaryClickAction !== 'back') return;
+    if (allowInteractiveTarget && shouldIgnoreSecondaryBack(event.target)) return;
+    event.preventDefault();
+    action();
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[1000] flex justify-center backdrop-blur-md animate-in fade-in duration-300" onClick={clearSelected}>
       <div
         className="bg-slate-50 w-full max-w-7xl h-full flex flex-col overflow-hidden animate-in slide-in-from-bottom-[100px] ease-out-expo duration-500 shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
+        onContextMenu={(event) => handleSecondaryBack(event, clearSelected)}
       >
         {isDetailLoading && (
           <div className="absolute inset-0 bg-white/60 backdrop-blur-xs z-[100] flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
@@ -113,7 +131,13 @@ export const DetailOverlay: React.FC = () => {
           </div>
         </div>
       </div>
-      {selectedImage && <DetailImageViewer url={selectedImage} onDismiss={() => setSelectedImage(null)} />}
+      {selectedImage && (
+        <DetailImageViewer
+          url={selectedImage}
+          onDismiss={() => setSelectedImage(null)}
+          secondaryClickAction={detailSecondaryClickAction as DetailSecondaryClickAction}
+        />
+      )}
     </div>
   );
 };
