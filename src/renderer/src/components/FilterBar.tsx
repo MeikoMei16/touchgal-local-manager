@@ -178,12 +178,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   return (
     <div
       className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-100/50 mb-8 overflow-visible"
-      onKeyDown={(event) => {
-        const target = event.target as HTMLElement;
-        if (event.key !== 'Enter') return;
-        if (target?.dataset?.submitMode === 'skip') return;
-        submitFilters();
-      }}
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         
@@ -264,7 +258,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
                       if (stat.key === 'minCommentCount') setMinCommentCount(val);
                       publishChange({ [stat.key]: val });
                     }}
-                    onKeyDown={e => e.key === 'Enter' && submitFilters()}
                   />
                 </div>
               </div>

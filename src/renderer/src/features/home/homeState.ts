@@ -23,6 +23,7 @@ export interface AdvancedBuildProgress {
 export interface AdvancedResourceRecord extends TouchGalResource {
   fullTags: string[];
   normalizedYear: number | null;
+  introHydrated: boolean;
   tagsHydrated: boolean;
 }
 

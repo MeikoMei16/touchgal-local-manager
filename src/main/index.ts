@@ -238,6 +238,7 @@ interface RawResource {
   } | null
   fullScreenshotUrls?: string[] | null
   pvVideoUrl?: string | null
+  created?: string | null
 }
 
 interface RawDownload {
@@ -417,11 +418,7 @@ const normalizeResource = (resource: any) => {
         ? raw.company.map((item: any) => item?.name).filter(Boolean).join(', ')
         : null
 
-  // Format date safely
-  let releasedDate = raw.releasedDate ?? raw.released ?? null
-  if (raw.created && !releasedDate) {
-    releasedDate = new Date(raw.created).toLocaleDateString()
-  }
+  const releasedDate = raw.releasedDate ?? raw.released ?? null
 
   // Preserve detail structure if present (e.g. from /patch)
   const detail = raw.detail ?? null
@@ -444,6 +441,7 @@ const normalizeResource = (resource: any) => {
     favoriteCount,
     commentCount,
     releasedDate,
+    created: raw.created ?? null,
     company,
     pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
     screenshots,
@@ -502,6 +500,7 @@ const normalizeIntroduction = (payload: any) => {
 
   return {
     introduction: introductionHtml ? stripEmbeddedMediaFromIntroduction(introductionHtml) : null,
+    created: payload.created ?? null,
     releasedDate: payload.released ?? null,
     resourceUpdateTime: payload.resourceUpdateTime ?? null,
     alias: payload.alias ?? [],

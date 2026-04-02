@@ -23,7 +23,7 @@ export const uniqueById = <T extends { uniqueId: string }>(items: T[]): T[] => {
 };
 
 export const normalizeYear = (resource: TouchGalResource): number | null => {
-  const rawDate = resource.releasedDate || (resource as any).released || (resource as any).created || null;
+  const rawDate = resource.releasedDate || (resource as any).released || null;
   if (!rawDate) return null;
   const directMatch = String(rawDate).match(/\b(19|20)\d{2}\b/);
   if (directMatch) return Number(directMatch[0]);
@@ -36,6 +36,7 @@ export const toAdvancedResourceRecord = (resource: TouchGalResource): AdvancedRe
   ...resource,
   fullTags: Array.isArray(resource.tags) ? resource.tags : [],
   normalizedYear: normalizeYear(resource),
+  introHydrated: false,
   tagsHydrated: false
 });
 

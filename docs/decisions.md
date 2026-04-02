@@ -60,9 +60,23 @@ Reason:
 
 - Stage 1 fields belong upstream
 - Stage 2 fields belong to local pure predicates
-- Stage 3 belongs to detail enrichment and strict tag matching
+- Stage 3 belongs to detail enrichment, authoritative release-date hydration, and strict tag matching
 
 Do not re-apply Stage 1 fields inside the local predicate.
+
+### Release-year filtering must use release date, not resource creation time
+
+Rule:
+
+- compute advanced release-year filtering from `releasedDate` / introduction `released` only
+- do not fall back to resource `created` time when evaluating `yearConstraints`
+- if homepage list data omits `releasedDate`, advanced mode must hydrate `/patch/introduction` before applying `yearConstraints`
+
+Reason:
+
+- TouchGal detail pages expose resource publish time and game release time as separate concepts
+- using `created` as a fallback silently turns “发行年份筛选” into “资源发布时间筛选”
+- correct release-year filtering requires the introduction payload when list data is incomplete
 
 ## UI / Interaction
 
@@ -231,6 +245,19 @@ Rule:
 Reason:
 
 - users expect “退出高级模式” to return to ordinary browsing immediately, not only flip an internal mode flag
+
+### Advanced filter execution is button-driven
+
+Rule:
+
+- editing advanced controls may update draft/query state immediately
+- pressing `Enter` in the release-year input should only add the typed constraint
+- the expensive advanced build should run only from the explicit `应用筛选` action
+
+Reason:
+
+- users treat the release-year input as a chip builder, not as an implicit submit control
+- auto-triggering the build while entering constraints causes accidental rebuilds and misleading intermediate results
 
 ### Tag suggestion dropdown uses `onMouseDown`
 

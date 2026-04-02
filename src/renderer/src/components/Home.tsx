@@ -37,6 +37,10 @@ export const Home: React.FC = () => {
   const [jumpPage, setJumpPage] = useState(String(currentPage));
   const activeAdvancedDataset = advancedDatasetsByDomain[activeNsfwDomain];
   const failedTagCount = activeAdvancedDataset?.failedTagIds.length ?? 0;
+  const showAdvancedStatus = homeMode === 'advanced_building' || homeMode === 'advanced_ready' || advancedBuildProgress.stage === 'error';
+  const advancedStatusTone = advancedBuildProgress.stage === 'error'
+    ? 'border-rose-200 bg-rose-50 text-rose-900'
+    : 'border-amber-200 bg-amber-50 text-amber-900';
 
   useEffect(() => {
     setMinRatingCountDraft(String(lastHomeQuery.minRatingCount || 0));
@@ -98,7 +102,7 @@ export const Home: React.FC = () => {
     goToAdvancedPage(page);
   };
 
-  if (error) {
+  if (error && advancedBuildProgress.stage !== 'error') {
     return (
       <div className="error-container">
         <p>{error}</p>
@@ -133,11 +137,15 @@ export const Home: React.FC = () => {
         onApplyMinRatingCount={applyMinRatingCount}
       />
 
-      {(homeMode === 'advanced_building' || homeMode === 'advanced_ready') && (
-        <div className="flex items-center justify-between gap-4 px-4 py-3 mb-2 rounded-3xl border border-amber-200 bg-amber-50 text-amber-900 shadow-sm">
+      {showAdvancedStatus && (
+        <div className={`flex items-center justify-between gap-4 px-4 py-3 mb-2 rounded-3xl border shadow-sm ${advancedStatusTone}`}>
           <div className="flex flex-col gap-1">
             <span className="text-sm font-black uppercase tracking-wide">
-              {homeMode === 'advanced_building' ? (lastHomeQuery.sortField === 'rating' ? '评分目录构建中' : '高级筛选构建中') : (lastHomeQuery.sortField === 'rating' ? '评分排序已就绪' : '高级筛选已就绪')}
+              {advancedBuildProgress.stage === 'error'
+                ? (lastHomeQuery.sortField === 'rating' ? '评分目录构建失败' : '高级筛选构建失败')
+                : homeMode === 'advanced_building'
+                  ? (lastHomeQuery.sortField === 'rating' ? '评分目录构建中' : '高级筛选构建中')
+                  : (lastHomeQuery.sortField === 'rating' ? '评分排序已就绪' : '高级筛选已就绪')}
             </span>
             <span className="text-sm font-semibold">
               当前数据域: {activeNsfwDomain.toUpperCase()} · {advancedBuildProgress.message || '本地高级筛选数据已切换为独立模式'}
@@ -148,12 +156,14 @@ export const Home: React.FC = () => {
               </span>
             )}
           </div>
-          <button
-            className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
-            onClick={handleExitAdvancedMode}
-          >
-            退出高级模式
-          </button>
+          {advancedBuildProgress.stage !== 'error' && (
+            <button
+              className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
+              onClick={handleExitAdvancedMode}
+            >
+              退出高级模式
+            </button>
+          )}
         </div>
       )}
       {advancedFilterDraft.selectedTags.length > 0 && (

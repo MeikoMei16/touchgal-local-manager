@@ -4,7 +4,6 @@ import {
   ADVANCED_PAGE_SIZE,
   ADVANCED_TAG_CONCURRENCY,
   applyAdvancedPredicate,
-  compareConstraint,
   createAdvancedSessionId,
   getAdvancedUpstreamKey,
   normalizeYear,
@@ -24,6 +23,19 @@ import {
 import { mapNsfwModeToDomain } from '../../features/home/homeQuery';
 import type { UIGetState, UISetState } from '../uiStoreTypes';
 
+const toErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return '未知错误';
+};
+
+const buildEnrichmentMessage = (completed: number, total: number, needsTagHydration: boolean, needsReleaseHydration: boolean) => {
+  if (needsTagHydration && needsReleaseHydration) return `正在补全标签与发售时间 (${completed}/${total})...`;
+  if (needsTagHydration) return `正在富化标签 (${completed}/${total})...`;
+  if (needsReleaseHydration) return `正在补全发售时间 (${completed}/${total})...`;
+  return `正在补全资源信息 (${completed}/${total})...`;
+};
+
 export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
   updateAdvancedFilterDraft: (draft: any) => set((s) => ({ advancedFilterDraft: { ...s.advancedFilterDraft, ...draft } })),
   setActiveNsfwDomain: (domain: any) => set((s) => ({ activeNsfwDomain: domain, advancedFilterDraft: { ...s.advancedFilterDraft, nsfwMode: domain } })),
@@ -32,6 +44,9 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     const domain = get().activeNsfwDomain;
     const sessionId = createAdvancedSessionId();
     const upstreamKey = getAdvancedUpstreamKey(draft, domain);
+    const needsTagHydration = draft.selectedTags.length > 0;
+    const needsReleaseHydration = draft.yearConstraints.length > 0;
+    const needsIntroHydration = needsTagHydration || needsReleaseHydration;
     set({ homeMode: 'advanced_building', advancedBuildSessionId: sessionId, error: null });
 
     try {
@@ -42,10 +57,6 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       if (draft.minRatingCount > 0) upstreamQuery.minRatingCount = draft.minRatingCount;
 
       const midstreamPass = (record: AdvancedResourceRecord): boolean => {
-        if (draft.yearConstraints.length > 0) {
-          if (record.normalizedYear == null) return false;
-          if (!draft.yearConstraints.every((c) => compareConstraint(record.normalizedYear as number, c.op, c.val))) return false;
-        }
         if (draft.minRatingScore > 0 && (record.averageRating || 0) < draft.minRatingScore) return false;
         if (draft.minCommentCount > 0 && (record.commentCount || (record as any).comments || 0) < draft.minCommentCount) return false;
         return true;
@@ -55,9 +66,14 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       const canReuseCatalog = existingDataset.upstreamKey === upstreamKey && existingDataset.resources.length > 0;
 
       if (canReuseCatalog) {
-        if (draft.selectedTags.length > 0) {
+        if (needsIntroHydration) {
           const pendingResources = existingDataset.resources.filter(
-            (resource) => !resource.tagsHydrated && !existingDataset.failedTagIds.includes(resource.uniqueId)
+            (resource) => {
+              if (existingDataset.failedTagIds.includes(resource.uniqueId)) return false;
+              if (!resource.introHydrated) return true;
+              if (needsTagHydration && !resource.tagsHydrated) return true;
+              return false;
+            }
           );
 
           if (pendingResources.length > 0) {
@@ -67,7 +83,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                 stage: 'enrichment',
                 completed: 0,
                 total: pendingResources.length,
-                message: `正在富化标签 (0/${pendingResources.length})...`
+                message: buildEnrichmentMessage(0, pendingResources.length, needsTagHydration, needsReleaseHydration)
               }
             });
             get().applyAdvancedFilters(1, sortField, sortOrder);
@@ -89,7 +105,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                           fullTags: intro.tags?.length ? intro.tags : item.fullTags,
                           releasedDate: intro.releasedDate || item.releasedDate,
                           normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear,
-                          tagsHydrated: true
+                          introHydrated: true,
+                          tagsHydrated: needsTagHydration ? true : item.tagsHydrated
                         }
                       : item
                   );
@@ -97,7 +114,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                     advancedBuildProgress: {
                       ...s.advancedBuildProgress,
                       completed: hydrated,
-                      message: `正在富化标签 (${hydrated}/${pendingResources.length})...`
+                      message: buildEnrichmentMessage(hydrated, pendingResources.length, needsTagHydration, needsReleaseHydration)
                     },
                     advancedDatasetsByDomain: {
                       ...s.advancedDatasetsByDomain,
@@ -113,6 +130,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                 });
                 get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
               } catch {
+                console.error(`[advanced] failed to enrich tags for ${resource.uniqueId}`);
                 set((s) => {
                   const ds = s.advancedDatasetsByDomain[domain];
                   if (!ds) return {};
@@ -137,7 +155,9 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
               advancedBuildProgress: {
                 ...s.advancedBuildProgress,
                 stage: 'ready',
-                message: `标签富化完成，${hydrated} 个`
+                message: needsTagHydration
+                  ? (needsReleaseHydration ? `标签与发售时间补全完成，${hydrated} 个` : `标签富化完成，${hydrated} 个`)
+                  : `发售时间补全完成，${hydrated} 个`
               }
             }));
             get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
@@ -176,7 +196,14 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
         advancedBuildProgress: { stage: 'catalog', completed: 0, total: 0, message: '正在获取目录总量...' }
       }));
 
-      const firstPage = await TouchGalClient.fetchGalgameResources(1, ADVANCED_PAGE_SIZE, upstreamQuery);
+      let firstPage;
+      try {
+        firstPage = await TouchGalClient.fetchGalgameResources(1, ADVANCED_PAGE_SIZE, upstreamQuery);
+      } catch (error) {
+        const message = `拉取高级筛选目录失败：第 1 页资源请求失败（${toErrorMessage(error)}）`;
+        console.error('[advanced] failed to fetch initial catalog page', { domain, upstreamQuery, error });
+        throw new Error(message);
+      }
       if (get().advancedBuildSessionId !== sessionId) return;
 
       const totalPages = Math.max(1, Math.ceil(firstPage.total / ADVANCED_PAGE_SIZE));
@@ -200,7 +227,14 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
       await runBounded(remainingPages, ADVANCED_CATALOG_CONCURRENCY, async (pageNum) => {
         if (get().advancedBuildSessionId !== sessionId) return;
-        const page = await TouchGalClient.fetchGalgameResources(pageNum, ADVANCED_PAGE_SIZE, upstreamQuery);
+        let page;
+        try {
+          page = await TouchGalClient.fetchGalgameResources(pageNum, ADVANCED_PAGE_SIZE, upstreamQuery);
+        } catch (error) {
+          const message = `拉取高级筛选目录失败：第 ${pageNum} 页资源请求失败（${toErrorMessage(error)}）`;
+          console.error('[advanced] failed to fetch catalog page', { domain, pageNum, upstreamQuery, error });
+          throw new Error(message);
+        }
         if (get().advancedBuildSessionId !== sessionId) return;
 
         const pageCandidates = addToPool(page.list);
@@ -222,11 +256,10 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
 
       const finalCandidates = uniqueById(candidates);
       set((s) => {
-        const hasTagFiltering = draft.selectedTags.length > 0;
         return {
-          homeMode: hasTagFiltering ? 'advanced_building' : 'advanced_ready',
-          advancedBuildProgress: hasTagFiltering
-            ? { stage: 'enrichment', completed: 0, total: finalCandidates.length, message: `正在富化标签 (0/${finalCandidates.length})...` }
+          homeMode: needsIntroHydration ? 'advanced_building' : 'advanced_ready',
+          advancedBuildProgress: needsIntroHydration
+            ? { stage: 'enrichment', completed: 0, total: finalCandidates.length, message: buildEnrichmentMessage(0, finalCandidates.length, needsTagHydration, needsReleaseHydration) }
             : { stage: 'ready', completed: finalCandidates.length, total: finalCandidates.length, message: `目录完成，${finalCandidates.length} 个候选` },
           advancedDatasetsByDomain: {
             ...s.advancedDatasetsByDomain,
@@ -243,7 +276,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       });
       get().applyAdvancedFilters(1, sortField, sortOrder);
 
-      if (draft.selectedTags.length === 0) return;
+      if (!needsIntroHydration) return;
       let hydrated = 0;
 
       await runBounded(finalCandidates, ADVANCED_TAG_CONCURRENCY, async (resource) => {
@@ -262,12 +295,17 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                     fullTags: intro.tags?.length ? intro.tags : item.fullTags,
                     releasedDate: intro.releasedDate || item.releasedDate,
                     normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear,
-                    tagsHydrated: true
+                    introHydrated: true,
+                    tagsHydrated: needsTagHydration ? true : item.tagsHydrated
                   }
                 : item
             );
             return {
-              advancedBuildProgress: { ...s.advancedBuildProgress, completed: hydrated, message: `正在富化标签 (${hydrated}/${finalCandidates.length})...` },
+              advancedBuildProgress: {
+                ...s.advancedBuildProgress,
+                completed: hydrated,
+                message: buildEnrichmentMessage(hydrated, finalCandidates.length, needsTagHydration, needsReleaseHydration)
+              },
               advancedDatasetsByDomain: {
                 ...s.advancedDatasetsByDomain,
                 [domain]: { ...ds, resources: next, hydratedTagIds: [...ds.hydratedTagIds, resource.uniqueId] }
@@ -276,6 +314,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
           });
           get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
         } catch {
+          console.error(`[advanced] failed to enrich tags for ${resource.uniqueId}`);
           set((s) => {
             const ds = s.advancedDatasetsByDomain[domain];
             if (!ds) return {};
@@ -290,14 +329,24 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       });
 
       if (get().advancedBuildSessionId !== sessionId) return;
-      set((s) => ({ advancedBuildProgress: { ...s.advancedBuildProgress, stage: 'ready', message: `标签富化完成，${hydrated} 个` } }));
+      set((s) => ({
+        advancedBuildProgress: {
+          ...s.advancedBuildProgress,
+          stage: 'ready',
+          message: needsTagHydration
+            ? (needsReleaseHydration ? `标签与发售时间补全完成，${hydrated} 个` : `标签富化完成，${hydrated} 个`)
+            : `发售时间补全完成，${hydrated} 个`
+        }
+      }));
       get().applyAdvancedFilters(get().currentPage, sortField, sortOrder);
     } catch (e: any) {
+      const message = toErrorMessage(e);
+      console.error('[advanced] enterAdvancedMode failed', { domain, upstreamKey, error: e });
       set({
         homeMode: 'normal',
         advancedBuildSessionId: null,
-        advancedBuildProgress: { stage: 'error', completed: 0, total: 0, message: e.message },
-        error: e.message
+        advancedBuildProgress: { stage: 'error', completed: 0, total: 0, message },
+        error: message
       });
     }
   },

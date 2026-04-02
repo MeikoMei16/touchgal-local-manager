@@ -21,6 +21,7 @@ export const mergeDetailResource = (
   ...(fallback ? toDetailShell(fallback) : {}),
   ...detail,
   id: detail.id || fallback?.id || 0,
+  created: detail.created ?? fallback?.created ?? null,
   introduction: detail.introduction ?? null,
   company: detail.company ?? null,
   vndbId: detail.vndbId ?? null,

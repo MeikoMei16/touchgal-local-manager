@@ -65,6 +65,7 @@ export const TouchGalResourceSchema = z.object({
     if (Array.isArray(val)) return val.join(', ');
     return val ?? '';
   }),
+  created: z.string().nullable().default(null),
   releasedDate: z.string().nullable(),
   averageRating: z.number().default(0),
   tags: z.array(z.string()).default([]),
@@ -108,6 +109,7 @@ export const TouchGalFeedResponseSchema = z.object({
 
 export const PatchIntroductionSchema = z.object({
   introduction: z.string().nullable().default(null),
+  created: z.string().nullable().default(null),
   releasedDate: z.string().nullable().default(null),
   resourceUpdateTime: z.string().nullable().default(null),
   alias: z.array(z.string()).default([]),

@@ -45,13 +45,21 @@ Applied in memory to each fetched page:
 
 Properties:
 
-- pure predicate
-- no async work
-- no network IO
+- `minRatingScore` and `minCommentCount` are pure predicates
+- `yearConstraints` are evaluated locally, but correct release-year filtering may require Stage 3 release-date hydration first when upstream list data omits `releasedDate`
+
+Release-year rule:
+
+- release-year filtering must use release date only
+- do not treat resource `created` time as release date
+- if the candidate list does not already carry `releasedDate`, advanced mode must hydrate `/patch/introduction` and re-compute `normalizedYear` from `intro.releasedDate` before applying `yearConstraints`
 
 ### Stage 3: Downstream tag enrichment
 
-Triggered only when `selectedTags.length > 0`.
+Triggered when either of these is true:
+
+- `selectedTags.length > 0`
+- `yearConstraints.length > 0`
 
 Source:
 
@@ -60,6 +68,7 @@ Source:
 Purpose:
 
 - obtain full tags
+- obtain authoritative release date when homepage list data omits it
 - optionally improve release-date normalization
 
 Final tag rule:
@@ -125,6 +134,7 @@ Draft model:
 - `advancedFilterDraft` is the editable advanced-search draft
 - `advancedFilterDraft.selectedTags` is the single source of truth for advanced tag constraints
 - `selectedTags` are also mirrored into `lastHomeQuery` when the homepage query is committed
+- editing inputs in the advanced panel updates draft/query state immediately, but the expensive advanced build is launched only by the `应用筛选` button
 
 Modes:
 
@@ -148,14 +158,17 @@ Modes:
 - Candidate pages are fetched with bounded concurrency.
 - Tag enrichment also uses bounded concurrency.
 - During Stage 3, strict tag filtering hides un-hydrated resources until they are enriched.
+- During Stage 3, release-year filtering also waits for hydrated release dates when the upstream list omitted `releasedDate`.
 - Local sorting and pagination happen after predicate application in advanced mode.
 - Rating sort is applied locally against the advanced dataset rather than delegated to unstable upstream page ordering.
 - When coarse upstream inputs (`nsfwMode`, `selectedPlatform`, `minRatingCount`) stay the same, switching between rating sort and other advanced constraints reuses the same candidate catalog.
 - Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
 - Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
+- Catalog-page fetch failures are surfaced in both console logs and the advanced-mode status UI so users can see which build step failed.
 - The advanced-mode exit button clears advanced constraints; if the preserved sort is still `rating`, the controller currently re-enters the local advanced path on the next cycle.
 - Normal-mode page navigation updates persisted page state first; the resulting fetch is driven by the homepage effect, not by direct button-triggered fetch calls.
 - Normal-mode sort changes keep the current page instead of forcing a page reset.
+- Pressing `Enter` inside the release-year input only records the constraint chip; it must not launch the advanced build.
 - Homepage top bar now splits responsibilities clearly:
   upstream controls live in chrome
   the advanced panel owns only midstream and downstream constraints

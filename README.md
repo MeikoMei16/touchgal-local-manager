@@ -8,7 +8,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - normalized session/token handling in the main-process relay
 - React renderer with Zustand state
 - persisted homepage browse state with hydration-aware refresh restore
-- advanced homepage filtering and rating sorting with a local catalog pipeline
+- advanced homepage filtering and rating sorting with a local catalog pipeline, including release-date hydration for correct release-year filtering
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, and comments
 - early local SQLite and download-manager scaffolding
 

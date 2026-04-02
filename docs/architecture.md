@@ -119,6 +119,7 @@ Important note:
 - sorting for the homepage is store-owned, not component-local
 - `sortField === 'rating'` is treated as an advanced-mode trigger because upstream rating pagination is unstable
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
+- release-year filtering is based on release date only; renderer code must not fall back to resource `created` time when computing release year
 - normal homepage refresh should restore sort key, sort order, upstream filters, and current page from persisted state
 - upstream homepage controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) are rendered directly in the homepage top bar, left of `高级筛选`
 - `useTouchGalStore.ts` should be treated as a compatibility layer, not as the place to add new state logic
@@ -146,8 +147,9 @@ Advanced homepage browsing:
 1. Renderer keeps the active homepage query in `lastHomeQuery`.
 2. Queries that require local correctness — including `sortField === 'rating'` — enter advanced mode instead of trusting upstream pagination.
 3. Entering advanced mode builds or reuses a domain-scoped local candidate dataset using only upstream coarse filters.
-4. Stage 2 and Stage 3 filtering are applied locally against that dataset.
-5. Local sorting and pagination update the same result view state used by normal mode.
+4. If strict tags or release-year constraints need authoritative introduction data, the renderer hydrates `/patch/introduction` for those candidates before final local filtering.
+5. Stage 2 and Stage 3 filtering are then applied locally against that dataset.
+6. Local sorting and pagination update the same result view state used by normal mode.
 
 Homepage top bar behavior:
 
@@ -155,6 +157,12 @@ Homepage top bar behavior:
 2. Upstream browse controls live on the right side, immediately to the left of `高级筛选`.
 3. Those controls still write into `lastHomeQuery`, so they participate in the same persistence and refresh-restore path as all other homepage query fields.
 4. Choosing rating sort routes the homepage through the same local advanced pipeline used by advanced filtering; there is no separate rating-only mode.
+
+Advanced filter interaction behavior:
+
+1. Editing advanced controls updates draft/query state immediately.
+2. Pressing `Enter` in the release-year field only adds the constraint chip to the draft.
+3. The expensive advanced build runs only when the user clicks `应用筛选`.
 
 Exiting advanced search:
 
@@ -205,6 +213,7 @@ Detail info and links presentation:
 
 - screenshots are rendered through a dedicated horizontal strip component instead of being left inside sanitized introduction HTML
 - PV links are rendered through a dedicated panel that supports direct video URLs and common embedded-player URLs
+- the info tab shows published time, release time, resource update time, and outbound VNDB/Bangumi/Steam links as separate metadata rows
 - resource links are rendered from `/patch/resource` data and first split into `Galgame 资源` and `Galgame 补丁` tabs by `section`
 - each resource tab is then grouped into official versus community sections
 - the `Galgame 补丁` tab also includes a dedicated external-entry card for 鲲 Galgame 补丁 rather than mixing that site into the TouchGal resource list itself

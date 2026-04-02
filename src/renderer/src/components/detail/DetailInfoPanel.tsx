@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Globe } from 'lucide-react';
+import { Calendar, Clock3, ExternalLink, RefreshCw } from 'lucide-react';
 import { TouchGalDetail } from '../../types';
 import { DetailScreenshotStrip } from './DetailScreenshotStrip';
 import { DetailPvPanel } from './DetailPvPanel';
@@ -19,12 +19,33 @@ export const DetailInfoPanel: React.FC<DetailInfoPanelProps> = ({
   const pvUrl = resource.pvUrl;
   const companyName = resource.company || 'Unknown';
   const aliases = resource.alias ?? [];
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return null;
+    const directMatch = value.match(/\b\d{4}-\d{2}-\d{2}\b/);
+    if (directMatch) return directMatch[0];
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   const metadataRows = [
-    { icon: FileText, label: '发售时间', value: resource.releasedDate || 'N/A' },
-    { icon: Globe, label: 'VNDB ID', value: resource.vndbId || 'N/A' },
-    { icon: Globe, label: 'Bangumi ID', value: resource.bangumiId || 'N/A' },
-    { icon: Globe, label: 'Steam ID', value: resource.steamId || 'N/A' }
-  ];
+    { icon: Clock3, label: '发布时间', value: formatDate(resource.created) },
+    { icon: Calendar, label: '发售时间', value: resource.releasedDate || null },
+    { icon: RefreshCw, label: '资源更新时间', value: formatDate(resource.resourceUpdateTime) }
+  ].filter((item) => item.value);
+  const externalRows = [
+    resource.vndbId
+      ? { label: 'VNDB ID', href: `https://vndb.org/${resource.vndbId}`, value: resource.vndbId }
+      : null,
+    resource.bangumiId
+      ? { label: 'Bangumi', href: `https://bgm.tv/subject/${resource.bangumiId}`, value: String(resource.bangumiId) }
+      : null,
+    resource.steamId
+      ? { label: 'Steam', href: `https://store.steampowered.com/app/${resource.steamId}`, value: resource.steamId }
+      : null
+  ].filter((item): item is { label: string; href: string; value: string } => Boolean(item));
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,19 +88,36 @@ export const DetailInfoPanel: React.FC<DetailInfoPanelProps> = ({
           </div>
         </section>
 
-        <section className="flex flex-col gap-6 pt-8 border-t border-slate-100">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
-            {metadataRows.map(({ icon: Icon, label, value }) => (
-              <div key={label} className="flex justify-between items-center py-2 border-b border-slate-50">
-                <div className="flex items-center gap-2 text-slate-400 font-bold text-sm italic">
-                  <Icon size={16} />
-                  <span>{label}</span>
+        {(metadataRows.length > 0 || externalRows.length > 0) && (
+          <section className="flex flex-col gap-6 pt-8 border-t border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
+              {metadataRows.map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+                  <Icon size={16} className="text-slate-400" />
+                  <span>
+                    {label}: {value}
+                  </span>
                 </div>
-                <span className="font-black text-slate-700">{value}</span>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+              {externalRows.map(({ label, href, value }) => (
+                <div key={label} className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+                  <ExternalLink size={16} className="text-slate-400" />
+                  <span>
+                    {label}:{' '}
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-bold text-blue-600 transition-colors hover:text-blue-700 hover:underline"
+                    >
+                      {value}
+                    </a>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {aliases.length > 0 && (
           <section className="flex flex-col gap-4 pt-8 border-t border-slate-100">
