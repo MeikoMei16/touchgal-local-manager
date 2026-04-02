@@ -35,6 +35,7 @@ export interface UIState {
   setActiveNsfwDomain: (domain: NsfwDomain) => void;
   enterAdvancedMode: (sortField: string, sortOrder: string) => Promise<void>;
   exitAdvancedMode: () => void;
+  pauseAdvancedBuild: () => void;
   clearAdvancedSearch: () => void;
   applyAdvancedFilters: (page: number, sortField: string, sortOrder: string) => void;
   addTagFilter: (tag: string) => void;

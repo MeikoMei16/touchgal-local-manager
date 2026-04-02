@@ -13,7 +13,7 @@ export const Home: React.FC = () => {
     resources, totalResources, currentPage, isLoading, error, 
     fetchResources, selectResource,
     removeTagFilter, clearTags, advancedFilterDraft,
-    homeMode, activeNsfwDomain, advancedBuildProgress, clearAdvancedSearch,
+    homeMode, activeNsfwDomain, advancedBuildProgress, clearAdvancedSearch, pauseAdvancedBuild,
     advancedDatasetsByDomain,
     lastHomeQuery, setCurrentPage
   } = useUIStore();
@@ -157,12 +157,22 @@ export const Home: React.FC = () => {
             )}
           </div>
           {advancedBuildProgress.stage !== 'error' && (
-            <button
-              className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
-              onClick={handleExitAdvancedMode}
-            >
-              退出高级模式
-            </button>
+            <div className="flex items-center gap-2">
+              {homeMode === 'advanced_building' && (
+                <button
+                  className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
+                  onClick={pauseAdvancedBuild}
+                >
+                  停止
+                </button>
+              )}
+              <button
+                className="px-4 py-2 rounded-full border border-amber-300 bg-white font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
+                onClick={handleExitAdvancedMode}
+              >
+                退出高级模式
+              </button>
+            </div>
           )}
         </div>
       )}

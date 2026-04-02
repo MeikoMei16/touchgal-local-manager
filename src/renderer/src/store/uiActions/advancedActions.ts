@@ -351,6 +351,12 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     }
   },
   exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),
+  pauseAdvancedBuild: () => {
+    if (get().homeMode !== 'advanced_building') return;
+    // Invalidate the session so running workers stop picking up new items.
+    // Already-in-flight requests finish naturally; results are discarded via the session check.
+    set({ advancedBuildSessionId: null, homeMode: 'advanced_ready' });
+  },
   clearAdvancedSearch: () => {
     const currentQuery = get().lastHomeQuery;
     // Reset rating sort on exit so the fetch effect does not immediately re-enter advanced mode.
