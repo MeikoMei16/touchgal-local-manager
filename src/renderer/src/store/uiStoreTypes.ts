@@ -36,6 +36,7 @@ export interface UIState {
   enterAdvancedMode: (sortField: string, sortOrder: string) => Promise<void>;
   exitAdvancedMode: () => void;
   pauseAdvancedBuild: () => void;
+  resumeAdvancedBuild: (sortField: string, sortOrder: string) => Promise<void>;
   clearAdvancedSearch: () => void;
   applyAdvancedFilters: (page: number, sortField: string, sortOrder: string) => void;
   addTagFilter: (tag: string) => void;

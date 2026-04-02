@@ -213,6 +213,10 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
           total: totalPages,
           completed: 1,
           message: `正在拉取目录 (1/${totalPages})...`
+        },
+        advancedDatasetsByDomain: {
+          ...s.advancedDatasetsByDomain,
+          [domain]: { ...s.advancedDatasetsByDomain[domain], catalogTotalPages: totalPages }
         }
       }));
 
@@ -353,9 +357,132 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
   exitAdvancedMode: () => set({ homeMode: 'normal', advancedBuildSessionId: null }),
   pauseAdvancedBuild: () => {
     if (get().homeMode !== 'advanced_building') return;
-    // Invalidate the session so running workers stop picking up new items.
-    // Already-in-flight requests finish naturally; results are discarded via the session check.
-    set({ advancedBuildSessionId: null, homeMode: 'advanced_ready' });
+    // Save catalog progress into the dataset so resumeAdvancedBuild knows where to continue from.
+    const progress = get().advancedBuildProgress;
+    const domain = get().activeNsfwDomain;
+    set((s) => ({
+      advancedBuildSessionId: null,
+      homeMode: 'advanced_ready',
+      advancedDatasetsByDomain: progress.stage === 'catalog'
+        ? {
+            ...s.advancedDatasetsByDomain,
+            [domain]: { ...s.advancedDatasetsByDomain[domain], catalogTotalPages: progress.total }
+          }
+        : s.advancedDatasetsByDomain
+    }));
+  },
+  resumeAdvancedBuild: async (sortField: string, sortOrder: string) => {
+    if (get().homeMode !== 'advanced_ready') return;
+    const draft = get().advancedFilterDraft;
+    const domain = get().activeNsfwDomain;
+    const ds = get().advancedDatasetsByDomain[domain];
+    // Only resumable when catalog is incomplete (lastBuiltAt null means catalog never finished)
+    // and we have a partial dataset with known total pages.
+    const catalogIncomplete = ds.lastBuiltAt === null && ds.resources.length > 0 && ds.catalogTotalPages !== null;
+    const enrichmentIncomplete = ds.lastBuiltAt !== null && ds.resources.some((r) => !r.introHydrated);
+    if (!catalogIncomplete && !enrichmentIncomplete) return;
+    // Delegate to enterAdvancedMode which already handles both resume paths:
+    // - canReuseCatalog + needsIntroHydration => enrichment resume
+    // - catalog incomplete => detected below via catalogTotalPages
+    if (enrichmentIncomplete) {
+      get().enterAdvancedMode(sortField, sortOrder);
+      return;
+    }
+    // Catalog resume: continue from the next unfinished page
+    const sessionId = createAdvancedSessionId();
+    const upstreamKey = getAdvancedUpstreamKey(draft, domain);
+    const upstreamQuery = {
+      nsfwMode: domain === 'all' ? undefined : domain,
+      platform: draft.selectedPlatform !== 'all' ? draft.selectedPlatform : undefined,
+      selectedPlatform: draft.selectedPlatform ?? 'all'
+    };
+    if (draft.minRatingCount > 0) (upstreamQuery as any).minRatingCount = draft.minRatingCount;
+    const needsTagHydration = draft.selectedTags.length > 0;
+    const needsReleaseHydration = draft.yearConstraints.length > 0;
+    const needsIntroHydration = needsTagHydration || needsReleaseHydration;
+    const midstreamPass = (record: AdvancedResourceRecord): boolean => {
+      if (draft.minRatingScore > 0 && (record.averageRating || 0) < draft.minRatingScore) return false;
+      if (draft.minCommentCount > 0 && (record.commentCount || (record as any).comments || 0) < draft.minCommentCount) return false;
+      return true;
+    };
+    const totalPages = ds.catalogTotalPages!;
+    const resumeFromPage = ds.resources.length > 0
+      ? Math.floor(ds.resources.length / 30) + 1  // rough estimate; uniqueById handles overlaps
+      : 2;
+    set({
+      homeMode: 'advanced_building',
+      advancedBuildSessionId: sessionId,
+      error: null,
+      advancedBuildProgress: {
+        stage: 'catalog',
+        completed: resumeFromPage - 1,
+        total: totalPages,
+        message: `继续拉取目录 (${resumeFromPage - 1}/${totalPages})...`
+      }
+    });
+    try {
+      let globalIndex = ds.resources.length;
+      const addToPool = (pageList: any[]) => {
+        const start = globalIndex;
+        globalIndex += pageList.length;
+        return pageList.map((r: any, i: number) => ({ ...toAdvancedResourceRecord(r), __catalogIndex: start + i })).filter(midstreamPass);
+      };
+      const remainingPages = Array.from({ length: totalPages - (resumeFromPage - 1) }, (_, i) => resumeFromPage + i);
+      await runBounded(remainingPages, ADVANCED_CATALOG_CONCURRENCY, async (pageNum) => {
+        if (get().advancedBuildSessionId !== sessionId) return;
+        let page;
+        try {
+          page = await TouchGalClient.fetchGalgameResources(pageNum, ADVANCED_PAGE_SIZE, upstreamQuery);
+        } catch (error) {
+          const message = `继续拉取目录失败：第 ${pageNum} 页资源请求失败（${toErrorMessage(error)}）`;
+          throw new Error(message);
+        }
+        if (get().advancedBuildSessionId !== sessionId) return;
+        const pageCandidates = addToPool(page.list);
+        set((s) => {
+          const completed = s.advancedBuildProgress.completed + 1;
+          const currentDs = s.advancedDatasetsByDomain[domain];
+          const merged = uniqueById([...currentDs.resources, ...pageCandidates]);
+          return {
+            advancedBuildProgress: { ...s.advancedBuildProgress, completed, message: `继续拉取目录 (${completed}/${totalPages})...` },
+            advancedDatasetsByDomain: { ...s.advancedDatasetsByDomain, [domain]: { ...currentDs, resources: merged, total: merged.length } }
+          };
+        });
+        get().applyAdvancedFilters(1, sortField, sortOrder);
+      });
+      if (get().advancedBuildSessionId !== sessionId) return;
+      const finalDs = get().advancedDatasetsByDomain[domain];
+      const finalCandidates = uniqueById(finalDs.resources);
+      set((s) => ({
+        homeMode: needsIntroHydration ? 'advanced_building' : 'advanced_ready',
+        advancedBuildProgress: needsIntroHydration
+          ? { stage: 'enrichment', completed: 0, total: finalCandidates.length, message: buildEnrichmentMessage(0, finalCandidates.length, needsTagHydration, needsReleaseHydration) }
+          : { stage: 'ready', completed: finalCandidates.length, total: finalCandidates.length, message: `目录完成，${finalCandidates.length} 个候选` },
+        advancedDatasetsByDomain: {
+          ...s.advancedDatasetsByDomain,
+          [domain]: {
+            ...finalDs,
+            resources: finalCandidates,
+            total: finalCandidates.length,
+            lastBuiltAt: Date.now(),
+            upstreamKey
+          }
+        }
+      }));
+      get().applyAdvancedFilters(1, sortField, sortOrder);
+      if (!needsIntroHydration) return;
+      // Enrichment phase: reuse enterAdvancedMode which handles pending resources
+      get().enterAdvancedMode(sortField, sortOrder);
+    } catch (e: any) {
+      const message = toErrorMessage(e);
+      console.error('[advanced] resumeAdvancedBuild failed', { domain, error: e });
+      set({
+        homeMode: 'advanced_ready',
+        advancedBuildSessionId: null,
+        advancedBuildProgress: { stage: 'error', completed: 0, total: 0, message },
+        error: message
+      });
+    }
   },
   clearAdvancedSearch: () => {
     const currentQuery = get().lastHomeQuery;

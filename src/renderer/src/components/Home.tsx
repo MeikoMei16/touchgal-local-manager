@@ -13,7 +13,7 @@ export const Home: React.FC = () => {
     resources, totalResources, currentPage, isLoading, error, 
     fetchResources, selectResource,
     removeTagFilter, clearTags, advancedFilterDraft,
-    homeMode, activeNsfwDomain, advancedBuildProgress, clearAdvancedSearch, pauseAdvancedBuild,
+    homeMode, activeNsfwDomain, advancedBuildProgress, clearAdvancedSearch, pauseAdvancedBuild, resumeAdvancedBuild,
     advancedDatasetsByDomain,
     lastHomeQuery, setCurrentPage
   } = useUIStore();
@@ -37,6 +37,10 @@ export const Home: React.FC = () => {
   const [jumpPage, setJumpPage] = useState(String(currentPage));
   const activeAdvancedDataset = advancedDatasetsByDomain[activeNsfwDomain];
   const failedTagCount = activeAdvancedDataset?.failedTagIds.length ?? 0;
+  const canResume = homeMode === 'advanced_ready' && activeAdvancedDataset != null && (
+    (activeAdvancedDataset.lastBuiltAt === null && activeAdvancedDataset.catalogTotalPages !== null && activeAdvancedDataset.resources.length > 0) ||
+    (activeAdvancedDataset.lastBuiltAt !== null && activeAdvancedDataset.resources.some((r) => !r.introHydrated))
+  );
   const showAdvancedStatus = homeMode === 'advanced_building' || homeMode === 'advanced_ready' || advancedBuildProgress.stage === 'error';
   const advancedStatusTone = advancedBuildProgress.stage === 'error'
     ? 'border-rose-200 bg-rose-50 text-rose-900'
@@ -164,6 +168,14 @@ export const Home: React.FC = () => {
                   onClick={pauseAdvancedBuild}
                 >
                   停止
+                </button>
+              )}
+              {canResume && (
+                <button
+                  className="px-4 py-2 rounded-full border border-amber-400 bg-amber-50 font-bold text-sm cursor-pointer transition-colors hover:bg-amber-100"
+                  onClick={() => resumeAdvancedBuild(lastHomeQuery.sortField, lastHomeQuery.sortOrder)}
+                >
+                  继续
                 </button>
               )}
               <button
