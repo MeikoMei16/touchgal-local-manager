@@ -14,6 +14,7 @@ Why:
 Rule:
 
 - renderer code must use `window.api` and `TouchGalClient`
+- renderer feature/store code should prefer `TouchGalClient` as the renderer-side wrapper instead of calling `window.api` directly from arbitrary components or stores
 
 ### Main-process auth token normalization owns header safety
 
@@ -127,6 +128,7 @@ Rule:
 
 - `nsfwMode`, `selectedPlatform`, and `minRatingCount` should be exposed directly from the homepage top bar
 - the advanced filter panel should only own midstream and downstream constraints
+- `minRatingCount` should remain an upstream `/galgame` filter and must not, by itself, force advanced mode
 
 Reason:
 

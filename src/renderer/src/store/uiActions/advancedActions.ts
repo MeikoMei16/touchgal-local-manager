@@ -202,7 +202,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       } catch (error) {
         const message = `拉取高级筛选目录失败：第 1 页资源请求失败（${toErrorMessage(error)}）`;
         console.error('[advanced] failed to fetch initial catalog page', { domain, upstreamQuery, error });
-        throw new Error(message);
+        throw new Error(message, { cause: error });
       }
       if (get().advancedBuildSessionId !== sessionId) return;
 
@@ -237,7 +237,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
         } catch (error) {
           const message = `拉取高级筛选目录失败：第 ${pageNum} 页资源请求失败（${toErrorMessage(error)}）`;
           console.error('[advanced] failed to fetch catalog page', { domain, pageNum, upstreamQuery, error });
-          throw new Error(message);
+          throw new Error(message, { cause: error });
         }
         if (get().advancedBuildSessionId !== sessionId) return;
 
@@ -435,7 +435,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
           page = await TouchGalClient.fetchGalgameResources(pageNum, ADVANCED_PAGE_SIZE, upstreamQuery);
         } catch (error) {
           const message = `继续拉取目录失败：第 ${pageNum} 页资源请求失败（${toErrorMessage(error)}）`;
-          throw new Error(message);
+          throw new Error(message, { cause: error });
         }
         if (get().advancedBuildSessionId !== sessionId) return;
         const pageCandidates = addToPool(page.list);
@@ -492,6 +492,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
       ...defaultHomeQuery(),
       nsfwMode: currentQuery.nsfwMode,
       selectedPlatform: currentQuery.selectedPlatform,
+      minRatingCount: currentQuery.minRatingCount,
       sortField: safeSortField,
       sortOrder: currentQuery.sortOrder
     };
@@ -499,7 +500,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     const resetDraft = {
       ...defaultAdvancedFilterDraft(),
       nsfwMode: resetDomain,
-      selectedPlatform: currentQuery.selectedPlatform
+      selectedPlatform: currentQuery.selectedPlatform,
+      minRatingCount: currentQuery.minRatingCount
     };
 
     set({

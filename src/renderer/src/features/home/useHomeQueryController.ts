@@ -41,7 +41,9 @@ export const useHomeQueryController = () => {
 
   useEffect(() => {
     if (!hasHydratedUi) return;
-    syncDraftFromQuery(lastHomeQuery);
+    const nextDomain = mapNsfwModeToDomain(lastHomeQuery.nsfwMode ?? 'safe');
+    setActiveNsfwDomain(nextDomain);
+    updateAdvancedFilterDraft(toDraftPayload(lastHomeQuery));
   }, [hasHydratedUi, lastHomeQuery, setActiveNsfwDomain, updateAdvancedFilterDraft]);
 
   // Fetch effect: routes to normal fetch or triggers advanced mode build

@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: async () => {
         try {
-          await window.api.logout();
+          await TouchGalClient.logout();
         } catch (err) {
           console.error('Failed to clear main-process session token:', err);
         } finally {
@@ -120,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
       verifyCaptcha: async (ids) => {
         try {
           set({ isLoading: true, error: null });
-          const result = await window.api.verifyCaptcha(get().captchaChallenge?.sessionId || '', ids);
+          const result = await TouchGalClient.verifyCaptcha(get().captchaChallenge?.sessionId || '', ids);
           set({ isLoading: false });
           return result.code;
         } catch {
@@ -132,10 +132,10 @@ export const useAuthStore = create<AuthState>()(
       fetchUserProfile: async () => {
         set({ isLoading: true });
         try {
-          const selfStatus = await window.api.getUserStatusSelf();
+          const selfStatus = await TouchGalClient.getUserStatusSelf();
           if (selfStatus?.uid || selfStatus?.id) {
             const uid = selfStatus.uid || selfStatus.id;
-            const profileDetail = await window.api.getUserStatus(uid);
+            const profileDetail = await TouchGalClient.getUserStatus(uid);
             set({ userProfile: profileDetail, user: { ...get().user, id: uid, uid }, isLoading: false });
             return;
           }
@@ -150,13 +150,13 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           if (type === 'comments') {
-            const data = await window.api.getUserComments(Number(uid), page, 20);
+            const data = await TouchGalClient.getUserComments(Number(uid), page, 20);
             set({ userComments: data.comments || [], isLoading: false });
           } else if (type === 'ratings') {
-            const data = await window.api.getUserRatings(Number(uid), page, 20);
+            const data = await TouchGalClient.getUserRatings(Number(uid), page, 20);
             set({ userRatings: data.ratings || [], isLoading: false });
           } else if (type === 'collections') {
-            const data = await window.api.getFavoriteFolders(Number(uid));
+            const data = await TouchGalClient.getFavoriteFolders(Number(uid));
             set({ userCollections: data || [], isLoading: false });
           }
         } catch (err: any) {

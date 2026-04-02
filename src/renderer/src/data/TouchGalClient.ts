@@ -50,12 +50,20 @@ export const TouchGalClient = {
     return await window.api.login(username, password, captcha);
   },
 
+  logout: async () => {
+    return await window.api.logout();
+  },
+
   searchTags: async (keyword: string) => {
     return await window.api.searchTags(keyword);
   },
 
   getUserStatus: async (id: number) => {
     return await window.api.getUserStatus(id);
+  },
+
+  getUserStatusSelf: async () => {
+    return await window.api.getUserStatusSelf();
   },
 
   getUserComments: async (uid: number, pageNum: number, limitNum: number) => {
@@ -68,5 +76,9 @@ export const TouchGalClient = {
 
   getUserResources: async (uid: number, pageNum: number, limitNum: number) => {
     return await window.api.getUserResources(uid, pageNum, limitNum);
+  },
+
+  getFavoriteFolders: async (uid: number) => {
+    return await window.api.getFavoriteFolders(uid);
   }
 };

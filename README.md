@@ -101,3 +101,7 @@ Still in progress:
 - [docs/styling.md](docs/styling.md)
 
 The docs set is current for the homepage state refactor, advanced-filter behavior, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow.
+
+Lint note:
+
+- the repository includes a `reference_project/` tree for comparison material; app linting excludes that tree so `pnpm lint` reports the local Electron app itself

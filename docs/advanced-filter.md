@@ -34,6 +34,7 @@ Purpose:
 
 - reduce candidate set size before local processing
 - these upstream controls are exposed directly on the homepage top bar, to the left of the `高级筛选` button
+- `minRatingCount` remains a normal-mode-safe upstream `/galgame` filter by itself; it does not force the renderer into advanced mode
 
 ### Stage 2: Midstream local filtering
 
@@ -127,6 +128,7 @@ Query model:
 - hydration must complete before normal-mode homepage fetch effects run
 - normal homepage refresh is expected to restore sort key, sort order, upstream filters, and current page
 - `nsfwMode`, `selectedPlatform`, and `minRatingCount` are edited from homepage chrome instead of the advanced panel
+- `minRatingCount` participates in advanced dataset cache keys when advanced mode is already active, but changing it alone should still stay on normal upstream pagination
 - homepage query control logic is no longer embedded in `Home.tsx`; it lives in `features/home/homeQuery.ts` and `features/home/useHomeQueryController.ts`
 
 Draft model:
@@ -150,6 +152,7 @@ Modes:
 - Rating sort and advanced filters share the same build session, cache, and local pagination path.
 - Exiting advanced mode returns homepage behavior to normal API pagination.
 - Clearing advanced search resets advanced constraints while preserving the current top-level sort order.
+- Clearing advanced search preserves Stage 1 upstream controls such as `nsfwMode`, `selectedPlatform`, and `minRatingCount`.
 - If the current sort field is `rating`, the exit action rewrites it to `created` so the homepage does not immediately re-enter the advanced local-catalog path.
 - Clearing advanced search currently resets the homepage page index back to `1`.
 - Persisted homepage query state auto-enters advanced mode on mount whenever the restored query still requires local handling, including `sortField === 'rating'`.
@@ -167,6 +170,7 @@ Modes:
 - Tag enrichment failures are tracked and surfaced in the advanced-mode status UI; failed candidates are excluded from strict tag results.
 - Catalog-page fetch failures are surfaced in both console logs and the advanced-mode status UI so users can see which build step failed.
 - The advanced-mode exit button clears advanced constraints; if the current sort is `rating`, the exit action rewrites it to `created` before returning to normal mode.
+- Exiting advanced mode clears only Stage 2 / Stage 3 constraints; Stage 1 upstream controls remain in `lastHomeQuery` and continue to drive normal `/galgame` pagination.
 - Normal-mode page navigation updates persisted page state first; the resulting fetch is driven by the homepage effect, not by direct button-triggered fetch calls.
 - Normal-mode sort changes keep the current page instead of forcing a page reset.
 - Pressing `Enter` inside the release-year input only records the constraint chip; it must not launch the advanced build.

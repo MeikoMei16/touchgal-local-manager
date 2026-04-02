@@ -121,11 +121,13 @@ Important note:
 
 - sorting for the homepage is store-owned, not component-local
 - `sortField === 'rating'` is treated as an advanced-mode trigger because upstream rating pagination is unstable
+- `minRatingCount` is still forwarded directly to upstream `/galgame` and does not, by itself, trigger advanced mode
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
 - release-year filtering is based on release date only; renderer code must not fall back to resource `created` time when computing release year
 - normal homepage refresh should restore sort key, sort order, upstream filters, and current page from persisted state
 - upstream homepage controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) are rendered directly in the homepage top bar, left of `高级筛选`
 - `useTouchGalStore.ts` should be treated as a compatibility layer, not as the place to add new state logic
+- `TouchGalClient.ts` is the renderer-side source of truth for the preload bridge surface used by browse, auth, and profile flows; new renderer network/IPC calls should be added there instead of reaching for `window.api` directly
 
 ## Data Flow
 
@@ -171,7 +173,7 @@ Exiting advanced search:
 
 1. Renderer clears advanced constraints and advanced-mode UI state.
 2. Homepage returns to `normal` mode.
-3. The reset query currently preserves the current top-level sort field and sort order.
+3. The reset query currently preserves Stage 1 upstream controls together with the current top-level sort field and sort order.
 4. If the preserved query still requires local correctness — notably `sortField === 'rating'` — the controller immediately re-enters the advanced local-catalog path instead of staying on normal API pagination.
 5. Otherwise, a fresh normal-mode fetch is triggered from the reset homepage query.
 

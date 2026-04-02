@@ -18,7 +18,6 @@ export const mapNsfwModeToDomain = (value: HomeQueryState['nsfwMode'] | NsfwDoma
 export const requiresAdvancedMode = (filters: HomeQueryState) =>
   filters.sortField === 'rating' ||
   (filters.yearConstraints?.length ?? 0) > 0 ||
-  (filters.minRatingCount ?? 0) > 0 ||
   (filters.minRatingScore ?? 0) > 0 ||
   (filters.minCommentCount ?? 0) > 0 ||
   (filters.selectedTags?.length ?? 0) > 0;
