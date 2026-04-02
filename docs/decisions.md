@@ -190,11 +190,26 @@ Rule:
 
 - `DetailOverlay.tsx` should compose dedicated subcomponents for header, tabs, info, links, board, evaluation, and image-viewer concerns
 - do not move large blocks of tab-specific rendering logic back into the overlay container
+- detail secondary-click behavior should remain preference-driven through renderer state, with `back` as the default desktop behavior
 
 Reason:
 
 - keeps detail presentation changes localized
 - avoids mixing tab UI, session gating, and content-specific markup in one large component
+
+### Settings-owned interaction preferences should stay renderer-side
+
+Rule:
+
+- interaction preferences such as `detailSecondaryClickAction` belong in persisted renderer UI state
+- settings UI may expose `back` versus `native` behavior for detail-page secondary click without involving the main process
+- detail right-click back handling must exempt interactive targets such as links and buttons so users do not lose native context behavior where it is expected
+
+Reason:
+
+- this behavior is local UX policy, not an upstream/network/runtime concern
+- renderer-side persistence keeps the setting reactive and cheap to change
+- exempting interactive targets preserves expected desktop affordances while still supporting fast back navigation
 
 ### Detail media should be extracted from introduction HTML before rendering
 

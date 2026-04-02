@@ -98,6 +98,7 @@ Key frontend state split:
 - current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
 - auth modal state: captcha payloads, login errors, and session-expired UI state
 - detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
+- persisted interaction preference: `detailSecondaryClickAction`
 
 Renderer code split:
 
@@ -112,6 +113,7 @@ Renderer persistence notes:
 - auth UI state is persisted separately from the encrypted token managed by the main process
 - renderer logout must clear both layers: renderer auth state and the main-process token
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
+- renderer interaction preferences such as `detailSecondaryClickAction` are also persisted in renderer `localStorage`
 - hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
 - `uiStore.ts` owns the persistence configuration, but action implementations are delegated to `uiActions/*`
 
@@ -201,6 +203,12 @@ Detail loading:
 7. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
 8. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
 9. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
+
+Detail interaction behavior:
+
+- the renderer settings page currently owns detail secondary-click behavior as a persisted interaction preference
+- the default setting maps right click to back in the detail overlay and full-screen screenshot viewer
+- interactive targets such as links and buttons keep their native context behavior even when right click is mapped to back
 
 Detail header layout:
 

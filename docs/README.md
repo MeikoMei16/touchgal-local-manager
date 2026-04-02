@@ -17,7 +17,9 @@ Current cross-cutting topics covered here:
 - homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
 - main-process auth token normalization and upstream header/cookie rules
 - current login and captcha interaction constraints
+- renderer settings page and persisted interaction preferences
 - guarded detail loading and current detail-overlay composition rules
+- detail secondary-click behavior with default right-click-to-back handling
 - detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
 
 ## API Notes
