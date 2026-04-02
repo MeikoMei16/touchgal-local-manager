@@ -7,6 +7,16 @@ interface ResourceCardProps {
   onClick: (uniqueId: string) => void;
 }
 
+const formatDateYMD = (raw: string | null | undefined): string => {
+  if (!raw) return '未知时间';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick }) => {
   const isClickable = resource.uniqueId && resource.uniqueId.length === 8;
 
@@ -49,7 +59,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       <div className="p-4 flex-1 flex flex-col gap-1.5">
         <h3 className="m-0 text-base font-bold leading-relaxed text-slate-900 h-11 line-clamp-2 tracking-tight group-hover:text-primary transition-colors" title={resource.name}>{resource.name}</h3>
         
-        <div className="text-[11px] text-slate-400 font-bold mb-2 uppercase tracking-wider">{resource.created || '未知时间'}</div>
+        <div className="text-[11px] text-slate-400 font-bold mb-2 uppercase tracking-wider">{formatDateYMD(resource.created)}</div>
 
         <div className="flex flex-nowrap justify-between gap-1.5 mb-4 w-full">
           <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="浏览数">
