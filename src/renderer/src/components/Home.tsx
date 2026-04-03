@@ -252,7 +252,7 @@ export const Home: React.FC = () => {
             <ResourceCard 
               key={resource.uniqueId} 
               resource={resource} 
-              onClick={selectResource}
+              onClick={(clickedResource) => void selectResource(clickedResource.uniqueId, clickedResource)}
             />
           ))}
         </div>

@@ -1,10 +1,11 @@
 import React from 'react';
 import { TouchGalResource } from '../types';
-import { Star, Download, Eye, Heart } from 'lucide-react';
+import { Star, Download, Eye, Heart, Loader2 } from 'lucide-react';
+import { useUIStore } from '../store/useTouchGalStore';
 
 interface ResourceCardProps {
   resource: TouchGalResource;
-  onClick: (uniqueId: string) => void;
+  onClick: (resource: TouchGalResource) => void;
 }
 
 const formatDateYMD = (raw: string | null | undefined): string => {
@@ -18,7 +19,10 @@ const formatDateYMD = (raw: string | null | undefined): string => {
 };
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick }) => {
+  const selectedResource = useUIStore((state) => state.selectedResource);
+  const isDetailLoading = useUIStore((state) => state.isDetailLoading);
   const isClickable = resource.uniqueId && resource.uniqueId.length === 8;
+  const isDetailLoadingForCard = isDetailLoading && selectedResource?.uniqueId === resource.uniqueId;
 
   // Format large numbers with defensive checks
   const formatStat = (num: number | undefined | null) => {
@@ -34,9 +38,16 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
 
   return (
     <div 
-      className={`group w-full bg-white rounded-[24px] overflow-hidden cursor-pointer transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] border border-slate-200 flex flex-col h-full relative hover:not-disabled:-translate-y-1.5 hover:not-disabled:shadow-2xl hover:not-disabled:border-primary ${!isClickable ? 'opacity-60 cursor-not-allowed grayscale' : ''}`} 
-      onClick={() => isClickable && onClick(resource.uniqueId)}
+      className={`group w-full bg-white rounded-[24px] overflow-hidden cursor-pointer transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] border border-slate-200 flex flex-col h-full relative hover:not-disabled:-translate-y-1.5 hover:not-disabled:shadow-2xl hover:not-disabled:border-primary ${!isClickable ? 'opacity-60 cursor-not-allowed grayscale' : ''} ${isDetailLoadingForCard ? 'ring-2 ring-primary/30 border-primary shadow-xl shadow-primary/10' : ''}`} 
+      onClick={() => isClickable && onClick(resource)}
     >
+      {isDetailLoadingForCard && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-white/78 backdrop-blur-[2px]">
+          <Loader2 className="animate-spin text-primary" size={28} />
+          <span className="text-sm font-black text-primary">正在加载详情...</span>
+        </div>
+      )}
+
       <div className="relative aspect-[1.618/1] overflow-hidden bg-slate-100">
         {resource.banner ? (
           <img 

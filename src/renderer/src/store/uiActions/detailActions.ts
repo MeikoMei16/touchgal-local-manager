@@ -2,12 +2,13 @@ import { TouchGalClient } from '../../data/TouchGalClient';
 import { useAuthStore } from '../authStore';
 import { mergeDetailResource, toDetailShell } from '../../features/detail/detailResource';
 import type { UIGetState, UISetState } from '../uiStoreTypes';
+import type { TouchGalResource } from '../../types';
 
 let activeDetailRequestKey: string | null = null;
 
 export const createDetailActions = (set: UISetState, get: UIGetState) => ({
-  selectResource: async (uniqueId: string) => {
-    const basicInfo = get().resources.find((r) => r.uniqueId === uniqueId);
+  selectResource: async (uniqueId: string, fallbackResource?: TouchGalResource) => {
+    const basicInfo = fallbackResource ?? get().resources.find((r) => r.uniqueId === uniqueId);
     activeDetailRequestKey = uniqueId;
     if (basicInfo) {
       set({
