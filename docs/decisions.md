@@ -214,6 +214,21 @@ Reason:
 - homepage cards may not always carry the final id needed by comment/rating endpoints
 - without request guarding, slower earlier detail requests can overwrite the currently open game
 
+### Detail social recovery must not overwrite resolved detail data
+
+Rule:
+
+- if a user logs in while a detail overlay is already open, the follow-up refresh should target discussion/evaluation data only
+- post-login social refresh must not replace or downgrade the already resolved `selectedResource`
+- automatic social recovery should trigger once on the login transition, not as a general-purpose retry loop
+- failed social recovery under an invalid session must settle into a locked state instead of immediately retriggering itself
+
+Reason:
+
+- the detail shell and the resolved detail payload are not interchangeable; writing the shell back over resolved detail data visibly regresses the overlay
+- a state-driven retry loop can hammer `/patch/comment` and `/patch/rating` while keeping the detail overlay stuck in loading
+- users need a deterministic “log in, refresh once, then either unlock or stay locked” interaction model
+
 ### Detail normalization belongs in the store, not the overlay render path
 
 Rule:
@@ -250,6 +265,19 @@ Reason:
 
 - keeps detail presentation changes localized
 - avoids mixing tab UI, session gating, and content-specific markup in one large component
+
+### Detail discussion and evaluation are gated content, not empty content
+
+Rule:
+
+- discussion and evaluation tabs should present a blurred locked state when the user is logged out
+- the same locked state should also be used when upstream reports `SESSION_EXPIRED` or equivalent invalid-cookie failures
+- do not fall back to generic empty-state messaging for those auth-gated social surfaces
+
+Reason:
+
+- “暂无内容” is misleading when content exists but the viewer lacks a valid session
+- reusing the same locked presentation for logged-out and expired-session cases keeps the UX consistent and easier to reason about
 
 ### Settings-owned interaction preferences should stay renderer-side
 

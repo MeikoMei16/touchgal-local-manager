@@ -33,6 +33,7 @@ export interface UIState {
   fetchResources: (page?: number, query?: Partial<HomeQueryState>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: any) => Promise<void>;
   selectResource: (uniqueId: string, fallbackResource?: TouchGalResource) => Promise<void>;
+  refreshSelectedResourceSocial: () => Promise<void>;
   clearSelected: () => void;
   updateAdvancedFilterDraft: (draft: Partial<AdvancedFilterDraft>) => void;
   setActiveNsfwDomain: (domain: NsfwDomain) => void;

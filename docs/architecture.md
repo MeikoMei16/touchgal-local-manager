@@ -242,6 +242,17 @@ Detail loading:
 7. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
 8. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
 9. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
+10. Search-page result cards pass their current card resource into the detail action as a fallback shell, so opening detail from search no longer waits for homepage-owned store state.
+
+Detail discussion / evaluation session behavior:
+
+1. Discussion and evaluation tabs are treated as session-gated social surfaces rather than as plain empty states.
+2. When the user is not logged in, those tab bodies remain blurred/locked with a login CTA instead of rendering misleading `暂无内容` placeholders.
+3. When upstream social endpoints report session expiry, the same locked presentation is forced even if renderer auth state still thinks a user exists.
+4. Successful detail opens still fetch comments and ratings during the main detail action, but post-login social recovery is a separate refresh path.
+5. If the user logs in while a detail overlay is already open, renderer triggers a one-shot social refresh for the currently selected resource.
+6. That post-login social refresh updates only comments and ratings; it must not overwrite the resolved `selectedResource` detail payload.
+7. The post-login social refresh is edge-triggered on login transition and should not loop or continuously retry while a session remains invalid.
 
 Detail interaction behavior:
 

@@ -17,19 +17,40 @@ const shouldIgnoreSecondaryBack = (target: EventTarget | null) => {
 
 export const DetailOverlay: React.FC = () => {
   const {
-    selectedResource, clearSelected, addTagFilter,
+    selectedResource, clearSelected, addTagFilter, refreshSelectedResourceSocial,
     isDetailLoading, patchComments, patchRatings, detailSecondaryClickAction
   } = useUIStore();
   const { user, sessionError, setIsLoginOpen } = useAuthStore();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTabType>('info');
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const socialRefreshKeyRef = React.useRef<string | null>(null);
+  const wasLoggedInRef = React.useRef(false);
 
   React.useEffect(() => {
     if (selectedResource && scrollRef.current) {
       scrollRef.current.focus();
     }
   }, [selectedResource]);
+
+  React.useEffect(() => {
+    const isLoggedIn = !!user;
+    const didJustLogin = isLoggedIn && !wasLoggedInRef.current;
+    wasLoggedInRef.current = isLoggedIn;
+
+    if (!selectedResource?.uniqueId) {
+      socialRefreshKeyRef.current = null;
+      return;
+    }
+    if (!didJustLogin) return;
+    if (!selectedResource.id || isDetailLoading || sessionError === 'SESSION_EXPIRED') return;
+
+    const refreshKey = `${selectedResource.uniqueId}:${user.id ?? user.uid ?? 'logged-in'}`;
+    if (socialRefreshKeyRef.current === refreshKey) return;
+
+    socialRefreshKeyRef.current = refreshKey;
+    void refreshSelectedResourceSocial();
+  }, [isDetailLoading, refreshSelectedResourceSocial, selectedResource, sessionError, user]);
 
   if (!selectedResource) return null;
 
@@ -110,10 +131,10 @@ export const DetailOverlay: React.FC = () => {
 
               {activeTab === 'board' && (
                 <DetailBoardPanel
+                  isLoggedIn={isLoggedIn}
                   sessionError={sessionError}
                   comments={patchComments}
                   isLoading={isDetailLoading}
-                  onLogin={() => setIsLoginOpen(true)}
                 />
               )}
 
@@ -123,7 +144,6 @@ export const DetailOverlay: React.FC = () => {
                   ratings={patchRatings}
                   isLoading={isDetailLoading}
                   isLoggedIn={isLoggedIn}
-                  onLogin={() => setIsLoginOpen(true)}
                 />
               )}
             </div>
