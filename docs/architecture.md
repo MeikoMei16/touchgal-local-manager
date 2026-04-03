@@ -163,8 +163,9 @@ Search-page browsing:
 3. Search scope toggles currently map directly to upstream search options for alias, introduction, and tag matching, with all three enabled by default.
 4. Most search-page sort controls map directly to the upstream search endpoint's supported `sortField` and `sortOrder` values.
 5. The exception is `sortField === 'rating'`: search-page `rating` sort now fetches a stable non-rating candidate set from upstream search and re-sorts that candidate set locally by `averageRating`.
-6. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
-7. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
+6. While that local rebuild is running, the search page renders explicit in-page progress for candidate-page fetch and the final local reorder stage instead of showing only a generic spinner.
+7. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
+8. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
 
 Advanced homepage browsing:
 

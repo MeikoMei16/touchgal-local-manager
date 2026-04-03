@@ -14,6 +14,22 @@ const SEARCH_PAGE_SIZE = 20;
 const SEARCH_UPSTREAM_PAGE_SIZE = 24;
 const SEARCH_RATING_CONCURRENCY = 4;
 
+type LocalRatingProgressStage = 'idle' | 'fetching' | 'sorting' | 'ready' | 'error';
+
+interface LocalRatingProgress {
+  stage: LocalRatingProgressStage;
+  completed: number;
+  total: number;
+  message: string;
+}
+
+const idleLocalRatingProgress = (): LocalRatingProgress => ({
+  stage: 'idle',
+  completed: 0,
+  total: 0,
+  message: ''
+});
+
 const defaultSearchOptions = (): SearchScopeOptions => ({
   searchInIntroduction: true,
   searchInAlias: true,
@@ -61,6 +77,7 @@ export const SearchView: React.FC = () => {
   const [sortField, setSortField] = useState<HomeSortField>('created');
   const [sortOrder, setSortOrder] = useState<HomeSortOrder>('desc');
   const [localRatingResults, setLocalRatingResults] = useState<TouchGalResource[] | null>(null);
+  const [localRatingProgress, setLocalRatingProgress] = useState<LocalRatingProgress>(idleLocalRatingProgress);
   const requestKeyRef = useRef(0);
 
   const totalPages = Math.max(1, Math.ceil(totalResources / SEARCH_PAGE_SIZE));
@@ -78,6 +95,7 @@ export const SearchView: React.FC = () => {
       setHasSearched(false);
       setError(null);
       setLocalRatingResults(null);
+      setLocalRatingProgress(idleLocalRatingProgress());
       return;
     }
 
@@ -85,30 +103,62 @@ export const SearchView: React.FC = () => {
     requestKeyRef.current = requestKey;
     setIsLoading(true);
     setError(null);
+    const updateLocalRatingProgress = (next: LocalRatingProgress) => {
+      if (requestKeyRef.current !== requestKey) return;
+      setLocalRatingProgress(next);
+    };
     const baseOptions = {
       searchOption: searchOptions
     };
 
     const searchTask = sortField === 'rating'
       ? (async () => {
+          updateLocalRatingProgress({
+            stage: 'fetching',
+            completed: 0,
+            total: 0,
+            message: '正在拉取评分候选...'
+          });
           const firstPage = await TouchGalClient.searchResources(activeKeyword, 1, SEARCH_UPSTREAM_PAGE_SIZE, {
             ...baseOptions,
             sortField: 'created',
             sortOrder: 'desc'
           });
           const totalPages = Math.max(1, Math.ceil(firstPage.total / SEARCH_UPSTREAM_PAGE_SIZE));
+          updateLocalRatingProgress({
+            stage: 'fetching',
+            completed: 1,
+            total: totalPages,
+            message: `正在拉取评分候选 (1/${totalPages})...`
+          });
+          let completedPages = 1;
           const remainingPages = Array.from({ length: totalPages - 1 }, (_, index) => index + 2);
           const rest = await runBounded(remainingPages, SEARCH_RATING_CONCURRENCY, async (pageNum) =>
             TouchGalClient.searchResources(activeKeyword, pageNum, SEARCH_UPSTREAM_PAGE_SIZE, {
               ...baseOptions,
               sortField: 'created',
               sortOrder: 'desc'
+            }).then((page) => {
+              completedPages += 1;
+              updateLocalRatingProgress({
+                stage: 'fetching',
+                completed: completedPages,
+                total: totalPages,
+                message: `正在拉取评分候选 (${completedPages}/${totalPages})...`
+              });
+              return page;
             })
           );
           const merged = uniqueById([
             ...firstPage.list,
             ...rest.flatMap((page) => page.list)
           ]);
+          updateLocalRatingProgress({
+            stage: 'sorting',
+            completed: totalPages,
+            total: totalPages,
+            message: `正在按评分进行本地重排，共 ${merged.length} 条候选...`
+          });
           const sorted = sortSearchResultsByRating(merged, sortOrder);
           return {
             total: sorted.length,
@@ -131,6 +181,16 @@ export const SearchView: React.FC = () => {
         setResources(data.list);
         setTotalResources(data.total);
         setLocalRatingResults(data.localRatingResults);
+        setLocalRatingProgress(
+          data.localRatingResults
+            ? {
+                stage: 'ready',
+                completed: data.localRatingResults.length,
+                total: data.localRatingResults.length,
+                message: `评分本地重排已完成，共 ${data.total} 条结果。`
+              }
+            : idleLocalRatingProgress()
+        );
         setHasSearched(true);
       })
       .catch((err: unknown) => {
@@ -141,6 +201,16 @@ export const SearchView: React.FC = () => {
         setResources([]);
         setTotalResources(0);
         setLocalRatingResults(null);
+        setLocalRatingProgress(
+          sortField === 'rating'
+            ? {
+                stage: 'error',
+                completed: 0,
+                total: 0,
+                message: `评分本地重排失败: ${message}`
+              }
+            : idleLocalRatingProgress()
+        );
         setHasSearched(true);
         if (message.includes('SESSION_EXPIRED')) {
           setSessionError('SESSION_EXPIRED');
@@ -178,6 +248,7 @@ export const SearchView: React.FC = () => {
     setHasSearched(false);
     setError(null);
     setLocalRatingResults(null);
+    setLocalRatingProgress(idleLocalRatingProgress());
   };
 
   const updateSearchOptions = (key: keyof SearchScopeOptions) => {
@@ -193,6 +264,9 @@ export const SearchView: React.FC = () => {
     setCurrentPage(1);
     setJumpPage('1');
     setSortField(value);
+    if (value !== 'rating') {
+      setLocalRatingProgress(idleLocalRatingProgress());
+    }
   };
 
   const toggleSortOrder = () => {
@@ -286,6 +360,38 @@ export const SearchView: React.FC = () => {
         onSelectSortField={updateSortField}
         onToggleSortOrder={toggleSortOrder}
       />
+
+      {sortField === 'rating' && localRatingProgress.stage !== 'idle' && (
+        <section
+          className={`rounded-[24px] border px-5 py-4 shadow-sm ${
+            localRatingProgress.stage === 'error'
+              ? 'border-rose-200 bg-rose-50 text-rose-800'
+              : localRatingProgress.stage === 'ready'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-black">
+                {localRatingProgress.stage === 'fetching' && '评分排序: 拉取候选中'}
+                {localRatingProgress.stage === 'sorting' && '评分排序: 本地重排中'}
+                {localRatingProgress.stage === 'ready' && '评分排序: 已完成'}
+                {localRatingProgress.stage === 'error' && '评分排序: 失败'}
+              </div>
+              <p className="mt-1 text-sm font-medium">
+                {localRatingProgress.message}
+              </p>
+            </div>
+
+            {localRatingProgress.total > 0 && (
+              <div className="rounded-full bg-white/70 px-4 py-2 text-sm font-black">
+                {localRatingProgress.completed}/{localRatingProgress.total}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {error && (
         <section className="rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-800">

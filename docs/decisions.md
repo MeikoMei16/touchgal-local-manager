@@ -67,6 +67,7 @@ Rule:
 - search scope toggles may expose upstream retrieval fields such as alias, introduction, and tag
 - search sort controls may expose upstream-supported sort fields directly
 - search-page `rating` sort should not trust upstream search `rating` ordering as the final source of truth
+- search-page `rating` sort should expose visible in-page rebuild progress so users can distinguish candidate fetch from the final local reorder stage
 - app-level left-nav navigation should survive renderer refresh and reopen the last selected primary section
 - do not route search-page queries through the homepage advanced pipeline
 
@@ -75,6 +76,7 @@ Reason:
 - search is retrieval-oriented and intentionally looser than homepage advanced filtering
 - keeping search separate avoids mixing fuzzy lookup behavior with strict boolean browse constraints
 - upstream search `rating` ordering can return severely incomplete result sets, so search-page `rating` sort must be rebuilt locally from a more stable candidate fetch
+- because that rebuild can span many upstream pages, a generic loading spinner is not enough feedback for the dedicated search page
 - primary left-nav restore is cheap renderer-owned UX state and should not reset users back to `home` on every refresh
 
 ### Stage ownership is fixed
