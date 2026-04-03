@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchGalResource } from '../types';
-import { Star, Download, Eye, Heart, Loader2 } from 'lucide-react';
+import { Star, Download, Eye, Heart, Loader2, MessageSquare } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 
 interface ResourceCardProps {
@@ -23,6 +23,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   const isDetailLoading = useUIStore((state) => state.isDetailLoading);
   const isClickable = resource.uniqueId && resource.uniqueId.length === 8;
   const isDetailLoadingForCard = isDetailLoading && selectedResource?.uniqueId === resource.uniqueId;
+  const visibleTags = Array.isArray(resource.tags) ? resource.tags.filter(Boolean).slice(0, 3) : [];
 
   // Format large numbers with defensive checks
   const formatStat = (num: number | undefined | null) => {
@@ -70,29 +71,55 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       <div className="p-4 flex-1 flex flex-col gap-1.5">
         <h3 className="m-0 text-base font-bold leading-relaxed text-slate-900 h-11 line-clamp-2 tracking-tight group-hover:text-primary transition-colors" title={resource.name}>{resource.name}</h3>
         
-        <div className="text-[11px] text-slate-400 font-bold mb-2 uppercase tracking-wider">{formatDateYMD(resource.created)}</div>
+        <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{formatDateYMD(resource.created)}</div>
 
-        <div className="flex flex-nowrap justify-between gap-1.5 mb-4 w-full">
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="浏览数">
+        {visibleTags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {visibleTags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-primary-container/70 px-3 py-1 text-[11px] font-black text-on-primary-container"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="浏览数">
              <Eye size={12} />
              <span>{formatStat(resource.viewCount || (resource as any).view || 0)}</span>
           </div>
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="下载数">
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="下载数">
              <Download size={12} />
              <span>{formatStat(resource.downloadCount || (resource as any).download || 0)}</span>
           </div>
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg transition-all flex-1 min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="收藏数">
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="收藏数">
              <Heart size={12} fill={resource.favoriteCount > 0 ? "currentColor" : "none"} className={resource.favoriteCount > 0 ? "text-pink-500 animate-in zoom-in-125" : ""} />
              <span>{formatStat(resource.favoriteCount)}</span>
           </div>
+          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="评论数">
+             <MessageSquare size={12} />
+             <span>{formatStat(resource.commentCount || (resource as any).comments || 0)}</span>
+          </div>
         </div>
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto grid grid-cols-[0.92fr,1.08fr] gap-2 pt-4">
            <button 
-             className="w-full p-2.5 bg-slate-100 text-primary border-none rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 hover:bg-primary hover:text-white shadow-xs group-hover:shadow-md active:scale-95" 
+             className="w-full px-3 py-2.5 bg-slate-100 text-slate-700 border-none rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 hover:bg-slate-200 shadow-xs active:scale-95" 
              onClick={(e) => { e.stopPropagation(); }}
            >
-             <span>立即收藏</span>
+             <span>收藏</span>
+           </button>
+           <button
+             className="w-full px-3 py-2.5 bg-primary text-on-primary border-none rounded-2xl font-black text-sm cursor-pointer transition-all duration-200 hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-95"
+             onClick={(e) => {
+               e.stopPropagation();
+               if (isClickable) onClick(resource);
+             }}
+           >
+             <span>下载</span>
            </button>
         </div>
       </div>
