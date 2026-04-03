@@ -14,7 +14,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - persisted homepage browse state with hydration-aware refresh restore
 - advanced homepage filtering and rating sorting with a local catalog pipeline, including release-date hydration for correct release-year filtering
 - dedicated search page for keyword-oriented fuzzy search with toggleable scope options and upstream sorting
-- local search-page `rating` sort rebuilt from stable search candidates with visible in-page progress
+- local search-page `rating` sort rebuilt from stable search candidates with visible in-page progress and incremental rendering
 - checkpoint-based advanced-build resume with page/resource progress retention
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, comments, and configurable right-click back behavior
 - renderer settings page for interaction preferences
@@ -87,7 +87,7 @@ Implemented or active:
 - left-nav refresh restore for primary app sections
 - homepage browsing and refresh persistence
 - keyword-oriented fuzzy search page with configurable scope toggles and upstream sorting
-- local search-page `rating` sort to avoid broken upstream search `rating` ordering, with visible candidate-fetch / local-sort progress
+- local search-page `rating` sort to avoid broken upstream search `rating` ordering, with visible candidate-fetch / local-sort progress and in-progress paging
 - main-process auth/session relay
 - advanced homepage filtering and local rating-sort pipeline
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
@@ -119,7 +119,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, search-page scope/sort controls, visible search-page rating-sort progress, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow.
+The docs set is current for left-nav refresh restore, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, search-page scope/sort controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow.
 
 Lint note:
 
