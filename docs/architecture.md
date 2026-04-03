@@ -126,6 +126,7 @@ Important note:
 
 - sorting for the homepage is store-owned, not component-local
 - the dedicated search page is intentionally separate from homepage advanced filtering and uses upstream search semantics with explicit scope toggles and upstream sort controls
+- search-page `rating` sort is rebuilt locally because the upstream search `rating` ordering is incomplete
 - `sortField === 'rating'` is treated as an advanced-mode trigger because upstream rating pagination is unstable
 - local rating-sort pagination is more stable than the upstream `rating` pages, but the current pipeline still cannot compensate for resources that the upstream rating candidate fetch never returns
 - `minRatingCount` is still forwarded directly to upstream `/galgame` and does not, by itself, trigger advanced mode
@@ -160,9 +161,10 @@ Search-page browsing:
 1. Renderer keeps the active search keyword local to the dedicated search page instead of writing it into homepage query state.
 2. Search requests call `TouchGalClient.searchResources(keyword, page, limit, options)` with keyword-oriented fuzzy matching semantics.
 3. Search scope toggles currently map directly to upstream search options for alias, introduction, and tag matching, with all three enabled by default.
-4. Search-page sort controls map directly to the upstream search endpoint's supported `sortField` and `sortOrder` values.
-5. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
-6. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
+4. Most search-page sort controls map directly to the upstream search endpoint's supported `sortField` and `sortOrder` values.
+5. The exception is `sortField === 'rating'`: search-page `rating` sort now fetches a stable non-rating candidate set from upstream search and re-sorts that candidate set locally by `averageRating`.
+6. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
+7. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
 
 Advanced homepage browsing:
 

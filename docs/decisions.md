@@ -66,6 +66,7 @@ Rule:
 - search page input should be treated as keyword-oriented fuzzy search
 - search scope toggles may expose upstream retrieval fields such as alias, introduction, and tag
 - search sort controls may expose upstream-supported sort fields directly
+- search-page `rating` sort should not trust upstream search `rating` ordering as the final source of truth
 - app-level left-nav navigation should survive renderer refresh and reopen the last selected primary section
 - do not route search-page queries through the homepage advanced pipeline
 
@@ -73,6 +74,7 @@ Reason:
 
 - search is retrieval-oriented and intentionally looser than homepage advanced filtering
 - keeping search separate avoids mixing fuzzy lookup behavior with strict boolean browse constraints
+- upstream search `rating` ordering can return severely incomplete result sets, so search-page `rating` sort must be rebuilt locally from a more stable candidate fetch
 - primary left-nav restore is cheap renderer-owned UX state and should not reset users back to `home` on every refresh
 
 ### Stage ownership is fixed

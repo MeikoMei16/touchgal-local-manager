@@ -14,6 +14,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - persisted homepage browse state with hydration-aware refresh restore
 - advanced homepage filtering and rating sorting with a local catalog pipeline, including release-date hydration for correct release-year filtering
 - dedicated search page for keyword-oriented fuzzy search with toggleable scope options and upstream sorting
+- local search-page `rating` sort rebuilt from stable search candidates
 - checkpoint-based advanced-build resume with page/resource progress retention
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, comments, and configurable right-click back behavior
 - renderer settings page for interaction preferences
@@ -86,6 +87,7 @@ Implemented or active:
 - left-nav refresh restore for primary app sections
 - homepage browsing and refresh persistence
 - keyword-oriented fuzzy search page with configurable scope toggles and upstream sorting
+- local search-page `rating` sort to avoid broken upstream search `rating` ordering
 - main-process auth/session relay
 - advanced homepage filtering and local rating-sort pipeline
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
@@ -101,6 +103,7 @@ Still in progress:
 Known issue:
 
 - homepage rating sort still depends on incomplete upstream candidate data in some cases; the local advanced pipeline fixes unstable upstream page ordering and duplication, but it cannot recover resources that the upstream rating query never returns
+- search-page `rating` sort is rebuilt locally from stable search candidates, but completeness still depends on the underlying non-rating search candidate feed
 
 Persistence status note:
 

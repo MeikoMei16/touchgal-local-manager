@@ -8,14 +8,41 @@ import { useUIStore } from '../store/useTouchGalStore';
 import { useAuthStore } from '../store/useTouchGalStore';
 import type { TouchGalResource } from '../types';
 import type { HomeSortField, HomeSortOrder } from '../features/home/homeState';
+import { runBounded, uniqueById } from '../features/home/advancedDataset';
 
 const SEARCH_PAGE_SIZE = 20;
+const SEARCH_UPSTREAM_PAGE_SIZE = 24;
+const SEARCH_RATING_CONCURRENCY = 4;
 
 const defaultSearchOptions = (): SearchScopeOptions => ({
   searchInIntroduction: true,
   searchInAlias: true,
   searchInTag: true
 });
+
+const paginateSearchResults = (items: TouchGalResource[], page: number) => {
+  const start = (page - 1) * SEARCH_PAGE_SIZE;
+  return items.slice(start, start + SEARCH_PAGE_SIZE);
+};
+
+const sortSearchResultsByRating = (items: TouchGalResource[], sortOrder: HomeSortOrder) => {
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  return [...items].sort((left, right) => {
+    const leftRating = left.averageRating || 0;
+    const rightRating = right.averageRating || 0;
+    if (leftRating !== rightRating) {
+      return leftRating > rightRating ? direction : -direction;
+    }
+
+    const leftCreated = left.created ? new Date(left.created).getTime() : 0;
+    const rightCreated = right.created ? new Date(right.created).getTime() : 0;
+    if (leftCreated !== rightCreated) {
+      return leftCreated > rightCreated ? -1 : 1;
+    }
+
+    return left.uniqueId.localeCompare(right.uniqueId);
+  });
+};
 
 export const SearchView: React.FC = () => {
   const selectResource = useUIStore((state) => state.selectResource);
@@ -33,6 +60,7 @@ export const SearchView: React.FC = () => {
   const [searchOptions, setSearchOptions] = useState<SearchScopeOptions>(defaultSearchOptions);
   const [sortField, setSortField] = useState<HomeSortField>('created');
   const [sortOrder, setSortOrder] = useState<HomeSortOrder>('desc');
+  const [localRatingResults, setLocalRatingResults] = useState<TouchGalResource[] | null>(null);
   const requestKeyRef = useRef(0);
 
   const totalPages = Math.max(1, Math.ceil(totalResources / SEARCH_PAGE_SIZE));
@@ -49,6 +77,7 @@ export const SearchView: React.FC = () => {
       setJumpPage('1');
       setHasSearched(false);
       setError(null);
+      setLocalRatingResults(null);
       return;
     }
 
@@ -56,16 +85,52 @@ export const SearchView: React.FC = () => {
     requestKeyRef.current = requestKey;
     setIsLoading(true);
     setError(null);
-
-    void TouchGalClient.searchResources(activeKeyword, currentPage, SEARCH_PAGE_SIZE, {
-      sortField,
-      sortOrder,
+    const baseOptions = {
       searchOption: searchOptions
-    })
+    };
+
+    const searchTask = sortField === 'rating'
+      ? (async () => {
+          const firstPage = await TouchGalClient.searchResources(activeKeyword, 1, SEARCH_UPSTREAM_PAGE_SIZE, {
+            ...baseOptions,
+            sortField: 'created',
+            sortOrder: 'desc'
+          });
+          const totalPages = Math.max(1, Math.ceil(firstPage.total / SEARCH_UPSTREAM_PAGE_SIZE));
+          const remainingPages = Array.from({ length: totalPages - 1 }, (_, index) => index + 2);
+          const rest = await runBounded(remainingPages, SEARCH_RATING_CONCURRENCY, async (pageNum) =>
+            TouchGalClient.searchResources(activeKeyword, pageNum, SEARCH_UPSTREAM_PAGE_SIZE, {
+              ...baseOptions,
+              sortField: 'created',
+              sortOrder: 'desc'
+            })
+          );
+          const merged = uniqueById([
+            ...firstPage.list,
+            ...rest.flatMap((page) => page.list)
+          ]);
+          const sorted = sortSearchResultsByRating(merged, sortOrder);
+          return {
+            total: sorted.length,
+            list: paginateSearchResults(sorted, currentPage),
+            localRatingResults: sorted
+          };
+        })()
+      : TouchGalClient.searchResources(activeKeyword, currentPage, SEARCH_PAGE_SIZE, {
+          ...baseOptions,
+          sortField,
+          sortOrder
+        }).then((data) => ({
+          ...data,
+          localRatingResults: null as TouchGalResource[] | null
+        }));
+
+    void searchTask
       .then((data) => {
         if (requestKeyRef.current !== requestKey) return;
         setResources(data.list);
         setTotalResources(data.total);
+        setLocalRatingResults(data.localRatingResults);
         setHasSearched(true);
       })
       .catch((err: unknown) => {
@@ -75,6 +140,7 @@ export const SearchView: React.FC = () => {
         setError(message);
         setResources([]);
         setTotalResources(0);
+        setLocalRatingResults(null);
         setHasSearched(true);
         if (message.includes('SESSION_EXPIRED')) {
           setSessionError('SESSION_EXPIRED');
@@ -85,6 +151,12 @@ export const SearchView: React.FC = () => {
         setIsLoading(false);
       });
   }, [activeKeyword, currentPage, searchOptions, setSessionError, sortField, sortOrder]);
+
+  useEffect(() => {
+    if (sortField !== 'rating' || !localRatingResults) return;
+    setResources(paginateSearchResults(localRatingResults, currentPage));
+    setTotalResources(localRatingResults.length);
+  }, [currentPage, localRatingResults, sortField]);
 
   const executeSearch = () => {
     const normalized = queryInput.trim();
@@ -105,6 +177,7 @@ export const SearchView: React.FC = () => {
     setIsLoading(false);
     setHasSearched(false);
     setError(null);
+    setLocalRatingResults(null);
   };
 
   const updateSearchOptions = (key: keyof SearchScopeOptions) => {
@@ -150,9 +223,9 @@ export const SearchView: React.FC = () => {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-xl font-black tracking-tight text-slate-900">搜索 Galgame</h3>
-              <p className="mt-1 text-sm font-medium text-slate-500">
-                这里只有关键词关联的 fuzzy search。标题始终参与匹配，其余搜索范围和排序可在下方设置面板里勾选。
-              </p>
+          <p className="mt-1 text-sm font-medium text-slate-500">
+            这里只有关键词关联的 fuzzy search。标题始终参与匹配，其余搜索范围和排序可在下方设置面板里勾选。评分排序会先抓取搜索候选，再在本地重排。
+          </p>
             </div>
             {activeKeyword && (
               <div className="rounded-full bg-primary-container px-4 py-2 text-sm font-bold text-on-primary-container">
