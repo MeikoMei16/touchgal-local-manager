@@ -22,6 +22,33 @@ const SECTION_LABELS: Record<string, string> = {
   android: '手机游戏',
 };
 
+const TYPE_LABELS: Record<string, string> = {
+  pc: 'PC游戏',
+  patch: '补丁资源',
+  emulator: '模拟器资源',
+  chinese: '汉化资源',
+  mobile: '手机游戏',
+  app: '直装资源',
+  raw: '生肉资源',
+  tool: '游戏工具',
+  other: '其它',
+};
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  'zh-Hans': '简体中文',
+  'zh-Hant': '繁體中文',
+  ja: '日本語',
+  other: '其它',
+};
+
+const PLATFORM_LABELS: Record<string, string> = {
+  android: 'Android',
+  windows: 'Windows',
+  ios: 'iOS',
+  linux: 'Linux',
+  other: '其它',
+};
+
 const STORAGE_LABELS: Record<string, string> = {
   touchgal: 'TouchGal 官方',
   s3: 'TouchGal 官方',
@@ -41,14 +68,46 @@ const getLinks = (download: TouchGalDownload) =>
 
 const getAccessCode = (download: TouchGalDownload) => download.code || null;
 const getPassword = (download: TouchGalDownload) => download.password || null;
+const getTypeLabel = (value: string) => TYPE_LABELS[value] ?? value;
+const getLanguageLabel = (value: string) => LANGUAGE_LABELS[value] ?? value;
+const getPlatformLabel = (value: string) => PLATFORM_LABELS[value] ?? value;
+
+const getDownloadMetadataChips = (download: TouchGalDownload) => {
+  const seen = new Set<string>();
+  const chips: Array<{ key: string; label: string; tone: 'section' | 'type' | 'language' | 'platform' }> = [];
+
+  const pushChip = (key: string, label: string | null, tone: 'section' | 'type' | 'language' | 'platform') => {
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    chips.push({ key, label, tone });
+  };
+
+  if (download.section) {
+    pushChip(`section:${download.section}`, SECTION_LABELS[download.section] ?? download.section, 'section');
+  }
+
+  for (const type of download.type ?? []) {
+    pushChip(`type:${type}`, getTypeLabel(type), 'type');
+  }
+
+  for (const language of download.language ?? []) {
+    pushChip(`language:${language}`, getLanguageLabel(language), 'language');
+  }
+
+  for (const platform of download.platform ?? []) {
+    pushChip(`platform:${platform}`, getPlatformLabel(platform), 'platform');
+  }
+
+  return chips;
+};
 
 const getDisplayName = (download: TouchGalDownload) => {
   const explicitName = download.name.trim();
   if (explicitName) return explicitName;
 
   const section = download.section ? SECTION_LABELS[download.section] ?? download.section : null;
-  const type = download.type[0] ?? null;
-  const platform = download.platform[0] ?? null;
+  const type = download.type[0] ? getTypeLabel(download.type[0]) : null;
+  const platform = download.platform[0] ? getPlatformLabel(download.platform[0]) : null;
   return [section, type, platform].filter(Boolean).join(' ') || '下载资源';
 };
 
@@ -95,34 +154,28 @@ const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) =>
   const password = getPassword(download);
   const displayName = getDisplayName(download);
   const created = formatRelative(download.created);
+  const metadataChips = getDownloadMetadataChips(download);
 
   return (
     <article className="rounded-[1.6rem] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="flex flex-wrap gap-2">
-            {download.section && (
-              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black text-sky-700">
-                {SECTION_LABELS[download.section] ?? download.section}
-              </span>
-            )}
-            {(download.type ?? []).map((type) => (
-              <span key={type} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700">
-                {type}
-              </span>
-            ))}
-            {(download.language ?? []).map((language) => (
+            {metadataChips.map((chip) => (
               <span
-                key={language}
-                className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700"
+                key={chip.key}
+                className={
+                  chip.tone === 'section'
+                    ? 'rounded-full bg-sky-100 px-3 py-1 text-xs font-black text-sky-700'
+                    : chip.tone === 'type'
+                      ? 'rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700'
+                      : chip.tone === 'language'
+                        ? 'inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700'
+                        : 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700'
+                }
               >
-                <Languages size={12} />
-                {language}
-              </span>
-            ))}
-            {(download.platform ?? []).map((platform) => (
-              <span key={platform} className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
-                {platform}
+                {chip.tone === 'language' && <Languages size={12} />}
+                {chip.label}
               </span>
             ))}
             {accessCode && (

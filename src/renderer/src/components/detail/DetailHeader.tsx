@@ -3,6 +3,44 @@ import { Download, Globe, Heart, MessageSquare, Share2, Star } from 'lucide-reac
 import { TouchGalDetail } from '../../types';
 import { RatingHistogram } from '../RatingHistogram';
 
+const RESOURCE_SECTION_LABELS: Record<string, string> = {
+  galgame: 'PC游戏',
+  patch: '补丁资源',
+  emulator: '模拟器资源',
+  android: '手机游戏',
+};
+
+const RESOURCE_TYPE_LABELS: Record<string, string> = {
+  pc: 'PC游戏',
+  patch: '补丁资源',
+  emulator: '模拟器资源',
+  chinese: '汉化资源',
+  mobile: '手机游戏',
+  app: '直装资源',
+  raw: '生肉资源',
+  tool: '游戏工具',
+  other: '其它',
+};
+
+const RESOURCE_LANGUAGE_LABELS: Record<string, string> = {
+  'zh-Hans': '简体中文',
+  'zh-Hant': '繁體中文',
+  ja: '日本語',
+  other: '其它',
+};
+
+const RESOURCE_PLATFORM_LABELS: Record<string, string> = {
+  android: 'Android',
+  windows: 'Windows',
+  ios: 'iOS',
+  linux: 'Linux',
+  other: '其它',
+};
+
+const mapResourceTypeLabel = (value: string) => RESOURCE_TYPE_LABELS[value] ?? value;
+const mapResourceLanguageLabel = (value: string) => RESOURCE_LANGUAGE_LABELS[value] ?? value;
+const mapResourcePlatformLabel = (value: string) => RESOURCE_PLATFORM_LABELS[value] ?? value;
+
 interface DetailHeaderProps {
   resource: TouchGalDetail;
   onImageClick?: (url: string) => void;
@@ -10,6 +48,27 @@ interface DetailHeaderProps {
 
 export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageClick }) => {
   const { ratingSummary } = resource;
+  const resourceTags = React.useMemo(() => {
+    const seen = new Set<string>();
+    const tags: string[] = [];
+
+    for (const download of resource.downloads ?? []) {
+      const values = [
+        download.section ? (RESOURCE_SECTION_LABELS[download.section] ?? download.section) : null,
+        ...(download.type ?? []).map(mapResourceTypeLabel),
+        ...(download.language ?? []).map(mapResourceLanguageLabel),
+        ...(download.platform ?? []).map(mapResourcePlatformLabel)
+      ].filter((value): value is string => Boolean(value));
+
+      for (const value of values) {
+        if (seen.has(value)) continue;
+        seen.add(value);
+        tags.push(value);
+      }
+    }
+
+    return tags;
+  }, [resource.downloads]);
 
   return (
     <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 grid grid-cols-1 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
@@ -52,7 +111,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {resource.tags?.slice(0, 8).map((tag: string) => (
+              {resourceTags.map((tag) => (
                 <div key={tag} className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-full font-bold text-sm">
                   {tag}
                 </div>

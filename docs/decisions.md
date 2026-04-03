@@ -354,10 +354,14 @@ Rule:
 - the external 鲲补丁入口 should be rendered as its own external-link card in the patch section, not merged into the TouchGal `/patch/resource` list
 - resource cards should surface user identity and resource metadata rather than collapsing everything to a raw URL list
 - `resourceUpdateTime` should be carried through from `/patch/introduction` and shown at the grouped-resource level when present
+- section/type/language/platform chips should be normalized with field-aware label maps before rendering
+- duplicate chip labels should be removed after normalization so `section=galgame` and `type=pc` do not both show as `PC游戏`
 
 Reason:
 
 - `/patch/resource` is the API shape used by the reference TouchGal web architecture for downloadable resources
+- upstream resource metadata values are often raw English codes rather than user-facing labels
+- field-aware normalization preserves distinctions such as `section=android` -> `手机游戏` versus `platform=android` -> `Android`
 - the reference web UI uses section tabs before trust-level grouping
 - the grouped presentation gives users the same trust and provenance cues as the upstream product without conflating TouchGal-hosted data and external patch-site navigation
 

@@ -18,6 +18,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - checkpoint-based advanced-build resume with page/resource progress retention
 - homepage resource cards with compact 3-tag chips, inline stat icons, hover-revealed right-edge action tabs, and page-change scroll reset
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, comments, session-aware gating, and configurable right-click back behavior
+- detail resource metadata chips normalized to field-aware Chinese labels with duplicate labels removed
 - renderer settings page for interaction preferences
 - early local SQLite and download-manager scaffolding
 

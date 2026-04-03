@@ -15,6 +15,7 @@ Current cross-cutting topics covered here:
 - homepage card interaction and current visual behavior
 - homepage feed-tag limits versus detail/introduction tag enrichment
 - homepage and search pagination scroll-to-top behavior
+- detail resource metadata normalization and deduplicated chip presentation
 - renderer store split and compatibility-bridge status
 - homepage query ownership, persistence, and hydration
 - dedicated search-page semantics, scope toggles, and upstream sort controls

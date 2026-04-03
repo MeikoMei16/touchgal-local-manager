@@ -276,6 +276,8 @@ Detail header layout:
 
 - the detail header only switches to the side-by-side desktop layout at wider breakpoints so mid-width windows do not crush the banner and metadata area
 - primary game metadata, tags, and actions stay in the left header column
+- the detail header's download metadata chips are derived from `/patch/resource` metadata, not from the game's content tags
+- those metadata chips are normalized field-by-field into human-readable Chinese labels and deduplicated after normalization
 - the compact `RatingHistogram` widget occupies the spare right-side header space on desktop
 - company/date and aggregate counters render in a dedicated footer strip under the header content
 - info/links/board/evaluation tab bodies are now modularized as separate detail components rather than living inline in `DetailOverlay`
@@ -290,6 +292,8 @@ Detail info and links presentation:
 - the `Galgame 补丁` tab also includes a dedicated external-entry card for 鲲 Galgame 补丁 rather than mixing that site into the TouchGal resource list itself
 - grouped resource headers surface the upstream `resourceUpdateTime` when available
 - resource cards surface section/type/language/platform chips, note text, user identity, and one or more download links
+- raw upstream resource metadata codes such as `pc`, `chinese`, `zh-Hans`, and `windows` are normalized into field-aware labels such as `PC游戏`, `汉化资源`, `简体中文`, and `Windows`
+- duplicate labels are removed after normalization so equivalent values from different metadata fields do not render twice in the same chip row
 
 ## Local Persistence
 
