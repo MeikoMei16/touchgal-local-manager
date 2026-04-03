@@ -12,6 +12,9 @@ This repository keeps project documentation under `docs/` and lightweight agent 
 Current cross-cutting topics covered here:
 
 - app-level left-nav persistence and refresh restore
+- homepage card interaction and current visual behavior
+- homepage feed-tag limits versus detail/introduction tag enrichment
+- homepage and search pagination scroll-to-top behavior
 - renderer store split and compatibility-bridge status
 - homepage query ownership, persistence, and hydration
 - dedicated search-page semantics, scope toggles, and upstream sort controls

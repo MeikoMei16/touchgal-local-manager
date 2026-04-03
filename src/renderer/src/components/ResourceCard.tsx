@@ -39,46 +39,51 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
 
   return (
     <div 
-      className={`group w-full bg-white rounded-[24px] overflow-hidden cursor-pointer transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] border border-slate-200 flex flex-col h-full relative hover:not-disabled:-translate-y-1.5 hover:not-disabled:shadow-2xl hover:not-disabled:border-primary ${!isClickable ? 'opacity-60 cursor-not-allowed grayscale' : ''} ${isDetailLoadingForCard ? 'ring-2 ring-primary/30 border-primary shadow-xl shadow-primary/10' : ''}`} 
+      className={`group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-[28px] border border-slate-200/90 bg-white shadow-[0_12px_32px_-24px_rgba(15,23,42,0.45)] transition-all duration-300 ease-out hover:not-disabled:-translate-y-1.5 hover:not-disabled:border-primary/40 hover:not-disabled:shadow-[0_24px_48px_-24px_rgba(0,100,147,0.28)] ${!isClickable ? 'cursor-not-allowed grayscale opacity-60' : ''} ${isDetailLoadingForCard ? 'border-primary/60 ring-2 ring-primary/20 shadow-[0_24px_48px_-24px_rgba(0,100,147,0.28)]' : ''}`} 
       onClick={() => isClickable && onClick(resource)}
     >
       {isDetailLoadingForCard && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-white/78 backdrop-blur-[2px]">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-white/80 backdrop-blur-[2px]">
           <Loader2 className="animate-spin text-primary" size={28} />
           <span className="text-sm font-black text-primary">正在加载详情...</span>
         </div>
       )}
 
-      <div className="relative aspect-[1.618/1] overflow-hidden bg-slate-100">
+      <div className="relative aspect-[1.52/1] overflow-hidden bg-slate-100">
         {resource.banner ? (
           <img 
             src={resource.banner} 
             alt={resource.name} 
             loading="lazy" 
-            className="w-full h-full object-cover transition-transform duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="w-full h-full bg-slate-200 animate-pulse" />
+          <div className="h-full w-full animate-pulse bg-slate-200" />
         )}
-        <div className="absolute top-0 inset-x-0 p-3 bg-linear-to-b from-black/30 to-transparent flex justify-end">
-          <div className="bg-white/90 text-amber-700 px-2.5 py-0.5 rounded-xl flex items-center gap-1 font-extrabold text-[13px] backdrop-blur-md shadow-sm">
-            <Star size={12} fill="currentColor" stroke="none" />
+        <div className="absolute inset-x-0 top-0 flex justify-end bg-linear-to-b from-black/35 via-black/10 to-transparent p-3.5">
+          <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100/90 px-3.5 py-1.5 text-[14px] font-extrabold text-amber-900 shadow-sm backdrop-blur-sm transition-all duration-200 group-hover:translate-x-2 group-hover:opacity-0">
+            <Star size={15} strokeWidth={2.1} />
             <span>{(resource.averageRating || 0).toFixed(1)}</span>
           </div>
         </div>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col gap-1.5">
-        <h3 className="m-0 text-base font-bold leading-relaxed text-slate-900 h-11 line-clamp-2 tracking-tight group-hover:text-primary transition-colors" title={resource.name}>{resource.name}</h3>
+      <div className="flex flex-1 flex-col gap-3 p-4 pr-16">
+        <div className="flex flex-col gap-1.5">
+          <h3 className="m-0 text-[1.05rem] font-bold leading-6 tracking-[-0.02em] text-slate-900 transition-colors group-hover:text-primary" title={resource.name}>
+            <span className="line-clamp-3">{resource.name}</span>
+          </h3>
         
-        <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{formatDateYMD(resource.created)}</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{formatDateYMD(resource.created)}</div>
+        </div>
 
         {visibleTags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-start gap-1.5">
             {visibleTags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-primary-container/70 px-3 py-1 text-[11px] font-black text-on-primary-container"
+                className="max-w-full truncate rounded-full border border-primary/10 bg-primary-container/75 px-2.5 py-1 text-[11px] font-bold leading-none text-on-primary-container shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
+                title={tag}
               >
                 {tag}
               </span>
@@ -86,41 +91,45 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
           </div>
         )}
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="浏览数">
-             <Eye size={12} />
+        <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[13px] font-bold text-slate-500 transition-colors group-hover:text-slate-700">
+          <div className="flex items-center gap-1.5 whitespace-nowrap" title="浏览数">
+             <Eye size={14} />
              <span>{formatStat(resource.viewCount || (resource as any).view || 0)}</span>
           </div>
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="下载数">
-             <Download size={12} />
+          <div className="flex items-center gap-1.5 whitespace-nowrap" title="下载数">
+             <Download size={14} />
              <span>{formatStat(resource.downloadCount || (resource as any).download || 0)}</span>
           </div>
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="收藏数">
-             <Heart size={12} fill={resource.favoriteCount > 0 ? "currentColor" : "none"} className={resource.favoriteCount > 0 ? "text-pink-500 animate-in zoom-in-125" : ""} />
+          <div className="flex items-center gap-1.5 whitespace-nowrap" title="收藏数">
+             <Heart size={14} />
              <span>{formatStat(resource.favoriteCount)}</span>
           </div>
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 rounded-xl transition-all min-w-fit whitespace-nowrap group-hover:bg-slate-100 group-hover:text-slate-700" title="评论数">
-             <MessageSquare size={12} />
+          <div className="flex items-center gap-1.5 whitespace-nowrap" title="评论数">
+             <MessageSquare size={14} />
              <span>{formatStat(resource.commentCount || (resource as any).comments || 0)}</span>
           </div>
         </div>
+      </div>
 
-        <div className="mt-auto grid grid-cols-[0.92fr,1.08fr] gap-2 pt-4">
-           <button 
-             className="w-full px-3 py-2.5 bg-slate-100 text-slate-700 border-none rounded-2xl font-bold text-sm cursor-pointer transition-all duration-200 hover:bg-slate-200 shadow-xs active:scale-95" 
-             onClick={(e) => { e.stopPropagation(); }}
-           >
-             <span>收藏</span>
-           </button>
-           <button
-             className="w-full px-3 py-2.5 bg-primary text-on-primary border-none rounded-2xl font-black text-sm cursor-pointer transition-all duration-200 hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-95"
-             onClick={(e) => {
-               e.stopPropagation();
-               if (isClickable) onClick(resource);
-             }}
-           >
-             <span>下载</span>
-           </button>
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-0.5">
+        <div className="flex translate-x-9 flex-col gap-2 transition-transform duration-300 ease-out group-hover:translate-x-0">
+          <button
+            className="pointer-events-auto flex h-28 w-12 items-center justify-center rounded-l-[22px] border border-slate-200 bg-slate-100 text-sm font-bold tracking-[0.2em] text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.5)] transition-colors duration-200 hover:bg-slate-200"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            <span className="[writing-mode:vertical-rl]">收藏</span>
+          </button>
+          <button
+            className="pointer-events-auto flex h-32 w-12 items-center justify-center rounded-l-[22px] bg-primary text-sm font-black tracking-[0.2em] text-on-primary shadow-[0_14px_28px_-18px_rgba(0,100,147,0.7)] transition-colors duration-200 hover:bg-primary/90"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isClickable) onClick(resource);
+            }}
+          >
+            <span className="[writing-mode:vertical-rl]">下载</span>
+          </button>
         </div>
       </div>
     </div>

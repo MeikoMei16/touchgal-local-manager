@@ -58,6 +58,20 @@ Reason:
 - keeps homepage browse semantics separate from search semantics
 - avoids mixing retrieval behavior into strict advanced filtering
 
+### Homepage feed tags are browse hints, not authoritative taxonomy
+
+Rule:
+
+- treat `/galgame` tag arrays as browse-card hints only
+- do not assume homepage feed tags are complete enough for strict tag semantics
+- when correctness matters, use `/patch/introduction` enrichment instead of stretching feed tags beyond what upstream guarantees
+
+Reason:
+
+- live upstream feed items can expose only a small tag subset while `/patch/introduction` exposes the fuller tag set for the same resource
+- this distinction explains why homepage cards may show fewer tags than the detail overlay
+- documenting the difference prevents future regressions where card UI assumptions leak into filtering logic
+
 ### Dedicated search stays keyword-oriented
 
 Rule:
@@ -132,6 +146,18 @@ Reason:
 - avoids split-brain state between React local state and persisted browse state
 - keeps normal-mode fetches and advanced-mode transitions consistent
 - prevents refresh from silently falling back to page `1` and default sort before persisted state is available
+
+### Page changes should reset the visible scroll position
+
+Rule:
+
+- homepage and dedicated search pagination must scroll the shared app content container back to the top when `currentPage` changes
+- do not rely on dead selectors or per-page ad hoc scroll targets
+
+Reason:
+
+- browse and search both paginate inside the same app-level scrollable section
+- without a reliable scroll reset, “next page” can strand the user in the middle or bottom of a freshly loaded result set
 
 ### Homepage query orchestration belongs in feature modules, not page components
 
@@ -292,6 +318,19 @@ Reason:
 - this behavior is local UX policy, not an upstream/network/runtime concern
 - renderer-side persistence keeps the setting reactive and cheap to change
 - exempting interactive targets preserves expected desktop affordances while still supporting fast back navigation
+
+### Homepage cards are scan-first browse components
+
+Rule:
+
+- homepage cards should optimize title legibility and scan density over metadata exhaustiveness
+- keep browse cards compact: inline tag chips, bare stat icons, and hover-revealed edge actions are preferred over heavy boxed subpanels
+
+Reason:
+
+- homepage cards are consumed in dense grids, not as full detail summaries
+- the feed metadata available at browse time is intentionally lighter than the fully enriched detail payload
+- tighter browse cards reduce layout noise and improve title recognition in long lists
 
 ### Detail media should be extracted from introduction HTML before rendering
 

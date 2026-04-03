@@ -85,6 +85,11 @@ export const SearchView: React.FC = () => {
 
   useEffect(() => {
     setJumpPage(String(currentPage));
+    const scrollArea = document.querySelector('[data-app-scroll-container="true"]') as HTMLElement | null;
+    if (scrollArea) {
+      scrollArea.scrollTo({ top: 0, behavior: 'auto' });
+      scrollArea.focus();
+    }
   }, [currentPage]);
 
   useEffect(() => {

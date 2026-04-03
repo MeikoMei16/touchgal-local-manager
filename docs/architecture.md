@@ -136,6 +136,8 @@ Important note:
 - upstream homepage controls (`nsfwMode`, `selectedPlatform`, `minRatingCount`) are rendered directly in the homepage top bar, left of `高级筛选`
 - `useTouchGalStore.ts` should be treated as a compatibility layer, not as the place to add new state logic
 - `TouchGalClient.ts` is the renderer-side source of truth for the preload bridge surface used by browse, auth, and profile flows; new renderer network/IPC calls should be added there instead of reaching for `window.api` directly
+- homepage cards currently render at most 3 browse tags from the feed item itself; the card does not assume feed tags are equivalent to the fuller taxonomy exposed by `/patch/introduction`
+- both homepage and dedicated search now scroll the shared app content container back to top whenever pagination changes page
 
 ## Data Flow
 
@@ -148,6 +150,7 @@ Normal homepage browsing:
 5. Preload forwards to `tg-fetch-resources`.
 6. Main process relays to upstream TouchGal API and normalizes the response.
 7. Renderer store updates `resources`, `totalResources`, and pagination state.
+8. Homepage cards render directly from that browse feed data, including the limited feed tag subset when present.
 
 Normal homepage refresh behavior:
 
@@ -168,6 +171,7 @@ Search-page browsing:
 8. In that in-progress `rating` mode, pagination works against the currently accumulated local result set instead of forcing navigation back to page `1`.
 9. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
 10. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
+11. Search-page pagination scrolls the shared app content container back to the top on page change.
 
 Advanced homepage browsing:
 
@@ -199,6 +203,14 @@ Homepage top bar behavior:
 2. Upstream browse controls live on the right side, immediately to the left of `高级筛选`.
 3. Those controls still write into `lastHomeQuery`, so they participate in the same persistence and refresh-restore path as all other homepage query fields.
 4. Choosing rating sort routes the homepage through the same local advanced pipeline used by advanced filtering; there is no separate rating-only mode.
+
+Homepage card behavior:
+
+1. Homepage cards are scan-first browse components rather than mini detail pages.
+2. Cards show at most 3 feed tags inline under the created date.
+3. Stats render as a single bare icon-plus-number row instead of boxed pills.
+4. `收藏` and `下载` are revealed as right-edge vertical hover tabs instead of persistent footer buttons.
+5. The corner rating badge fades out on hover so the action tabs become the dominant interaction state.
 
 Advanced filter interaction behavior:
 

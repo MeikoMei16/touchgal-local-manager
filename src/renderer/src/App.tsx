@@ -92,7 +92,11 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <section className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50/50 outline-hidden" tabIndex={0}>
+        <section
+          className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50/50 outline-hidden"
+          data-app-scroll-container="true"
+          tabIndex={0}
+        >
           {activeTab === 'home' && <Home />}
           {activeTab === 'search' && <SearchView />}
           {activeTab === 'library' && <Library />}

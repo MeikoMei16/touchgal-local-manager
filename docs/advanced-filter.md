@@ -36,6 +36,12 @@ Purpose:
 - these upstream controls are exposed directly on the homepage top bar, to the left of the `高级筛选` button
 - `minRatingCount` remains a normal-mode-safe upstream `/galgame` filter by itself; it does not force the renderer into advanced mode
 
+Homepage tag-display note:
+
+- the normal homepage card UI uses the tag subset already present on the `/galgame` feed item
+- do not assume those browse-level tags are complete; TouchGal may expose a fuller tag list only through `/patch/introduction`
+- Stage 3 enrichment exists for correctness of strict filtering, not because homepage cards currently hydrate every item before render
+
 ### Stage 2: Midstream local filtering
 
 Applied in memory to each fetched page:
@@ -71,6 +77,11 @@ Purpose:
 - obtain full tags
 - obtain authoritative release date when homepage list data omits it
 - optionally improve release-date normalization
+
+Important distinction:
+
+- Stage 3 full tags are authoritative for advanced-filter correctness
+- the current normal homepage card still renders feed tags, not `fullTags`, unless the renderer is already operating on an enriched advanced dataset
 
 Final tag rule:
 
