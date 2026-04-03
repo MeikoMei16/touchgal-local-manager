@@ -64,6 +64,10 @@ export const LoginModal: React.FC = () => {
     // The useEffect below will re-open the challenge window automatically.
   };
 
+  const openRegisterPage = () => {
+    window.open('https://www.touchgal.top/register', '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[2000] animate-in fade-in duration-300" onClick={closeModal}>
       <div className="bg-white w-full max-w-sm p-10 rounded-[32px] shadow-2xl relative animate-in zoom-in-95 ease-out-back duration-500" onClick={(e) => e.stopPropagation()}>
@@ -133,6 +137,15 @@ export const LoginModal: React.FC = () => {
 
           <button className="mt-4 p-4.5 bg-primary text-on-primary border-none rounded-full font-black text-base cursor-pointer flex items-center justify-center gap-2 transition-all hover:bg-primary/95 hover:shadow-xl active:scale-[0.97] shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none" type="submit" disabled={isLoading}>
             {isLoading ? <Loader2 className="animate-spin" /> : (captchaUrl ? 'Login' : 'Next')}
+          </button>
+
+          <button
+            type="button"
+            className="border-none bg-transparent text-sm font-bold text-primary cursor-pointer transition-colors hover:text-primary/80 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={openRegisterPage}
+            disabled={isLoading}
+          >
+            没有账户？注册
           </button>
         </form>
 
