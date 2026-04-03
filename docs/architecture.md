@@ -77,6 +77,7 @@ Owns:
 - application UI
 - auth UI state
 - homepage query state and result state
+- search-page keyword query and search result state
 - advanced-filter orchestration
 - detail overlay lifecycle
 - detail header composition and rating histogram presentation
@@ -91,6 +92,7 @@ Renderer state implementation is now split:
 
 Key frontend state split:
 
+- persisted app-level left-nav tab: active primary section (`home` / `search` / `library` / `favorites` / `profile` / `settings`)
 - persisted homepage query: `lastHomeQuery`
 - persisted homepage page index: `currentPage`
 - advanced draft state: `advancedFilterDraft`
@@ -104,12 +106,14 @@ Key frontend state split:
 Renderer code split:
 
 - homepage query rules and controller: [`src/renderer/src/features/home/homeQuery.ts`](../src/renderer/src/features/home/homeQuery.ts), [`src/renderer/src/features/home/useHomeQueryController.ts`](../src/renderer/src/features/home/useHomeQueryController.ts)
+- dedicated search page UI: [`src/renderer/src/components/SearchView.tsx`](../src/renderer/src/components/SearchView.tsx), [`src/renderer/src/components/SearchOptionsPanel.tsx`](../src/renderer/src/components/SearchOptionsPanel.tsx)
 - advanced-filter pure helpers: [`src/renderer/src/features/home/advancedDataset.ts`](../src/renderer/src/features/home/advancedDataset.ts)
 - detail normalization helpers: [`src/renderer/src/features/detail/detailResource.ts`](../src/renderer/src/features/detail/detailResource.ts)
 - detail overlay subcomponents: [`src/renderer/src/components/detail/`](../src/renderer/src/components/detail)
 
 Renderer persistence notes:
 
+- active left-nav tab is persisted in renderer `localStorage` so refresh returns to the same primary section
 - homepage UI state is persisted through Zustand in renderer `localStorage`
 - auth UI state is persisted separately from the encrypted token managed by the main process
 - renderer logout must clear both layers: renderer auth state and the main-process token
@@ -121,7 +125,9 @@ Renderer persistence notes:
 Important note:
 
 - sorting for the homepage is store-owned, not component-local
+- the dedicated search page is intentionally separate from homepage advanced filtering and uses upstream search semantics with explicit scope toggles and upstream sort controls
 - `sortField === 'rating'` is treated as an advanced-mode trigger because upstream rating pagination is unstable
+- local rating-sort pagination is more stable than the upstream `rating` pages, but the current pipeline still cannot compensate for resources that the upstream rating candidate fetch never returns
 - `minRatingCount` is still forwarded directly to upstream `/galgame` and does not, by itself, trigger advanced mode
 - tag constraints are represented by `advancedFilterDraft.selectedTags` as the single source of truth
 - release-year filtering is based on release date only; renderer code must not fall back to resource `created` time when computing release year
@@ -145,8 +151,18 @@ Normal homepage browsing:
 Normal homepage refresh behavior:
 
 1. Refresh recreates the renderer process.
-2. Zustand rehydrates persisted `lastHomeQuery` and `currentPage`.
-3. Homepage mount effects resume with the hydrated values instead of falling back to page `1` and default sort.
+2. App-level left-nav state restores the previously selected primary section instead of forcing navigation back to `home`.
+3. Zustand rehydrates persisted `lastHomeQuery` and `currentPage`.
+4. Homepage mount effects resume with the hydrated values instead of falling back to page `1` and default sort.
+
+Search-page browsing:
+
+1. Renderer keeps the active search keyword local to the dedicated search page instead of writing it into homepage query state.
+2. Search requests call `TouchGalClient.searchResources(keyword, page, limit, options)` with keyword-oriented fuzzy matching semantics.
+3. Search scope toggles currently map directly to upstream search options for alias, introduction, and tag matching, with all three enabled by default.
+4. Search-page sort controls map directly to the upstream search endpoint's supported `sortField` and `sortOrder` values.
+5. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
+6. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
 
 Advanced homepage browsing:
 
@@ -307,6 +323,7 @@ Status note:
 - Downloader is scaffolded, not full end-to-end
 - Offline-first search is not yet the main browse path
 - Deciding which upstream resource payloads deserve durable SQLite storage is still deferred work, not a settled requirement
+- Homepage rating sort can still miss resources when the upstream rating candidate feed itself is incomplete
 
 ## Important Constraints
 

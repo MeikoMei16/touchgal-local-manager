@@ -93,6 +93,12 @@ Reason:
 - the renderer already has a local-catalog pipeline with bounded concurrency, stale-session cancellation, and local pagination
 - there is no separate rating-only mode; rating sort reuses the same advanced dataset and progress UI
 
+Important limit:
+
+- the local advanced pipeline fixes unstable upstream rating page ordering and duplicate-page behavior
+- it does not guarantee complete rating results when the upstream rating candidate feed itself omits resources
+- in that failure mode, renderer-side local sorting can only work with the incomplete candidate set it was able to fetch
+
 ## Store Model
 
 This is now split across dedicated renderer store modules:
@@ -169,6 +175,7 @@ Modes:
 - During Stage 3, release-year filtering also waits for hydrated release dates when the upstream list omitted `releasedDate`.
 - Local sorting and pagination happen after predicate application in advanced mode.
 - Rating sort is applied locally against the advanced dataset rather than delegated to unstable upstream page ordering.
+- Rating sort should currently be treated as ordering-stable but not completeness-guaranteed because upstream rating candidate retrieval can still miss resources.
 - When coarse upstream inputs (`nsfwMode`, `selectedPlatform`, `minRatingCount`) stay the same, switching between rating sort and other advanced constraints reuses the same candidate catalog.
 - Advanced-mode pagination is clamped locally after filtering so page indices stay valid when result counts shrink.
 - While advanced catalog/enrichment work is still running, background result refreshes now re-apply against the user's current advanced page instead of forcing the view back to page `1`.

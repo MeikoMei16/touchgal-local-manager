@@ -10,8 +10,10 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - upstream API relay through Electron main process
 - normalized session/token handling in the main-process relay
 - React renderer with Zustand state
+- persisted app-level left-nav restore across refresh
 - persisted homepage browse state with hydration-aware refresh restore
 - advanced homepage filtering and rating sorting with a local catalog pipeline, including release-date hydration for correct release-year filtering
+- dedicated search page for keyword-oriented fuzzy search with toggleable scope options and upstream sorting
 - checkpoint-based advanced-build resume with page/resource progress retention
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, comments, and configurable right-click back behavior
 - renderer settings page for interaction preferences
@@ -81,7 +83,9 @@ The current Windows target is an NSIS `x64` installer `.exe`, generated under `r
 
 Implemented or active:
 
+- left-nav refresh restore for primary app sections
 - homepage browsing and refresh persistence
+- keyword-oriented fuzzy search page with configurable scope toggles and upstream sorting
 - main-process auth/session relay
 - advanced homepage filtering and local rating-sort pipeline
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
@@ -93,6 +97,10 @@ Still in progress:
 - broader use of the local metadata cache
 - downloader flow beyond the current scaffold / persistence layer
 - more complete local-first and offline-friendly browsing flows
+
+Known issue:
+
+- homepage rating sort still depends on incomplete upstream candidate data in some cases; the local advanced pipeline fixes unstable upstream page ordering and duplication, but it cannot recover resources that the upstream rating query never returns
 
 Persistence status note:
 
@@ -108,7 +116,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow.
+The docs set is current for left-nav refresh restore, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, search-page scope/sort controls, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow.
 
 Lint note:
 

@@ -11,9 +11,12 @@ This repository keeps project documentation under `docs/` and lightweight agent 
 
 Current cross-cutting topics covered here:
 
+- app-level left-nav persistence and refresh restore
 - renderer store split and compatibility-bridge status
 - homepage query ownership, persistence, and hydration
+- dedicated search-page semantics, scope toggles, and upstream sort controls
 - advanced search and rating-sort pipeline, cache reuse, and current exit behavior
+- known limits of upstream rating data completeness even after local rating-sort stabilization
 - homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
 - main-process auth token normalization and upstream header/cookie rules
 - current login and captcha interaction constraints

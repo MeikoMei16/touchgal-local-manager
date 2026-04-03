@@ -58,6 +58,23 @@ Reason:
 - keeps homepage browse semantics separate from search semantics
 - avoids mixing retrieval behavior into strict advanced filtering
 
+### Dedicated search stays keyword-oriented
+
+Rule:
+
+- the dedicated search page should use upstream search semantics, not homepage advanced-filter semantics
+- search page input should be treated as keyword-oriented fuzzy search
+- search scope toggles may expose upstream retrieval fields such as alias, introduction, and tag
+- search sort controls may expose upstream-supported sort fields directly
+- app-level left-nav navigation should survive renderer refresh and reopen the last selected primary section
+- do not route search-page queries through the homepage advanced pipeline
+
+Reason:
+
+- search is retrieval-oriented and intentionally looser than homepage advanced filtering
+- keeping search separate avoids mixing fuzzy lookup behavior with strict boolean browse constraints
+- primary left-nav restore is cheap renderer-owned UX state and should not reset users back to `home` on every refresh
+
 ### Stage ownership is fixed
 
 - Stage 1 fields belong upstream
@@ -142,12 +159,14 @@ Rule:
 - treat `sortField === 'rating'` as an advanced-mode trigger
 - do not rely on upstream `rating asc/desc` pagination as the source of truth for page ordering
 - build or reuse the advanced candidate catalog, then sort and paginate locally
+- document clearly that the local rating pipeline stabilizes ordering and deduplication, but does not guarantee completeness if the upstream rating candidate fetch is itself incomplete
 
 Reason:
 
 - upstream rating pages can duplicate or reshuffle items across page boundaries
 - the advanced pipeline already provides bounded page fetches, dataset reuse, stale-session cancellation, and local pagination
 - keeping rating sort inside the advanced pipeline avoids a second competing mode with overlapping cache/session behavior
+- if upstream rating candidate retrieval omits resources entirely, no renderer-side pagination fix can reconstruct those missing inputs
 
 ### Advanced resume is checkpoint-based, not coroutine-based
 

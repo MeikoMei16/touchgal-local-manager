@@ -4,21 +4,38 @@ import { Home } from './components/Home';
 import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
 import { LoginModal } from './components/LoginModal';
+import { SearchView } from './components/SearchView';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
 import { useAuthStore } from './store/useTouchGalStore';
 
+const APP_NAV_STORAGE_KEY = 'touchgal-active-nav-tab';
+const APP_NAV_IDS = ['home', 'search', 'library', 'favorites', 'profile', 'settings'] as const;
+type AppNavTab = typeof APP_NAV_IDS[number];
+
+const normalizeAppNavTab = (value: unknown): AppNavTab =>
+  typeof value === 'string' && APP_NAV_IDS.includes(value as AppNavTab)
+    ? (value as AppNavTab)
+    : 'home';
+
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState<AppNavTab>(() => {
+    if (typeof window === 'undefined') return 'home';
+    return normalizeAppNavTab(window.localStorage.getItem(APP_NAV_STORAGE_KEY));
+  });
   const { isLoginOpen } = useAuthStore();
 
-  const navItems = [
+  const navItems: Array<{ id: AppNavTab; icon: React.ReactNode; label: string }> = [
     { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },
     { id: 'search', icon: <Search size={24} />, label: 'Search' },
     { id: 'library', icon: <LibraryIcon size={24} />, label: 'Library' },
     { id: 'favorites', icon: <HeartIcon size={24} />, label: 'Favorites' },
     { id: 'profile', icon: <UserIcon size={24} />, label: 'Profile' },
   ];
+
+  React.useEffect(() => {
+    window.localStorage.setItem(APP_NAV_STORAGE_KEY, activeTab);
+  }, [activeTab]);
 
   React.useEffect(() => {
     const handleNav = () => setActiveTab('profile');
@@ -77,7 +94,7 @@ const App: React.FC = () => {
 
         <section className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50/50 outline-hidden" tabIndex={0}>
           {activeTab === 'home' && <Home />}
-          {activeTab === 'search' && <Home />}
+          {activeTab === 'search' && <SearchView />}
           {activeTab === 'library' && <Library />}
           {activeTab === 'favorites' && <Home />}
           {activeTab === 'profile' && <ProfileView />}
