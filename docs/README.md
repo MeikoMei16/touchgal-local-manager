@@ -15,6 +15,7 @@ Current cross-cutting topics covered here:
 - homepage card interaction and current visual behavior
 - homepage feed-tag limits versus detail/introduction tag enrichment
 - homepage and search pagination scroll-to-top behavior
+- Search-page NSFW domain controls and dedicated search-state ownership
 - detail resource metadata normalization and deduplicated chip presentation
 - renderer store split and compatibility-bridge status
 - homepage query ownership, persistence, and hydration
@@ -23,11 +24,13 @@ Current cross-cutting topics covered here:
 - known limits of upstream rating data completeness even after local rating-sort stabilization
 - homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
 - main-process auth token normalization and upstream header/cookie rules
+- startup session revalidation and the distinction between renderer auth UI state and real main-process session state
 - current login and captcha interaction constraints
 - detail discussion/evaluation session gating and post-login social refresh behavior
 - renderer settings page and persisted interaction preferences
 - guarded detail loading and current detail-overlay composition rules
 - detail secondary-click behavior with default right-click-to-back handling
+- layer-aware `Escape` handling for detail overlay and full-screen screenshot viewer
 - detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
 
 ## API Notes

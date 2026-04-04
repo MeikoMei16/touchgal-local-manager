@@ -542,8 +542,20 @@ const normalizeIntroduction = (payload: any) => {
   }
 }
 
+const buildSearchTerms = (keyword: string) => {
+  const terms = keyword
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean)
+
+  const uniqueTerms = Array.from(new Set(terms))
+  return uniqueTerms.length > 0 ? uniqueTerms : [keyword.trim()].filter(Boolean)
+}
+
 const buildSearchBody = (keyword: string, page: number, limit: number) => ({
-  queryString: JSON.stringify([{ type: 'keyword', name: keyword }]),
+  queryString: JSON.stringify(
+    buildSearchTerms(keyword).map((term) => ({ type: 'keyword', name: term }))
+  ),
   limit,
   page,
   selectedType: 'all',

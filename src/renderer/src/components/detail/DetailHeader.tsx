@@ -85,11 +85,6 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
             className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
           />
         )}
-        <div className="absolute top-4 left-4">
-          <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg ${resource.contentLimit === 'nsfw' ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}`}>
-            {resource.contentLimit || 'sfw'}
-          </div>
-        </div>
       </div>
 
       <div className="p-6 md:p-8 flex flex-col gap-4">

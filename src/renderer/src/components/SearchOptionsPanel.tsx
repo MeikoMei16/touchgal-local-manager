@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, Search as SearchIcon, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { SortDropdown } from './SortDropdown';
-import type { HomeSortField, HomeSortOrder } from '../features/home/homeState';
+import type { HomeQueryState, HomeSortField, HomeSortOrder } from '../features/home/homeState';
 
 export interface SearchScopeOptions {
   searchInIntroduction: boolean;
@@ -11,10 +11,12 @@ export interface SearchScopeOptions {
 
 interface SearchOptionsPanelProps {
   options: SearchScopeOptions;
+  nsfwMode: HomeQueryState['nsfwMode'];
   sortField: HomeSortField;
   sortOrder: HomeSortOrder;
   disabled?: boolean;
   onToggleOption: (key: keyof SearchScopeOptions) => void;
+  onCycleNsfwMode: () => void;
   onSelectSortField: (field: HomeSortField) => void;
   onToggleSortOrder: () => void;
 }
@@ -45,10 +47,12 @@ const searchSortOptions: Array<{ label: string; value: HomeSortField }> = [
 
 export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
   options,
+  nsfwMode,
   sortField,
   sortOrder,
   disabled,
   onToggleOption,
+  onCycleNsfwMode,
   onSelectSortField,
   onToggleSortOrder
 }) => (
@@ -121,11 +125,18 @@ export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
         <div>
           <div className="text-sm font-black text-slate-900">结果排序</div>
           <p className="mt-1 text-sm font-medium text-slate-500">
-            使用上游搜索接口支持的排序字段和方向。
+            使用上游搜索接口支持的排序字段、方向和 NSFW 数据域。
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            className="rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onCycleNsfwMode}
+            disabled={disabled}
+          >
+            {nsfwMode === 'safe' ? '仅 SFW' : nsfwMode === 'nsfw' ? '仅 NSFW' : '全部内容'}
+          </button>
           <SortDropdown
             value={sortField}
             options={searchSortOptions}

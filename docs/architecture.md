@@ -60,6 +60,7 @@ Session handling notes:
 - upstream browse/search requests attach a `Cookie` header for the NSFW preference cookie even when there is no auth token
 - the auth cookie segment is attached only when there is a valid normalized auth token to send
 - logout is finalized in the main process by clearing the in-memory token and removing persisted token files through `tg-logout`
+- renderer startup must not trust previously persisted `user` objects as proof of login; it should revalidate through the main-process session instead
 
 ### Preload
 
@@ -117,6 +118,7 @@ Renderer persistence notes:
 - active left-nav tab is persisted in renderer `localStorage` so refresh returns to the same primary section
 - homepage UI state is persisted through Zustand in renderer `localStorage`
 - auth UI state is persisted separately from the encrypted token managed by the main process
+- renderer auth persistence is intentionally narrow and must not treat stored `user` profile data as authoritative session state across app restart
 - renderer logout must clear both layers: renderer auth state and the main-process token
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
 - renderer interaction preferences such as `detailSecondaryClickAction` are also persisted in renderer `localStorage`
@@ -165,14 +167,22 @@ Search-page browsing:
 1. Renderer keeps the active search keyword local to the dedicated search page instead of writing it into homepage query state.
 2. Search requests call `TouchGalClient.searchResources(keyword, page, limit, options)` with keyword-oriented fuzzy matching semantics.
 3. Search scope toggles currently map directly to upstream search options for alias, introduction, and tag matching, with all three enabled by default.
-4. Most search-page sort controls map directly to the upstream search endpoint's supported `sortField` and `sortOrder` values.
-5. The exception is `sortField === 'rating'`: search-page `rating` sort now fetches a stable non-rating candidate set from upstream search and re-sorts that candidate set locally by `averageRating`.
-6. While that local rebuild is running, the search page renders explicit in-page progress for candidate-page fetch and the final local reorder stage instead of showing only a generic spinner.
-7. Search-page `rating` rebuild publishes partial locally sorted results as new candidate pages arrive, so the grid can render incrementally before the full rebuild finishes.
-8. In that in-progress `rating` mode, pagination works against the currently accumulated local result set instead of forcing navigation back to page `1`.
-9. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
-10. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
-11. Search-page pagination scrolls the shared app content container back to the top on page change.
+4. Search has its own local NSFW domain control (`safe` / `nsfw` / `all`) and forwards that through the main-process relay so the same TouchGal preference-cookie mechanism applies to dedicated search.
+5. Most search-page sort controls map directly to the upstream search endpoint's supported `sortField` and `sortOrder` values.
+6. The exception is `sortField === 'rating'`: search-page `rating` sort now fetches a stable non-rating candidate set from upstream search and re-sorts that candidate set locally by `averageRating`.
+7. While that local rebuild is running, the search page renders explicit in-page progress for candidate-page fetch and the final local reorder stage instead of showing only a generic spinner.
+8. Search-page `rating` rebuild publishes partial locally sorted results as new candidate pages arrive, so the grid can render incrementally before the full rebuild finishes.
+9. In that in-progress `rating` mode, pagination works against the currently accumulated local result set instead of forcing navigation back to page `1`.
+10. Search-page pagination is local to the search view and does not reuse homepage advanced-filter state.
+11. Search results can still open the shared detail overlay, but search itself does not participate in the homepage advanced pipeline.
+12. Search-page pagination scrolls the shared app content container back to the top on page change.
+
+Renderer session restore behavior:
+
+1. On app startup, renderer calls `getUserStatusSelf()` through the main-process relay instead of trusting persisted `user` state as proof of login.
+2. If the main-process token is still valid, renderer rebuilds `user` and `userProfile` from the resolved self identity and profile payload.
+3. If self-status fails or returns no usable id, renderer clears auth state so the app does not present a stale logged-in UI.
+4. This keeps detail discussion/rating gating aligned with the real main-process session after app restart.
 
 Advanced homepage browsing:
 
@@ -272,8 +282,10 @@ Detail interaction behavior:
 
 - the renderer settings page currently owns detail secondary-click behavior as a persisted interaction preference
 - the default setting maps right click to back in the detail overlay and full-screen screenshot viewer
+- when the screenshot viewer is not open, pressing `Escape` closes the detail overlay itself
 - interactive targets such as links and buttons keep their native context behavior even when right click is mapped to back
 - the full-screen screenshot viewer also supports keyboard `ArrowLeft` / `ArrowRight` navigation and on-screen previous/next arrows when multiple screenshots exist
+- when the screenshot viewer is open, its own `Escape` handling closes only the viewer first rather than the underlying detail overlay
 
 Detail header layout:
 
@@ -339,11 +351,13 @@ Status note:
 - Homepage refresh persistence for query, sort, and page
 - Login and captcha relay
 - Main-process token normalization and safer upstream cookie/header assembly
+- Startup session restore from main-process session validation
 - Detail overlay with introduction, comments, and ratings
 - Guarded detail loading that resolves comments/ratings from the final detail id
 - Modular detail rating histogram component in the header
 - Introduction-media extraction for dedicated screenshot and PV panels
 - Sectioned detail resource links sourced from `/patch/resource`
+- Search-page NSFW toggle routed through the same main-process cookie relay used by upstream browse/search
 - Split renderer stores with compatibility bridge for legacy imports
 - Split UI-store action modules for browse, detail, and advanced pipelines
 - Modular detail overlay composition

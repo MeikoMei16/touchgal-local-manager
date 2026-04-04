@@ -16,6 +16,7 @@ export interface AuthState {
   error: string | null;
   login: (username: string, password: string, captcha: string) => Promise<void>;
   logout: () => Promise<void>;
+  restoreSession: () => Promise<void>;
   setIsLoginOpen: (isOpen: boolean) => void;
   setSessionError: (error: 'SESSION_EXPIRED' | null) => void;
   clearAuthUi: () => void;
@@ -60,18 +61,25 @@ const formatAuthError = (err: unknown): string => {
   }
 };
 
+const emptyAuthState = {
+  user: null,
+  userProfile: null,
+  userComments: [],
+  userRatings: [],
+  userCollections: [],
+  sessionError: null,
+  captchaUrl: null,
+  captchaChallenge: null
+} satisfies Pick<
+  AuthState,
+  'user' | 'userProfile' | 'userComments' | 'userRatings' | 'userCollections' | 'sessionError' | 'captchaUrl' | 'captchaChallenge'
+>;
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user: null,
-      userProfile: null,
-      userComments: [],
-      userRatings: [],
-      userCollections: [],
+      ...emptyAuthState,
       isLoginOpen: false,
-      captchaUrl: null,
-      captchaChallenge: null,
-      sessionError: null,
       isLoading: false,
       error: null,
 
@@ -79,7 +87,12 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const user = await TouchGalClient.login(username, password, captcha);
-          set({ user, isLoading: false, sessionError: null, captchaUrl: null, captchaChallenge: null });
+          set({
+            ...emptyAuthState,
+            user,
+            isLoading: false,
+            error: null
+          });
         } catch (err: any) {
           set({ error: formatAuthError(err), isLoading: false, captchaUrl: null, captchaChallenge: null });
         }
@@ -91,16 +104,40 @@ export const useAuthStore = create<AuthState>()(
           console.error('Failed to clear main-process session token:', err);
         } finally {
           set({
-            user: null,
-            userProfile: null,
-            userComments: [],
-            userRatings: [],
-            userCollections: [],
-            sessionError: null,
-            captchaUrl: null,
-            captchaChallenge: null,
+            ...emptyAuthState,
             error: null,
             isLoading: false
+          });
+        }
+      },
+      restoreSession: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const selfStatus = await TouchGalClient.getUserStatusSelf();
+          const uid = selfStatus?.uid || selfStatus?.id;
+
+          if (!uid) {
+            set({
+              ...emptyAuthState,
+              isLoading: false,
+              error: null
+            });
+            return;
+          }
+
+          const profileDetail = await TouchGalClient.getUserStatus(uid);
+          set({
+            ...emptyAuthState,
+            user: { ...selfStatus, id: uid, uid },
+            userProfile: profileDetail,
+            isLoading: false,
+            error: null
+          });
+        } catch {
+          set({
+            ...emptyAuthState,
+            isLoading: false,
+            error: null
           });
         }
       },
@@ -164,6 +201,11 @@ export const useAuthStore = create<AuthState>()(
         }
       }
     }),
-    { name: 'touchgal-auth-storage' }
+    {
+      name: 'touchgal-auth-storage',
+      partialize: (state) => ({
+        isLoginOpen: state.isLoginOpen
+      })
+    }
   )
 );

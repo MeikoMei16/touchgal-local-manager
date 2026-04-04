@@ -7,7 +7,7 @@ import { SearchOptionsPanel, type SearchScopeOptions } from './SearchOptionsPane
 import { useUIStore } from '../store/useTouchGalStore';
 import { useAuthStore } from '../store/useTouchGalStore';
 import type { TouchGalResource } from '../types';
-import type { HomeSortField, HomeSortOrder } from '../features/home/homeState';
+import type { HomeQueryState, HomeSortField, HomeSortOrder } from '../features/home/homeState';
 import { runBounded } from '../features/home/advancedDataset';
 
 const SEARCH_PAGE_SIZE = 20;
@@ -74,6 +74,7 @@ export const SearchView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchOptions, setSearchOptions] = useState<SearchScopeOptions>(defaultSearchOptions);
+  const [nsfwMode, setNsfwMode] = useState<HomeQueryState['nsfwMode']>('safe');
   const [sortField, setSortField] = useState<HomeSortField>('created');
   const [sortOrder, setSortOrder] = useState<HomeSortOrder>('desc');
   const [localRatingResults, setLocalRatingResults] = useState<TouchGalResource[] | null>(null);
@@ -117,6 +118,7 @@ export const SearchView: React.FC = () => {
 
     void TouchGalClient.searchResources(activeKeyword, currentPage, SEARCH_PAGE_SIZE, {
       searchOption: searchOptions,
+      nsfwMode,
       sortField,
       sortOrder
     })
@@ -142,7 +144,7 @@ export const SearchView: React.FC = () => {
         if (requestKeyRef.current !== requestKey) return;
         setIsLoading(false);
       });
-  }, [activeKeyword, currentPage, isLocalRatingMode, searchOptions, setSessionError, sortField, sortOrder]);
+  }, [activeKeyword, currentPage, isLocalRatingMode, nsfwMode, searchOptions, setSessionError, sortField, sortOrder]);
 
   useEffect(() => {
     if (!activeKeyword || !isLocalRatingMode) return;
@@ -185,6 +187,7 @@ export const SearchView: React.FC = () => {
 
       const firstPage = await TouchGalClient.searchResources(activeKeyword, 1, SEARCH_UPSTREAM_PAGE_SIZE, {
         searchOption: searchOptions,
+        nsfwMode,
         sortField: 'created',
         sortOrder: 'desc'
       });
@@ -205,6 +208,7 @@ export const SearchView: React.FC = () => {
       await runBounded(remainingPages, SEARCH_RATING_CONCURRENCY, async (pageNum) => {
         const page = await TouchGalClient.searchResources(activeKeyword, pageNum, SEARCH_UPSTREAM_PAGE_SIZE, {
           searchOption: searchOptions,
+          nsfwMode,
           sortField: 'created',
           sortOrder: 'desc'
         });
@@ -254,7 +258,7 @@ export const SearchView: React.FC = () => {
         if (requestKeyRef.current !== requestKey) return;
         setIsLoading(false);
       });
-  }, [activeKeyword, isLocalRatingMode, searchOptions, setSessionError, sortOrder]);
+  }, [activeKeyword, isLocalRatingMode, nsfwMode, searchOptions, setSessionError, sortOrder]);
 
   useEffect(() => {
     if (sortField !== 'rating' || !localRatingResults) return;
@@ -292,6 +296,16 @@ export const SearchView: React.FC = () => {
       ...current,
       [key]: !current[key]
     }));
+  };
+
+  const cycleNsfwMode = () => {
+    setCurrentPage(1);
+    setJumpPage('1');
+    setNsfwMode((current) => {
+      if (current === 'safe') return 'nsfw';
+      if (current === 'nsfw') return 'all';
+      return 'safe';
+    });
   };
 
   const updateSortField = (value: HomeSortField) => {
@@ -391,10 +405,12 @@ export const SearchView: React.FC = () => {
 
       <SearchOptionsPanel
         options={searchOptions}
+        nsfwMode={nsfwMode}
         sortField={sortField}
         sortOrder={sortOrder}
         disabled={isLoading}
         onToggleOption={updateSearchOptions}
+        onCycleNsfwMode={cycleNsfwMode}
         onSelectSortField={updateSortField}
         onToggleSortOrder={toggleSortOrder}
       />

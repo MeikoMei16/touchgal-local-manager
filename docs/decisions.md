@@ -93,6 +93,7 @@ Rule:
 - the dedicated search page should use upstream search semantics, not homepage advanced-filter semantics
 - search page input should be treated as keyword-oriented fuzzy search
 - search scope toggles may expose upstream retrieval fields such as alias, introduction, and tag
+- search page may expose its own NSFW-domain control, but that control remains search-local and must not mutate homepage browse state
 - search sort controls may expose upstream-supported sort fields directly
 - search-page `rating` sort should not trust upstream search `rating` ordering as the final source of truth
 - search-page `rating` sort should expose visible in-page rebuild progress so users can distinguish candidate fetch from the final local reorder stage
@@ -104,10 +105,25 @@ Reason:
 
 - search is retrieval-oriented and intentionally looser than homepage advanced filtering
 - keeping search separate avoids mixing fuzzy lookup behavior with strict boolean browse constraints
+- Search-page NSFW mode is still an upstream retrieval concern, but it belongs to the dedicated search surface rather than to homepage-owned query state
 - upstream search `rating` ordering can return severely incomplete result sets, so search-page `rating` sort must be rebuilt locally from a more stable candidate fetch
 - because that rebuild can span many upstream pages, a generic loading spinner is not enough feedback for the dedicated search page
 - once local candidate accumulation starts, blocking pagination until the rebuild fully finishes defeats the purpose of timely rendering
 - primary left-nav restore is cheap renderer-owned UX state and should not reset users back to `home` on every refresh
+
+### Renderer auth state must be revalidated on startup
+
+Rule:
+
+- do not treat persisted renderer `user` objects as authoritative login state across app restart
+- renderer startup should revalidate session through the main-process relay, then rebuild auth state from `getUserStatusSelf()` / `getUserStatus(...)` only when that real session is valid
+- if startup session validation fails, clear renderer auth state instead of leaving the app in a stale logged-in presentation
+
+Reason:
+
+- the real TouchGal session lives in the main-process token/cookie layer, not in renderer local storage
+- stale persisted renderer auth can make the app look logged in while discussion/rating endpoints still fail with session-expired behavior
+- startup revalidation keeps visible auth state aligned with the actual request credentials used by detail social endpoints
 
 ### Stage ownership is fixed
 
@@ -340,12 +356,14 @@ Rule:
 - interaction preferences such as `detailSecondaryClickAction` belong in persisted renderer UI state
 - settings UI may expose `back` versus `native` behavior for detail-page secondary click without involving the main process
 - detail right-click back handling must exempt interactive targets such as links and buttons so users do not lose native context behavior where it is expected
+- keyboard close behavior should remain layer-aware: `Escape` closes the full-screen screenshot viewer first, then closes the detail overlay when no deeper layer is open
 
 Reason:
 
 - this behavior is local UX policy, not an upstream/network/runtime concern
 - renderer-side persistence keeps the setting reactive and cheap to change
 - exempting interactive targets preserves expected desktop affordances while still supporting fast back navigation
+- layer-aware `Escape` handling matches desktop image-viewer and modal expectations better than collapsing multiple layers at once
 
 ### Homepage cards are scan-first browse components
 

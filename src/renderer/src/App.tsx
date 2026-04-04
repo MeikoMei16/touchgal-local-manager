@@ -23,7 +23,7 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return 'home';
     return normalizeAppNavTab(window.localStorage.getItem(APP_NAV_STORAGE_KEY));
   });
-  const { isLoginOpen } = useAuthStore();
+  const { isLoginOpen, restoreSession } = useAuthStore();
 
   const navItems: Array<{ id: AppNavTab; icon: React.ReactNode; label: string }> = [
     { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },
@@ -42,6 +42,10 @@ const App: React.FC = () => {
     window.addEventListener('nav-to-profile', handleNav);
     return () => window.removeEventListener('nav-to-profile', handleNav);
   }, []);
+
+  React.useEffect(() => {
+    void restoreSession();
+  }, [restoreSession]);
 
   const activeLabel = activeTab === 'settings'
     ? 'Settings'
