@@ -1167,6 +1167,25 @@ handleWithLog('tg-get-favorite-folders', async (_event, uid: number) => {
   return ensureValidResponse(response.data)
 })
 
+handleWithLog(
+  'tg-create-favorite-folder',
+  async (_event, input: { name: string; description?: string; isPublic?: boolean }) => {
+    const response = await API_CLIENT.post('/user/profile/favorite/folder', {
+      name: input.name,
+      description: input.description ?? '',
+      isPublic: Boolean(input.isPublic)
+    })
+    return ensureValidResponse(response.data)
+  }
+)
+
+handleWithLog('tg-delete-favorite-folder', async (_event, folderId: number) => {
+  const response = await API_CLIENT.delete('/user/profile/favorite/folder', {
+    params: { folderId }
+  })
+  return ensureValidResponse(response.data)
+})
+
 handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number, page: number, limit: number) => {
   const response = await API_CLIENT.get('/user/profile/favorite/folder/patch', {
     params: { folderId, page, limit }

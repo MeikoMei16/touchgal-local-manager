@@ -259,7 +259,7 @@ Favorites architecture:
 1. The `favorites` primary nav now owns a dedicated page rather than reusing homepage browse UI.
 2. Favorites are modeled as two parallel domains instead of one merged abstraction.
 3. Local collections are always available, stored in SQLite, and writable without login.
-4. Cloud favorite folders remain upstream-owned and are currently shown as a read-only companion section when logged in.
+4. Cloud favorite folders remain upstream-owned and are shown as a login-gated companion section when logged in.
 5. Clicking a cloud favorite folder now opens a paginated overlay that fetches folder contents from `/user/profile/favorite/folder/patch`.
 6. That cloud-folder content flow mirrors the current `kun-touchgal-next` pattern: folder list first, folder contents second.
 7. Detail-header favorite interaction opens a menu that prioritizes local collection add/remove actions and also surfaces current cloud folder visibility state.
@@ -268,12 +268,26 @@ Favorites architecture:
 10. Local collection cards support inline `move`, `copy`, and `remove` workflows so users can reorganize a folder without leaving the overlay.
 11. Local collection overlays also support bulk select for `move`, `copy`, and `remove` against the current filtered result set.
 12. Detail overlays intentionally stack above collection overlays so opening a game from inside a collection behaves like a second-layer drill-down instead of disappearing underneath the parent modal.
+13. Cloud favorite folders are no longer browse-only: the cloud overlay now supports per-card removal from the current folder through the upstream `PUT /patch/favorite` toggle API.
+14. Cloud favorite overlays also support multi-select, batch remove from the current folder, and batch move into another cloud folder by composing `add to target folder` plus `remove from current folder`.
+15. Cloud-card quick actions use the same toggle API carefully: move first ensures the game exists in the target folder, then removes it from the current folder so a pre-existing target relation does not accidentally duplicate or cancel itself.
+16. Favorites and Profile both pass the current cloud-folder list into the overlay so single-item and batch cloud moves can choose any sibling folder without fetching an extra list inside the modal.
+17. Cloud overlay mutations trigger parent refresh so folder counts in Favorites and Profile stay aligned with the overlay's current contents.
+18. The cloud overlay UI has been reorganized into a compact gallery-management card style: full-but-contained banner art, top-right selection affordance, bottom-right destructive action, and a dedicated action tray for open/move/remove workflows.
+19. The main Favorites page now keeps creation controls close to each domain header instead of concentrating all create actions in one shared top-right panel.
+20. Local Favorites header supports inline local-folder creation, while each local folder card owns its own delete affordance with a confirmation dialog.
+21. Cloud Favorites header supports inline cloud-folder creation plus a Chinese `公开 / 私有` visibility toggle beside the create button.
+22. Cloud folder deletion is now exposed from each cloud folder card, not from a shared header-level delete control, so the destructive action is visually bound to the folder it will remove.
+23. Both local and cloud folder deletion paths use a shared confirmation dialog that explicitly states the folder and all folder-item relations will be removed.
+24. To avoid invalid nested interactive markup, cloud folder list cards now render as non-button containers with separate open and delete button targets.
 
 Profile loading:
 
 1. Renderer resolves the self identity through `getUserStatusSelf()`.
 2. If a usable `uid` or `id` is present, renderer fetches the full profile with `getUserStatus(uid)`.
 3. If self-status resolves without a usable id, profile loading must still settle back to a non-loading state instead of hanging the screen.
+4. The profile root view now renders an explicit loading circle during the initial profile load instead of leaving the user on a silent blank surface.
+5. The comments, ratings, and collections tabs also render their own activity-level loading indicator while the corresponding user activity request is in flight.
 
 Detail loading:
 
@@ -392,6 +406,18 @@ Status note:
 - Rating-sort stabilization through the same local advanced dataset pipeline
 - Basic SQLite bootstrap
 - Basic download queue persistence and link parsing scaffold
+- Dedicated Favorites page with parallel local and cloud collection domains
+- SQLite-backed local collection CRUD and detail-header add/remove integration
+- Local collection gallery overlay with single-item and batch move/copy/remove flows
+- Cloud favorite folder browsing through `/user/profile/favorite/folder/patch`
+- Cloud favorite folder creation through `/user/profile/favorite/folder`
+- Cloud favorite folder deletion through `DELETE /user/profile/favorite/folder`
+- Cloud favorite folder mutation through `/patch/favorite`
+- Cloud overlay batch management for move/remove across sibling cloud folders
+- Profile and Favorites cloud-folder overlays that stay count-synchronized after mutation
+- Layer-correct modal stacking for collection overlay -> detail overlay drill-down
+- Explicit loading indicators for profile shell and profile activity tabs
+- Shared destructive confirmation dialog for local and cloud folder deletion on the Favorites page
 
 ### Partial / In Progress
 
@@ -400,6 +426,8 @@ Status note:
 - Offline-first search is not yet the main browse path
 - Deciding which upstream resource payloads deserve durable SQLite storage is still deferred work, not a settled requirement
 - Homepage rating sort can still miss resources when the upstream rating candidate feed itself is incomplete
+- Cloud favorites still use upstream-owned folders only; create/delete are exposed now, but cloud-folder editing is not yet surfaced in this Electron UI
+- Cloud move/remove flows are sequential and correctness-oriented; they have not been optimized into a background job queue or optimistic write model yet
 
 ## Important Constraints
 

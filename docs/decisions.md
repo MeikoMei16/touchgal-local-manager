@@ -132,12 +132,44 @@ Rule:
 - the `favorites` page should continue to present local collections and cloud favorite folders as separate domains
 - local collection organization UX such as bulk select, move, copy, and remove belongs to the local overlay flow only
 - opening a game from a collection overlay must stack the shared detail overlay above that collection surface instead of replacing it or rendering beneath it
+- cloud-folder writes should preserve the upstream folder model instead of pretending cloud folders are just another local collection row
+- create controls may live near each domain header, but destructive folder deletion should stay attached to the specific folder card being removed rather than to a generic shared header action
 
 Reason:
 
 - local collections are SQLite-backed and writable offline, while cloud folders are upstream-owned and currently read-only in this app
 - forcing a merged abstraction would blur auth requirements and complicate fast local-management flows
 - stacked modal behavior preserves context so users can inspect a game and return to the same collection management state
+- destructive card-level placement reduces ambiguity about which folder will be deleted and pairs naturally with confirmation copy
+
+### Cloud favorite mutation uses upstream toggle semantics, not bespoke add/remove endpoints
+
+Rule:
+
+- cloud favorite item writes must go through upstream `PUT /patch/favorite { patchId, folderId }`
+- renderer code should treat that API as a toggle, not as a guaranteed add-only or remove-only primitive
+- move operations between cloud folders should be implemented as `ensure added to target` followed by `remove from current`
+- batch cloud mutations may compose repeated toggle calls serially when correctness is more important than throughput
+
+Reason:
+
+- the current upstream product exposes one toggle endpoint for folder membership rather than separate dedicated add/remove routes
+- naïvely calling the toggle endpoint once during a move can accidentally remove an already-present target relation instead of preserving it
+- explicit add-then-remove sequencing is easier to reason about than optimistic local rewrites for cross-folder cloud moves
+
+### Cloud folder create/delete should use the upstream folder endpoints directly
+
+Rule:
+
+- cloud folder creation should use upstream `POST /user/profile/favorite/folder`
+- cloud folder deletion should use upstream `DELETE /user/profile/favorite/folder?folderId=...`
+- after create or delete, renderer should refresh cloud folder lists so counts and cards stay aligned with upstream state
+
+Reason:
+
+- folder lifecycle is owned by upstream TouchGal, not by the local SQLite layer
+- using the same endpoints as the reference web product reduces behavioral drift
+- explicit post-mutation refresh keeps Favorites and Profile views from showing stale folder counts
 
 ### Stage ownership is fixed
 
@@ -378,6 +410,45 @@ Reason:
 - renderer-side persistence keeps the setting reactive and cheap to change
 - exempting interactive targets preserves expected desktop affordances while still supporting fast back navigation
 - layer-aware `Escape` handling matches desktop image-viewer and modal expectations better than collapsing multiple layers at once
+
+### Collection overlays are management surfaces, not plain viewers
+
+Rule:
+
+- local and cloud collection overlays should provide direct organization actions in-context instead of forcing users back to the page grid for every change
+- card-level selection affordances should be explicit and visually separated from destructive actions
+- destructive actions should stay spatially distinct from the primary `open detail` action
+- collection overlays should refresh their parent folder counts after mutation so summary cards and modal contents do not diverge
+
+Reason:
+
+- these overlays are where users spend time reorganizing folders, not just reading contents
+- mixing select, open, and delete into the same visual slot creates avoidable misclick risk
+- count drift between overlay contents and parent summary cards makes folder management feel unreliable
+
+### Favorites page must avoid nested interactive containers
+
+Rule:
+
+- folder cards that contain secondary destructive actions should not use a single outer `<button>` wrapper
+- use a non-button container with separate child buttons for `open` and `delete` actions when both exist on the same card
+
+Reason:
+
+- nested `<button>` markup is invalid HTML and causes React hydration/runtime warnings
+- splitting targets keeps keyboard/focus behavior correct while preserving the card-level interaction model
+
+### Profile loading should never be visually silent
+
+Rule:
+
+- the profile root route should show a dedicated loading indicator while resolving self identity and the profile payload
+- comments, ratings, and collections tabs should also render an in-panel loading state during activity fetches instead of leaving stale or blank content behind
+
+Reason:
+
+- profile data is session-gated and commonly slower than ordinary browse-card data
+- silent blank states are hard to distinguish from broken auth/session restore behavior
 
 ### Homepage cards are scan-first browse components
 

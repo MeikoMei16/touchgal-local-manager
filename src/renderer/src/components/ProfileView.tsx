@@ -246,6 +246,7 @@ const ProfileView: React.FC = () => {
       </div>
       {selectedCloudCollection && (
         <CloudCollectionOverlay
+          allFolders={userCollections}
           folder={selectedCloudCollection}
           onClose={() => setSelectedCloudCollection(null)}
           onCollectionMutated={async () => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Cloud,
   Check,
   Copy,
   FolderCog,
@@ -13,6 +14,7 @@ import {
   X
 } from 'lucide-react';
 import type { TouchGalResource } from '../types';
+import { TouchGalClient } from '../data/TouchGalClient';
 import { useAuthStore, useUIStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import type { LocalCollection, LocalCollectionGameInput, LocalCollectionItem } from '../types/electron';
@@ -57,6 +59,61 @@ const summarizeCollection = (collection: LocalCollection) => {
       : 0;
 
   return { totalDownloads, averageRating };
+};
+
+interface ConfirmDialogState {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: 'rose' | 'slate';
+  onConfirm: () => Promise<void>;
+}
+
+interface ConfirmDialogProps {
+  state: ConfirmDialogState | null;
+  isSubmitting: boolean;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}
+
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ state, isSubmitting, onCancel, onConfirm }) => {
+  if (!state) return null;
+
+  const confirmClassName =
+    state.tone === 'rose'
+      ? 'bg-rose-500 text-white hover:bg-rose-600'
+      : 'bg-slate-900 text-white hover:bg-slate-700';
+
+  return (
+    <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm" onClick={onCancel}>
+      <div
+        className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-300/40"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Confirm Action</div>
+        <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">{state.title}</h3>
+        <p className="mt-3 text-sm font-bold leading-6 text-slate-500">{state.description}</p>
+        <div className="mt-6 flex gap-3">
+          <button
+            className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:border-slate-300 hover:text-slate-900"
+            disabled={isSubmitting}
+            onClick={onCancel}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className={`flex-1 rounded-2xl px-4 py-3 text-sm font-black transition-all disabled:cursor-not-allowed disabled:opacity-50 ${confirmClassName}`}
+            disabled={isSubmitting}
+            onClick={() => void onConfirm()}
+            type="button"
+          >
+            {isSubmitting ? '处理中...' : state.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 interface CollectionOverlayProps {
@@ -648,7 +705,12 @@ export const FavoritesView: React.FC = () => {
   } = useLocalCollectionStore();
   const { selectResource } = useUIStore();
   const { user, userCollections, isLoading: isAuthLoading, fetchUserActivity, setIsLoginOpen } = useAuthStore();
-  const [newCollectionName, setNewCollectionName] = React.useState('');
+  const [newLocalCollectionName, setNewLocalCollectionName] = React.useState('');
+  const [newCloudCollectionName, setNewCloudCollectionName] = React.useState('');
+  const [isCloudCollectionPublic, setIsCloudCollectionPublic] = React.useState(false);
+  const [isCreatingCloudCollection, setIsCreatingCloudCollection] = React.useState(false);
+  const [confirmDialog, setConfirmDialog] = React.useState<ConfirmDialogState | null>(null);
+  const [isConfirming, setIsConfirming] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [selectedCollectionId, setSelectedCollectionId] = React.useState<number | null>(null);
   const [selectedCloudCollection, setSelectedCloudCollection] = React.useState<any | null>(null);
@@ -676,14 +738,35 @@ export const FavoritesView: React.FC = () => {
   const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId) ?? null;
 
   const handleCreateCollection = async () => {
-    const trimmedName = newCollectionName.trim();
+    const trimmedName = newLocalCollectionName.trim();
     if (!trimmedName) return;
     setActionError(null);
     try {
       await createCollection(trimmedName);
-      setNewCollectionName('');
+      setNewLocalCollectionName('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to create collection');
+    }
+  };
+
+  const handleCreateCloudCollection = async () => {
+    const trimmedName = newCloudCollectionName.trim();
+    if (!trimmedName || !user) return;
+    setActionError(null);
+    setIsCreatingCloudCollection(true);
+    try {
+      await TouchGalClient.createFavoriteFolder({
+        name: trimmedName,
+        description: '',
+        isPublic: isCloudCollectionPublic
+      });
+      setNewCloudCollectionName('');
+      setIsCloudCollectionPublic(false);
+      await fetchUserActivity('collections');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to create cloud collection');
+    } finally {
+      setIsCreatingCloudCollection(false);
     }
   };
 
@@ -693,6 +776,21 @@ export const FavoritesView: React.FC = () => {
       await deleteCollection(collectionId);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to delete collection');
+    }
+  };
+
+  const handleDeleteCloudCollection = async (folderId: number) => {
+    setActionError(null);
+    try {
+      await TouchGalClient.deleteFavoriteFolder(folderId);
+      if (selectedCloudCollection?.id === folderId) {
+        setSelectedCloudCollection(null);
+      }
+      if (user) {
+        await fetchUserActivity('collections');
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to delete cloud collection');
     }
   };
 
@@ -718,10 +816,45 @@ export const FavoritesView: React.FC = () => {
     await selectResource(item.uniqueId, toFallbackResource(item));
   };
 
+  const requestDeleteLocalCollection = (collection: LocalCollection) => {
+    setConfirmDialog({
+      title: `删除本地收藏夹「${collection.name}」`,
+      description: '这会删除这个本地收藏夹，以及其中的全部游戏归档关系。游戏本体不会被删除，但该收藏夹中的所有条目都会移除。',
+      confirmLabel: '删除本地收藏夹',
+      tone: 'rose',
+      onConfirm: async () => {
+        await handleDeleteCollection(collection.id);
+      }
+    });
+  };
+
+  const requestDeleteCloudCollection = (folder: any) => {
+    setConfirmDialog({
+      title: `删除云端收藏夹「${folder.name}」`,
+      description: '这会向 TouchGal 云端发送删除请求，并移除该文件夹及其中包含的全部游戏关联。这个操作无法撤销。',
+      confirmLabel: '删除云端收藏夹',
+      tone: 'rose',
+      onConfirm: async () => {
+        await handleDeleteCloudCollection(folder.id);
+      }
+    });
+  };
+
+  const handleConfirmDialog = async () => {
+    if (!confirmDialog) return;
+    setIsConfirming(true);
+    try {
+      await confirmDialog.onConfirm();
+      setConfirmDialog(null);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
   return (
     <>
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 p-2">
-        <section className="grid gap-4 rounded-[2rem] border border-slate-200 bg-linear-to-r from-white via-slate-50 to-blue-50 p-6 shadow-sm lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-2">
+        <section className="rounded-[2rem] border border-slate-200 bg-linear-to-r from-white via-slate-50 to-blue-50 p-6 shadow-sm">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500 shadow-sm">
               <Heart size={14} className="text-rose-500" />
@@ -732,26 +865,6 @@ export const FavoritesView: React.FC = () => {
               本地收藏夹始终可用，适合离线整理。云端收藏夹在登录后并列展示，保留同步能力。
             </p>
           </div>
-          <div className="rounded-[1.75rem] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/50">
-            <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">新建本地收藏夹</div>
-            <div className="mt-3 flex gap-3">
-              <input
-                className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-blue-300 focus:bg-white"
-                onChange={(event) => setNewCollectionName(event.target.value)}
-                placeholder="例如：想补完、周末玩、白月光"
-                value={newCollectionName}
-              />
-              <button
-                className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!newCollectionName.trim() || isLocalLoading}
-                onClick={() => void handleCreateCollection()}
-                type="button"
-              >
-                <FolderPlus size={16} />
-                创建
-              </button>
-            </div>
-          </div>
         </section>
 
         {(localError || actionError) && (
@@ -760,15 +873,43 @@ export const FavoritesView: React.FC = () => {
           </div>
         )}
 
-        <section className="grid gap-8 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,1fr)]">
           <div className="space-y-4">
+            <div className="flex flex-col gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-xl font-black tracking-tight text-slate-900">本地收藏</h4>
+                  <p className="text-sm font-bold text-slate-400">完全离线可用，直接落到本地数据库。</p>
+                </div>
+                <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                  {collections.length} 个收藏夹
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <input
+                  className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-blue-300 focus:bg-white"
+                  onChange={(event) => setNewLocalCollectionName(event.target.value)}
+                  placeholder="新建本地收藏夹，例如：想补完、周末玩、白月光"
+                  value={newLocalCollectionName}
+                />
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!newLocalCollectionName.trim() || isLocalLoading}
+                    onClick={() => void handleCreateCollection()}
+                    type="button"
+                  >
+                    <FolderPlus size={15} />
+                    创建
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-xl font-black tracking-tight text-slate-900">本地收藏</h4>
-                <p className="text-sm font-bold text-slate-400">完全离线可用，直接落到本地数据库。</p>
-              </div>
-              <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                {collections.length} 个收藏夹
+                <h4 className="text-xl font-black tracking-tight text-slate-900">本地收藏列表</h4>
+                <p className="text-sm font-bold text-slate-400">点击卡片进入本地收藏夹管理窗口。</p>
               </div>
             </div>
 
@@ -803,7 +944,10 @@ export const FavoritesView: React.FC = () => {
                     </button>
                     <button
                       className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                      onClick={() => void handleDeleteCollection(collection.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        requestDeleteLocalCollection(collection);
+                      }}
                       type="button"
                     >
                       <Trash2 size={14} />
@@ -870,13 +1014,48 @@ export const FavoritesView: React.FC = () => {
 
           <aside className="space-y-4">
             <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h4 className="text-xl font-black tracking-tight text-slate-900">云端收藏</h4>
-                  <p className="text-sm font-bold text-slate-400">登录后读取你的 TouchGal 收藏夹。</p>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-xl font-black tracking-tight text-slate-900">云端收藏</h4>
+                    <p className="text-sm font-bold text-slate-400">登录后读取你的 TouchGal 收藏夹。</p>
+                  </div>
+                  <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                    {user ? `${userCollections.length} 个` : '未登录'}
+                  </div>
                 </div>
-                <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                  {user ? `${userCollections.length} 个` : '未登录'}
+                <div className="flex flex-col gap-3">
+                  <input
+                    className="min-w-0 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-emerald-300 focus:bg-white"
+                    disabled={!user}
+                    onChange={(event) => setNewCloudCollectionName(event.target.value)}
+                    placeholder={user ? '新建云端收藏夹，例如：待同步、公开推荐' : '登录后可创建云收藏夹'}
+                    value={newCloudCollectionName}
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      aria-pressed={isCloudCollectionPublic}
+                      className={`inline-flex min-w-20 items-center justify-center rounded-2xl px-4 py-3 text-sm font-black transition-all ${
+                        isCloudCollectionPublic
+                          ? 'bg-emerald-500 text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-600'
+                      }`}
+                      disabled={!user || isCreatingCloudCollection}
+                      onClick={() => setIsCloudCollectionPublic((current) => !current)}
+                      type="button"
+                    >
+                      {isCloudCollectionPublic ? '公开' : '私有'}
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!user || !newCloudCollectionName.trim() || isCreatingCloudCollection}
+                      onClick={() => void handleCreateCloudCollection()}
+                      type="button"
+                    >
+                      <Cloud size={15} />
+                      {isCreatingCloudCollection ? '创建中...' : '创建'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -913,24 +1092,39 @@ export const FavoritesView: React.FC = () => {
               {user && userCollections.length > 0 && (
                 <div className="mt-5 space-y-3">
                   {userCollections.map((folder: any) => (
-                    <button
+                    <article
                       key={folder.id}
-                      className="w-full rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 text-left transition-all hover:border-emerald-200 hover:bg-white"
-                      onClick={() => setSelectedCloudCollection(folder)}
-                      type="button"
+                      className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all hover:border-emerald-200 hover:bg-white"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                        <button
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => setSelectedCloudCollection(folder)}
+                          type="button"
+                        >
                           <div className="truncate text-base font-black text-slate-900">{folder.name}</div>
                           <div className="mt-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
                             {folder.is_public ? 'Public' : 'Private'}
                           </div>
-                        </div>
-                        <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 shadow-sm">
-                          {folder._count?.patch || 0} 项
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 shadow-sm">
+                            {folder._count?.patch || 0} 项
+                          </div>
+                          <button
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              requestDeleteCloudCollection(folder);
+                            }}
+                            type="button"
+                          >
+                            <Trash2 size={12} />
+                            删除
+                          </button>
                         </div>
                       </div>
-                    </button>
+                    </article>
                   ))}
                 </div>
               )}
@@ -953,6 +1147,7 @@ export const FavoritesView: React.FC = () => {
       )}
       {selectedCloudCollection && (
         <CloudCollectionOverlay
+          allFolders={userCollections}
           folder={selectedCloudCollection}
           onClose={() => setSelectedCloudCollection(null)}
           onCollectionMutated={async () => {
@@ -965,6 +1160,15 @@ export const FavoritesView: React.FC = () => {
           }}
         />
       )}
+      <ConfirmDialog
+        state={confirmDialog}
+        isSubmitting={isConfirming}
+        onCancel={() => {
+          if (isConfirming) return;
+          setConfirmDialog(null);
+        }}
+        onConfirm={handleConfirmDialog}
+      />
     </>
   );
 };

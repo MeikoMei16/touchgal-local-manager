@@ -27,13 +27,24 @@ Current cross-cutting topics covered here:
 - startup session revalidation and the distinction between renderer auth UI state and real main-process session state
 - persisted upstream auth cookies in addition to the normalized token, plus stale-auth cleanup after failed restore
 - parallel local-collection and cloud-favorites architecture for the Favorites area
+- SQLite-backed local collection CRUD plus detail-header integration for adding/removing a game locally
+- local collection overlay gallery UX with inline move/copy/remove and batch organization actions
+- Favorites-page header layout for domain-local creation controls
+- Favorites-page shared delete-confirmation flow and card-level delete actions
 - cloud favorite folder content loading via the upstream `/user/profile/favorite/folder/patch` API
+- cloud favorite folder mutation through upstream `/patch/favorite` toggle semantics
+- cloud favorite folder create/delete lifecycle through the upstream folder endpoints
+- cloud overlay batch move/remove behavior and current count-refresh rules
 - current login and captcha interaction constraints
+- startup auth/session restore hardening, including persisted cookie restore and stale-auth cleanup
+- profile-shell and profile-tab loading states
 - detail discussion/evaluation session gating and post-login social refresh behavior
 - renderer settings page and persisted interaction preferences
 - guarded detail loading and current detail-overlay composition rules
 - detail secondary-click behavior with default right-click-to-back handling
 - layer-aware `Escape` handling for detail overlay and full-screen screenshot viewer
+- collection-overlay to detail-overlay stacking order rules
+- invalid nested-button avoidance in Favorites folder cards
 - detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
 
 ## API Notes
