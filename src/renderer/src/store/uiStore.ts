@@ -11,12 +11,15 @@ import {
 import { createBrowseActions } from './uiActions/browseActions';
 import { createDetailActions } from './uiActions/detailActions';
 import { createAdvancedActions } from './uiActions/advancedActions';
-import type { DetailSecondaryClickAction, UIState } from './uiStoreTypes';
+import type { DetailOpenIntent, DetailSecondaryClickAction, UIState } from './uiStoreTypes';
 
 export type { UIState } from './uiStoreTypes';
 
 const normalizeDetailSecondaryClickAction = (value: unknown): DetailSecondaryClickAction =>
   value === 'native' ? 'native' : 'back';
+
+const normalizeDetailOpenIntent = (value: unknown): DetailOpenIntent =>
+  value === 'links' || value === 'favorite' ? value : 'default';
 
 const coerceLegacyHomepageDefaults = (query: Partial<UIState['lastHomeQuery']> | undefined) => {
   const normalized = normalizeHomeQuery(query);
@@ -51,6 +54,7 @@ export const useUIStore = create<UIState>()(
       patchComments: [],
       patchRatings: [],
       detailSecondaryClickAction: 'back',
+      detailOpenIntent: 'default',
       homeMode: 'normal',
       activeNsfwDomain: 'sfw',
       advancedFilterDraft: defaultAdvancedFilterDraft(),
@@ -63,6 +67,7 @@ export const useUIStore = create<UIState>()(
       },
       lastHomeQuery: defaultHomeQuery(),
       setDetailSecondaryClickAction: (action) => set({ detailSecondaryClickAction: normalizeDetailSecondaryClickAction(action) }),
+      setDetailOpenIntent: (intent) => set({ detailOpenIntent: normalizeDetailOpenIntent(intent) }),
       ...createBrowseActions(set, get),
       ...createDetailActions(set, get),
       ...createAdvancedActions(set, get)

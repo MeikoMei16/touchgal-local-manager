@@ -18,7 +18,7 @@ const shouldIgnoreSecondaryBack = (target: EventTarget | null) => {
 export const DetailOverlay: React.FC = () => {
   const {
     selectedResource, clearSelected, addTagFilter, refreshSelectedResourceSocial,
-    isDetailLoading, patchComments, patchRatings, detailSecondaryClickAction
+    isDetailLoading, patchComments, patchRatings, detailSecondaryClickAction, detailOpenIntent, setDetailOpenIntent
   } = useUIStore();
   const { user, sessionError, setIsLoginOpen } = useAuthStore();
   const [imageViewerState, setImageViewerState] = useState<{ images: string[]; index: number } | null>(null);
@@ -32,6 +32,22 @@ export const DetailOverlay: React.FC = () => {
       scrollRef.current.focus();
     }
   }, [selectedResource]);
+
+  React.useEffect(() => {
+    if (!selectedResource?.uniqueId) return;
+
+    if (detailOpenIntent === 'links') {
+      setActiveTab('links');
+    } else {
+      setActiveTab('info');
+    }
+  }, [detailOpenIntent, selectedResource?.uniqueId]);
+
+  React.useEffect(() => {
+    if (!selectedResource?.uniqueId) return;
+    if (detailOpenIntent === 'default') return;
+    setDetailOpenIntent('default');
+  }, [detailOpenIntent, selectedResource?.uniqueId, setDetailOpenIntent]);
 
   React.useEffect(() => {
     const isLoggedIn = !!user;
@@ -138,6 +154,7 @@ export const DetailOverlay: React.FC = () => {
         >
           <div className="max-w-6xl mx-auto flex flex-col gap-6">
             <DetailHeader
+              autoOpenCollectionMenu={detailOpenIntent === 'favorite'}
               resource={selectedResource}
               onImageClick={openBannerViewer}
               onNavigateTab={setActiveTab}

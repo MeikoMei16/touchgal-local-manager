@@ -10,6 +10,7 @@ import type {
 } from '../features/home/homeState';
 
 export type DetailSecondaryClickAction = 'back' | 'native';
+export type DetailOpenIntent = 'default' | 'links' | 'favorite';
 
 export interface UIState {
   hasHydratedUi: boolean;
@@ -23,6 +24,7 @@ export interface UIState {
   patchComments: any[];
   patchRatings: any[];
   detailSecondaryClickAction: DetailSecondaryClickAction;
+  detailOpenIntent: DetailOpenIntent;
   homeMode: HomeMode;
   activeNsfwDomain: NsfwDomain;
   advancedFilterDraft: AdvancedFilterDraft;
@@ -35,6 +37,7 @@ export interface UIState {
   selectResource: (uniqueId: string, fallbackResource?: TouchGalResource) => Promise<void>;
   refreshSelectedResourceSocial: () => Promise<void>;
   clearSelected: () => void;
+  setDetailOpenIntent: (intent: DetailOpenIntent) => void;
   updateAdvancedFilterDraft: (draft: Partial<AdvancedFilterDraft>) => void;
   setActiveNsfwDomain: (domain: NsfwDomain) => void;
   enterAdvancedMode: (sortField: string, sortOrder: string) => Promise<void>;

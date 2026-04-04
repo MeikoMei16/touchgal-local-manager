@@ -82,6 +82,6 @@ export const createDetailActions = (set: UISetState, get: UIGetState) => ({
   clearSelected: () => {
     activeDetailRequestKey = null;
     activeSocialRequestKey = null;
-    set({ selectedResource: null, patchComments: [], patchRatings: [] });
+    set({ selectedResource: null, patchComments: [], patchRatings: [], detailOpenIntent: 'default' });
   }
 });

@@ -46,12 +46,18 @@ const mapResourceLanguageLabel = (value: string) => RESOURCE_LANGUAGE_LABELS[val
 const mapResourcePlatformLabel = (value: string) => RESOURCE_PLATFORM_LABELS[value] ?? value;
 
 interface DetailHeaderProps {
+  autoOpenCollectionMenu?: boolean;
   resource: TouchGalDetail;
   onImageClick?: (url: string) => void;
   onNavigateTab?: (tab: DetailTabType) => void;
 }
 
-export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageClick, onNavigateTab }) => {
+export const DetailHeader: React.FC<DetailHeaderProps> = ({
+  autoOpenCollectionMenu = false,
+  resource,
+  onImageClick,
+  onNavigateTab
+}) => {
   const { ratingSummary } = resource;
   const {
     collections,
@@ -102,6 +108,11 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
       void fetchCollections();
     }
   }, [fetchCollections, hasLoaded]);
+
+  React.useEffect(() => {
+    if (!autoOpenCollectionMenu) return;
+    setIsCollectionMenuOpen(true);
+  }, [autoOpenCollectionMenu, resource.uniqueId]);
 
   React.useEffect(() => {
     if (!isCollectionMenuOpen || !user || !resource.id) return;

@@ -230,6 +230,10 @@ Homepage card behavior:
 3. Stats render as a single bare icon-plus-number row instead of boxed pills.
 4. `收藏` and `下载` are revealed as right-edge vertical hover tabs instead of persistent footer buttons.
 5. The corner rating badge fades out on hover so the action tabs become the dominant interaction state.
+6. The homepage `收藏` hover tab now opens a card-local quick-collect surface instead of forcing a detail-overlay jump.
+7. That quick-collect surface can overflow beyond the card bounds and float over the homepage grid, while the card body itself keeps its original rounded clipping.
+8. Quick-collect automatically chooses whether to open left or right based on the card's viewport position so cards on the right half do not push the panel off-screen.
+9. Quick-collect currently supports direct local collection toggle, inline local-folder creation, login-gated cloud-folder toggle, and per-row loading/error feedback without leaving the homepage.
 
 Advanced filter interaction behavior:
 
@@ -421,6 +425,7 @@ Status note:
 - Layer-correct modal stacking for collection overlay -> detail overlay drill-down
 - Explicit loading indicators for profile shell and profile activity tabs
 - Shared destructive confirmation dialog for local and cloud folder deletion on the Favorites page
+- Homepage quick-collect popover for local/cloud folder toggle directly from the browse card hover rail
 
 ### Partial / In Progress
 

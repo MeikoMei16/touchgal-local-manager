@@ -23,6 +23,7 @@ Current cross-cutting topics covered here:
 - advanced search and rating-sort pipeline, cache reuse, and current exit behavior
 - known limits of upstream rating data completeness even after local rating-sort stabilization
 - homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
+- homepage hover-side `收藏` action now opens a floating quick-collect panel directly on the browse grid
 - main-process auth token normalization and upstream header/cookie rules
 - startup session revalidation and the distinction between renderer auth UI state and real main-process session state
 - persisted upstream auth cookies in addition to the normalized token, plus stale-auth cleanup after failed restore
@@ -47,6 +48,7 @@ Current cross-cutting topics covered here:
 - collection-overlay to detail-overlay stacking order rules
 - invalid nested-button avoidance in Favorites folder cards
 - detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
+- homepage quick-collect panel keeps card clipping intact while allowing the panel itself to float across the grid and auto-flip left/right by viewport position
 
 ## API Notes
 
