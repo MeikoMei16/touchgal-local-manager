@@ -27,6 +27,7 @@ Current cross-cutting topics covered here:
 - startup session revalidation and the distinction between renderer auth UI state and real main-process session state
 - persisted upstream auth cookies in addition to the normalized token, plus stale-auth cleanup after failed restore
 - parallel local-collection and cloud-favorites architecture for the Favorites area
+- cloud favorite folder content loading via the upstream `/user/profile/favorite/folder/patch` API
 - current login and captcha interaction constraints
 - detail discussion/evaluation session gating and post-login social refresh behavior
 - renderer settings page and persisted interaction preferences

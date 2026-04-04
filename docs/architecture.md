@@ -260,8 +260,10 @@ Favorites architecture:
 2. Favorites are modeled as two parallel domains instead of one merged abstraction.
 3. Local collections are always available, stored in SQLite, and writable without login.
 4. Cloud favorite folders remain upstream-owned and are currently shown as a read-only companion section when logged in.
-5. Detail-header favorite interaction opens a menu that prioritizes local collection add/remove actions and also surfaces current cloud folder visibility state.
-6. Local collection item writes upsert the minimal game shell into SQLite before linking the game to a collection so collection foreign keys do not depend on broader browse-cache rollout.
+5. Clicking a cloud favorite folder now opens a paginated overlay that fetches folder contents from `/user/profile/favorite/folder/patch`.
+6. That cloud-folder content flow mirrors the current `kun-touchgal-next` pattern: folder list first, folder contents second.
+7. Detail-header favorite interaction opens a menu that prioritizes local collection add/remove actions and also surfaces current cloud folder visibility state.
+8. Local collection item writes upsert the minimal game shell into SQLite before linking the game to a collection so collection foreign keys do not depend on broader browse-cache rollout.
 
 Profile loading:
 

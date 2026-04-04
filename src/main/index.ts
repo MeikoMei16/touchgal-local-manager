@@ -1167,6 +1167,38 @@ handleWithLog('tg-get-favorite-folders', async (_event, uid: number) => {
   return ensureValidResponse(response.data)
 })
 
+handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number, page: number, limit: number) => {
+  const response = await API_CLIENT.get('/user/profile/favorite/folder/patch', {
+    params: { folderId, page, limit }
+  })
+  const data = ensureValidResponse(response.data) as { patches?: any[]; total?: number }
+
+  const patches = (data.patches ?? []).map((patch) => ({
+    id: patch.id ?? 0,
+    uniqueId: patch.uniqueId ?? patch.unique_id ?? '',
+    name: patch.name ?? '',
+    banner: patch.banner ?? null,
+    platform: patch.platform ?? [],
+    language: patch.language ?? [],
+    created: patch.created ?? null,
+    releasedDate: patch.releasedDate ?? null,
+    averageRating: typeof patch.averageRating === 'number' ? patch.averageRating : 0,
+    tags: Array.isArray(patch.tags) ? patch.tags : [],
+    alias: Array.isArray(patch.alias) ? patch.alias : [],
+    favoriteCount: patch._count?.favorite_folder ?? patch.favoriteCount ?? 0,
+    resourceCount: patch._count?.patch_resource ?? patch.resourceCount ?? 0,
+    commentCount: patch._count?.patch_comment ?? patch.commentCount ?? 0,
+    viewCount: patch.view ?? patch.viewCount ?? 0,
+    downloadCount: patch.download ?? patch.downloadCount ?? 0,
+    ratingSummary: null
+  }))
+
+  return {
+    patches,
+    total: data.total ?? patches.length
+  }
+})
+
 handleWithLog('tg-local-collections-list', async () => {
   return listLocalCollections()
 })

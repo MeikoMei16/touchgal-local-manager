@@ -57,6 +57,7 @@ export interface ElectronAPI {
   getUserRatings: (uid: number, page: number, limit: number) => Promise<any>;
   getUserResources: (uid: number, page: number, limit: number) => Promise<any>;
   getFavoriteFolders: (uid: number) => Promise<any>;
+  getFavoriteFolderPatches: (folderId: number, page: number, limit: number) => Promise<any>;
   getLocalCollections: () => Promise<LocalCollection[]>;
   createLocalCollection: (name: string) => Promise<LocalCollection[]>;
   deleteLocalCollection: (collectionId: number) => Promise<LocalCollection[]>;

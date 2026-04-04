@@ -1,6 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/useTouchGalStore';
+import { useUIStore } from '../store/uiStore';
 import { MessageSquare, Star, Package, Heart, Coins, Users, User } from 'lucide-react';
+import { CloudCollectionOverlay } from './CloudCollectionOverlay';
+import type { TouchGalResource } from '../types';
+
+const LoadingCircle: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Loading...', compact = false }) => (
+  <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-14' : 'h-full'} text-on-surface-variant`}>
+    <div className="relative">
+      <div className={`${compact ? 'h-12 w-12' : 'h-16 w-16'} rounded-full border-4 border-slate-200`} />
+      <div
+        className={`absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-primary border-r-primary ${
+          compact ? 'h-12 w-12' : 'h-16 w-16'
+        }`}
+      />
+    </div>
+    <div className={`${compact ? 'mt-4 text-sm' : 'mt-5 text-base'} font-black tracking-wide text-slate-500`}>{label}</div>
+  </div>
+);
 
 const ProfileView: React.FC = () => {
   const { 
@@ -13,8 +30,10 @@ const ProfileView: React.FC = () => {
     userCollections,
     isLoading 
   } = useAuthStore();
+  const { selectResource } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections'>('comments');
+  const [selectedCloudCollection, setSelectedCloudCollection] = useState<any | null>(null);
 
   useEffect(() => {
     if (user && !userProfile) {
@@ -46,14 +65,13 @@ const ProfileView: React.FC = () => {
   }
 
   if (isLoading && !userProfile) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <LoadingCircle label="Loading profile..." />;
   }
 
   const counts = userProfile?._count || {};
+  const handleOpenCloudResource = async (resource: TouchGalResource) => {
+    await selectResource(resource.uniqueId, resource);
+  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -147,7 +165,7 @@ const ProfileView: React.FC = () => {
             </div>
 
             <div className="p-6">
-              {isLoading && <div className="py-20 text-center text-outline animate-pulse font-bold">Loading activity...</div>}
+              {isLoading && <LoadingCircle label="Loading activity..." compact />}
               
               {!isLoading && activeTab === 'comments' && (
                 <div className="space-y-4">
@@ -199,7 +217,12 @@ const ProfileView: React.FC = () => {
                     <div className="col-span-2 py-20 text-center text-outline font-bold">No collections found</div>
                   ) : (
                     userCollections.map(folder => (
-                      <div key={folder.id} className="flex items-center justify-between p-5 bg-surface-container-low rounded-2xl border border-outline-variant hover:border-emerald-200 transition-all group cursor-pointer">
+                      <button
+                        key={folder.id}
+                        className="flex w-full items-center justify-between p-5 bg-surface-container-low rounded-2xl border border-outline-variant hover:border-emerald-200 transition-all group cursor-pointer text-left"
+                        onClick={() => setSelectedCloudCollection(folder)}
+                        type="button"
+                      >
                         <div className="flex items-center gap-4">
                            <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-emerald-50 transition-colors">
                               <Package size={24} className="text-emerald-500" />
@@ -212,7 +235,7 @@ const ProfileView: React.FC = () => {
                         <div className="bg-white px-3 py-1 rounded-full text-xs font-black text-on-surface-variant shadow-sm">
                            {folder._count?.patch || 0}
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>
@@ -221,6 +244,13 @@ const ProfileView: React.FC = () => {
           </div>
         </div>
       </div>
+      {selectedCloudCollection && (
+        <CloudCollectionOverlay
+          folder={selectedCloudCollection}
+          onClose={() => setSelectedCloudCollection(null)}
+          onOpenResource={handleOpenCloudResource}
+        />
+      )}
     </div>
   );
 };

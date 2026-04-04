@@ -28,6 +28,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - renderer settings page for interaction preferences
 - dedicated Favorites page with parallel local-collection and cloud-folder sections
 - detail-header favorite menu for adding/removing resources from local collections without login
+- cloud favorite folders can now open paginated folder contents through the upstream folder-patch API
 - early local SQLite and download-manager scaffolding
 
 ## Stack
@@ -104,6 +105,7 @@ Implemented or active:
 - main-process persistence of both normalized auth token and upstream auth cookies, plus stale-auth cleanup on failed restore
 - advanced homepage filtering and local rating-sort pipeline
 - local collections CRUD through SQLite + IPC with a dedicated Favorites view
+- cloud favorite folder overlays backed by the real `/user/profile/favorite/folder/patch` content feed
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
 - homepage cards redesigned around feed-level browse data rather than detail-only metadata
 - detail overlay with comments, ratings, screenshots, PV extraction, sectioned resource links, and session-aware discussion/evaluation gating
@@ -139,7 +141,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
+The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
 
 Lint note:
 
