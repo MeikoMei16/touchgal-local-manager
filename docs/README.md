@@ -25,6 +25,8 @@ Current cross-cutting topics covered here:
 - homepage top-bar upstream filters versus advanced-panel midstream/downstream filters
 - main-process auth token normalization and upstream header/cookie rules
 - startup session revalidation and the distinction between renderer auth UI state and real main-process session state
+- persisted upstream auth cookies in addition to the normalized token, plus stale-auth cleanup after failed restore
+- parallel local-collection and cloud-favorites architecture for the Favorites area
 - current login and captcha interaction constraints
 - detail discussion/evaluation session gating and post-login social refresh behavior
 - renderer settings page and persisted interaction preferences

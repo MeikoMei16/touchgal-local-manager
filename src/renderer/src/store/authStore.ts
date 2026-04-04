@@ -134,6 +134,11 @@ export const useAuthStore = create<AuthState>()(
             error: null
           });
         } catch {
+          try {
+            await TouchGalClient.clearPersistedAuth();
+          } catch (clearError) {
+            console.error('Failed to clear persisted auth after restore failure:', clearError);
+          }
           set({
             ...emptyAuthState,
             isLoading: false,

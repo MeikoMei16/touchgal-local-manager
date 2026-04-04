@@ -2,6 +2,8 @@ import React from 'react';
 import { Download, Globe, Heart, MessageSquare, Share2, Star } from 'lucide-react';
 import { TouchGalDetail } from '../../types';
 import { RatingHistogram } from '../RatingHistogram';
+import { useAuthStore } from '../../store/authStore';
+import { useLocalCollectionStore } from '../../store/localCollectionStore';
 
 const RESOURCE_SECTION_LABELS: Record<string, string> = {
   galgame: 'PC游戏',
@@ -48,6 +50,20 @@ interface DetailHeaderProps {
 
 export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageClick }) => {
   const { ratingSummary } = resource;
+  const {
+    collections,
+    hasLoaded,
+    isLoading: isCollectionLoading,
+    fetchCollections,
+    createCollectionAndAdd,
+    addToCollection,
+    removeFromCollection
+  } = useLocalCollectionStore();
+  const { user, userCollections, fetchUserActivity, setIsLoginOpen } = useAuthStore();
+  const [isCollectionMenuOpen, setIsCollectionMenuOpen] = React.useState(false);
+  const [newCollectionName, setNewCollectionName] = React.useState('');
+  const [collectionError, setCollectionError] = React.useState<string | null>(null);
+  const [isSavingCollection, setIsSavingCollection] = React.useState(false);
   const resourceTags = React.useMemo(() => {
     const seen = new Set<string>();
     const tags: string[] = [];
@@ -69,6 +85,65 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
 
     return tags;
   }, [resource.downloads]);
+  const containingCollections = React.useMemo(
+    () => collections.filter((collection) => collection.items.some((item) => item.uniqueId === resource.uniqueId)),
+    [collections, resource.uniqueId]
+  );
+  const isFavoritedLocally = containingCollections.length > 0;
+
+  React.useEffect(() => {
+    if (!hasLoaded) {
+      void fetchCollections();
+    }
+  }, [fetchCollections, hasLoaded]);
+
+  React.useEffect(() => {
+    if (!isCollectionMenuOpen || !user || userCollections.length > 0) return;
+    void fetchUserActivity('collections');
+  }, [fetchUserActivity, isCollectionMenuOpen, user, userCollections.length]);
+
+  const resourcePayload = React.useMemo(() => ({
+    id: resource.id,
+    uniqueId: resource.uniqueId,
+    name: resource.name,
+    banner: resource.banner,
+    averageRating: resource.averageRating,
+    viewCount: resource.viewCount,
+    downloadCount: resource.downloadCount,
+    alias: resource.alias
+  }), [resource.alias, resource.averageRating, resource.banner, resource.downloadCount, resource.id, resource.name, resource.uniqueId, resource.viewCount]);
+
+  const handleCollectionToggle = async (collectionId: number, isSelected: boolean) => {
+    setCollectionError(null);
+    setIsSavingCollection(true);
+    try {
+      if (isSelected) {
+        await removeFromCollection(collectionId, resource.uniqueId);
+      } else {
+        await addToCollection(collectionId, resourcePayload);
+      }
+    } catch (error) {
+      setCollectionError(error instanceof Error ? error.message : 'Failed to update collection');
+    } finally {
+      setIsSavingCollection(false);
+    }
+  };
+
+  const handleCreateAndAdd = async () => {
+    const trimmedName = newCollectionName.trim();
+    if (!trimmedName) return;
+
+    setCollectionError(null);
+    setIsSavingCollection(true);
+    try {
+      await createCollectionAndAdd(trimmedName, resourcePayload);
+      setNewCollectionName('');
+    } catch (error) {
+      setCollectionError(error instanceof Error ? error.message : 'Failed to create collection');
+    } finally {
+      setIsSavingCollection(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 grid grid-cols-1 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
@@ -123,7 +198,125 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
                 <span>评分</span>
               </button>
               <div className="flex gap-2 ml-auto sm:ml-0">
-                {[Heart, Share2, MessageSquare].map((Icon, i) => (
+                <div className="relative">
+                  <button
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all active:scale-95 ${
+                      isFavoritedLocally
+                        ? 'border-rose-200 bg-rose-50 text-rose-500'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                    onClick={() => setIsCollectionMenuOpen((current) => !current)}
+                    type="button"
+                  >
+                    <Heart size={20} fill={isFavoritedLocally ? 'currentColor' : 'none'} />
+                  </button>
+                  {isCollectionMenuOpen && (
+                    <div className="absolute right-0 top-12 z-30 w-80 rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-200/60">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-black text-slate-900">收藏</div>
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                            本地优先，云端并列
+                          </div>
+                        </div>
+                        <button
+                          className="text-xs font-black text-slate-400 hover:text-slate-700"
+                          onClick={() => setIsCollectionMenuOpen(false)}
+                          type="button"
+                        >
+                          关闭
+                        </button>
+                      </div>
+
+                      <div className="mt-4 space-y-2">
+                        <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">本地收藏</div>
+                        {collections.length === 0 && !isCollectionLoading && (
+                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
+                            还没有本地收藏夹，下面可以直接创建。
+                          </div>
+                        )}
+                        {collections.map((collection) => {
+                          const isSelected = collection.items.some((item) => item.uniqueId === resource.uniqueId);
+                          return (
+                            <button
+                              key={collection.id}
+                              className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${
+                                isSelected
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                              }`}
+                              disabled={isSavingCollection}
+                              onClick={() => void handleCollectionToggle(collection.id, isSelected)}
+                              type="button"
+                            >
+                              <span className="font-black">{collection.name}</span>
+                              <span className="text-xs font-black">{isSelected ? '已添加' : `${collection.itemCount} 项`}</span>
+                            </button>
+                          );
+                        })}
+                        <div className="flex gap-2 pt-2">
+                          <input
+                            className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-blue-300 focus:bg-white"
+                            onChange={(event) => setNewCollectionName(event.target.value)}
+                            placeholder="新建本地收藏夹"
+                            value={newCollectionName}
+                          />
+                          <button
+                            className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={isSavingCollection || !newCollectionName.trim()}
+                            onClick={() => void handleCreateAndAdd()}
+                            type="button"
+                          >
+                            添加
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">云端收藏</div>
+                          {!user && (
+                            <button
+                              className="text-xs font-black text-blue-600 hover:text-blue-700"
+                              onClick={() => setIsLoginOpen(true)}
+                              type="button"
+                            >
+                              登录
+                            </button>
+                          )}
+                        </div>
+                        {!user && (
+                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
+                            登录后可查看云端收藏夹。
+                          </div>
+                        )}
+                        {user && userCollections.length === 0 && (
+                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
+                            暂无云端收藏夹，当前版本先展示列表。
+                          </div>
+                        )}
+                        {userCollections.slice(0, 4).map((folder: any) => (
+                          <div
+                            key={folder.id}
+                            className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600"
+                          >
+                            <span className="font-black text-slate-800">{folder.name}</span>
+                            <span className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              {folder._count?.patch || 0} 项
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {collectionError && (
+                        <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600">
+                          {collectionError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {[Share2, MessageSquare].map((Icon, i) => (
                   <button key={i} className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 active:scale-95">
                     <Icon size={20} />
                   </button>

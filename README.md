@@ -23,7 +23,11 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - detail resource metadata chips normalized to field-aware Chinese labels with duplicate labels removed
 - detail resource type chips normalized against upstream enum drift such as `row` rendering as `生肉资源`
 - startup session restore that rebuilds renderer auth state from main-process session validation instead of trusting persisted renderer login state
+- persisted auth-cookie jar alongside the normalized token so dev restarts can restore upstream session context more faithfully
+- automatic clearing of stale persisted auth artifacts when startup revalidation reports an invalid session
 - renderer settings page for interaction preferences
+- dedicated Favorites page with parallel local-collection and cloud-folder sections
+- detail-header favorite menu for adding/removing resources from local collections without login
 - early local SQLite and download-manager scaffolding
 
 ## Stack
@@ -97,7 +101,9 @@ Implemented or active:
 - local search-page `rating` sort to avoid broken upstream search `rating` ordering, with visible candidate-fetch / local-sort progress and in-progress paging
 - main-process auth/session relay
 - startup session revalidation so renderer login state follows the real main-process token on app reopen
+- main-process persistence of both normalized auth token and upstream auth cookies, plus stale-auth cleanup on failed restore
 - advanced homepage filtering and local rating-sort pipeline
+- local collections CRUD through SQLite + IPC with a dedicated Favorites view
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
 - homepage cards redesigned around feed-level browse data rather than detail-only metadata
 - detail overlay with comments, ratings, screenshots, PV extraction, sectioned resource links, and session-aware discussion/evaluation gating
@@ -121,8 +127,9 @@ Known issue:
 Persistence status note:
 
 - SQLite exists today as schema/bootstrap groundwork, not as the primary source of truth for browse/detail data
-- database-backed resource persistence is intentionally deferred until the UI and local-first flows that consume it are defined more concretely
-- for now, only persist data with a clear local ownership story such as renderer UI restore state, auth/session artifacts managed by the main process, download tasks, local file links, and future user-authored metadata
+- the first user-owned SQLite feature now shipped is local collections/favorites, managed in parallel with read-only cloud favorite folders
+- browse/detail resource persistence is still intentionally deferred as a primary source of truth until broader local-first flows are defined more concretely
+- for now, persistent data with a clear local ownership story includes renderer UI restore state, main-process auth/session artifacts, local collections, download tasks, local file links, and future user-authored metadata
 
 ## Documentation
 
@@ -132,7 +139,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
+The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
 
 Lint note:
 

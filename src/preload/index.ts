@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
   verifyCaptcha: (sessionId: string, selectedIds: string[]) => ipcRenderer.invoke('tg-verify-captcha', sessionId, selectedIds),
   login: (username: string, password: string, captcha: string) => ipcRenderer.invoke('tg-login', username, password, captcha),
   logout: () => ipcRenderer.invoke('tg-logout'),
+  clearPersistedAuth: () => ipcRenderer.invoke('tg-clear-persisted-auth'),
 
   searchTags: (keyword: string) =>
     ipcRenderer.invoke('tg-search-tags', keyword),
@@ -38,4 +39,12 @@ contextBridge.exposeInMainWorld('api', {
   getUserRatings: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-ratings', uid, page, limit),
   getUserResources: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-resources', uid, page, limit),
   getFavoriteFolders: (uid: number) => ipcRenderer.invoke('tg-get-favorite-folders', uid),
+
+  getLocalCollections: () => ipcRenderer.invoke('tg-local-collections-list'),
+  createLocalCollection: (name: string) => ipcRenderer.invoke('tg-local-collections-create', name),
+  deleteLocalCollection: (collectionId: number) => ipcRenderer.invoke('tg-local-collections-delete', collectionId),
+  addLocalCollectionItem: (collectionId: number, game: Record<string, unknown>) =>
+    ipcRenderer.invoke('tg-local-collections-add-item', collectionId, game),
+  removeLocalCollectionItem: (collectionId: number, uniqueId: string) =>
+    ipcRenderer.invoke('tg-local-collections-remove-item', collectionId, uniqueId),
 })

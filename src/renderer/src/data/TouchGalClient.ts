@@ -54,6 +54,10 @@ export const TouchGalClient = {
     return await window.api.logout();
   },
 
+  clearPersistedAuth: async () => {
+    return await window.api.clearPersistedAuth();
+  },
+
   searchTags: async (keyword: string) => {
     return await window.api.searchTags(keyword);
   },

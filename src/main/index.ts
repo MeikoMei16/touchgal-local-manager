@@ -5,7 +5,15 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import axios from 'axios'
 import log from 'electron-log'
-import { initDb, getDb } from './db'
+import {
+  addItemToLocalCollection,
+  createLocalCollection,
+  deleteLocalCollection,
+  getDb,
+  initDb,
+  listLocalCollections,
+  removeItemFromLocalCollection
+} from './db'
 import {
   buildTouchGalBaseHeaders,
   defaultHttpConfigState,
@@ -25,7 +33,9 @@ log.info('Log initialized (Spying on Renderer) at:', logPath)
 
 // Persistence Helpers: JWT Token with Encryption
 const tokenPath = join(app.getPath('userData'), 'session_token.dat')
+const cookiePath = join(app.getPath('userData'), 'session_cookies.txt')
 let currentToken = ''
+let authCookies: Record<string, string> = {}
 
 const sanitizeToken = (token: string) => token.replace(/[\r\n\t]/g, '').trim()
 
@@ -46,6 +56,63 @@ const normalizeTokenInput = (rawToken: string) => {
 
 const buildAuthCookie = (token: string) => `kun-galgame-patch-moe-token=${token}`
 
+const parseCookiePair = (rawCookie: string) => {
+  const [pair] = rawCookie.split(';')
+  const separatorIndex = pair.indexOf('=')
+  if (separatorIndex <= 0) return null
+
+  const name = pair.slice(0, separatorIndex).trim()
+  const value = pair.slice(separatorIndex + 1).trim()
+  if (!name) return null
+
+  return { name, value }
+}
+
+const serializeAuthCookies = () =>
+  Object.entries(authCookies)
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ')
+
+const persistAuthCookies = () => {
+  try {
+    const serialized = serializeAuthCookies()
+    if (serialized) {
+      fs.writeFileSync(cookiePath, serialized, 'utf8')
+    } else if (fs.existsSync(cookiePath)) {
+      fs.unlinkSync(cookiePath)
+    }
+  } catch (e) {
+    log.warn('Failed to persist auth cookies:', e)
+  }
+}
+
+const updateAuthCookiesFromSetCookie = (setCookies: string[]) => {
+  let didChange = false
+
+  for (const cookieStr of setCookies) {
+    const parsed = parseCookiePair(cookieStr)
+    if (!parsed) continue
+
+    const expiresImmediately = /max-age=0/i.test(cookieStr) || /expires=thu,\s*01 jan 1970/i.test(cookieStr)
+    if (expiresImmediately) {
+      if (parsed.name in authCookies) {
+        delete authCookies[parsed.name]
+        didChange = true
+      }
+      continue
+    }
+
+    if (authCookies[parsed.name] !== parsed.value) {
+      authCookies[parsed.name] = parsed.value
+      didChange = true
+    }
+  }
+
+  if (didChange) {
+    persistAuthCookies()
+  }
+}
+
 const normalizeNsfwCookieValue = (value: unknown) => {
   if (value === 'nsfw') return 'nsfw'
   if (value === 'all') return 'all'
@@ -57,7 +124,12 @@ const buildNsfwCookie = (nsfwMode: unknown) =>
 
 const buildRequestCookie = (nsfwMode?: unknown) => {
   const cookies: string[] = []
-  if (currentToken) cookies.push(buildAuthCookie(currentToken))
+  const serializedAuthCookies = serializeAuthCookies()
+  if (serializedAuthCookies) {
+    cookies.push(serializedAuthCookies)
+  } else if (currentToken) {
+    cookies.push(buildAuthCookie(currentToken))
+  }
   cookies.push(buildNsfwCookie(nsfwMode))
   return cookies.join('; ')
 }
@@ -65,6 +137,11 @@ const buildRequestCookie = (nsfwMode?: unknown) => {
 const saveToken = (token: string) => {
   try {
     const sanitizedToken = normalizeTokenInput(token)
+    currentToken = sanitizedToken
+    if (sanitizedToken) {
+      authCookies['kun-galgame-patch-moe-token'] = sanitizedToken
+      persistAuthCookies()
+    }
     if (safeStorage.isEncryptionAvailable()) {
       const encrypted = safeStorage.encryptString(sanitizedToken)
       fs.writeFileSync(tokenPath, encrypted)
@@ -80,6 +157,7 @@ const saveToken = (token: string) => {
 
 const clearToken = () => {
   currentToken = ''
+  authCookies = {}
 
   try {
     if (fs.existsSync(tokenPath)) {
@@ -90,12 +168,11 @@ const clearToken = () => {
   }
 
   try {
-    const oldCookiePath = join(app.getPath('userData'), 'session_cookies.txt')
-    if (fs.existsSync(oldCookiePath)) {
-      fs.unlinkSync(oldCookiePath)
+    if (fs.existsSync(cookiePath)) {
+      fs.unlinkSync(cookiePath)
     }
   } catch (e) {
-    log.warn('Failed to remove legacy cookie file:', e)
+    log.warn('Failed to remove persisted cookie file:', e)
   }
 }
 
@@ -110,19 +187,21 @@ const loadToken = () => {
         currentToken = normalizeTokenInput(buffer.toString('utf8'))
         log.info('Loaded plain text token from disk (fallback)')
       }
-    } else {
-      // Compatibility: Check for old cookie file
-      const oldCookiePath = join(app.getPath('userData'), 'session_cookies.txt')
-      if (fs.existsSync(oldCookiePath)) {
-        const oldCookies = fs.readFileSync(oldCookiePath, 'utf8')
-        // Try to extract token from old cookie string
-        const match = oldCookies.match(/kun-galgame-patch-moe-token=([^;]+)/)
-        if (match) {
-          currentToken = normalizeTokenInput(match[1])
-          saveToken(currentToken)
-          log.info('Migrated old cookie to encrypted token')
-          fs.unlinkSync(oldCookiePath) // Clean up old file
-        }
+    }
+
+    if (fs.existsSync(cookiePath)) {
+      const rawCookies = fs.readFileSync(cookiePath, 'utf8')
+      authCookies = rawCookies
+        .split(';')
+        .map((entry) => parseCookiePair(entry.trim()))
+        .filter((value): value is { name: string; value: string } => Boolean(value))
+        .reduce<Record<string, string>>((accumulator, cookie) => {
+          accumulator[cookie.name] = cookie.value
+          return accumulator
+        }, {})
+
+      if (!currentToken && authCookies['kun-galgame-patch-moe-token']) {
+        currentToken = normalizeTokenInput(authCookies['kun-galgame-patch-moe-token'])
       }
     }
   } catch (e) {
@@ -166,7 +245,7 @@ API_CLIENT.interceptors.request.use((config) => {
     
     // 2. Compatibility Cookie Header (for backend middleware)
     const existingCookie = config.headers['Cookie'] as string | undefined;
-    const authCookie = buildAuthCookie(currentToken);
+    const authCookie = serializeAuthCookies() || buildAuthCookie(currentToken);
     
     if (existingCookie) {
       if (!existingCookie.includes('kun-galgame-patch-moe-token')) {
@@ -187,17 +266,18 @@ API_CLIENT.interceptors.request.use((config) => {
 API_CLIENT.interceptors.response.use((response) => {
   const setCookies = response.headers['set-cookie'] as string[] | undefined;
   if (setCookies) {
+    updateAuthCookiesFromSetCookie(setCookies)
+
     // Extract the specific token from Set-Cookie headers
     for (const cookieStr of setCookies) {
       const match = cookieStr.match(/kun-galgame-patch-moe-token=([^;]+)/);
       if (match) {
         const newToken = normalizeTokenInput(match[1]);
         if (newToken !== currentToken) {
-          currentToken = newToken;
-          saveToken(currentToken);
+          saveToken(newToken);
           log.info('[API] JWT Token updated and encrypted');
         }
-        break; 
+        break;
       }
     }
   }
@@ -1047,6 +1127,11 @@ handleWithLog('tg-logout', async () => {
   return { success: true }
 })
 
+handleWithLog('tg-clear-persisted-auth', async () => {
+  clearToken()
+  return { success: true }
+})
+
 handleWithLog('tg-search-tags', async (_event, keyword: string) => {
   const response = await API_CLIENT.get('/tag', { params: { name: keyword, limit: 20 } })
   return ensureValidResponse(response.data)
@@ -1080,4 +1165,37 @@ handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number,
 handleWithLog('tg-get-favorite-folders', async (_event, uid: number) => {
   const response = await API_CLIENT.get('/user/profile/favorite/folder', { params: { uid } })
   return ensureValidResponse(response.data)
+})
+
+handleWithLog('tg-local-collections-list', async () => {
+  return listLocalCollections()
+})
+
+handleWithLog('tg-local-collections-create', async (_event, name: string) => {
+  createLocalCollection(name)
+  return listLocalCollections()
+})
+
+handleWithLog('tg-local-collections-delete', async (_event, collectionId: number) => {
+  deleteLocalCollection(collectionId)
+  return listLocalCollections()
+})
+
+handleWithLog('tg-local-collections-add-item', async (_event, collectionId: number, game: {
+  id: number
+  uniqueId: string
+  name: string
+  banner?: string | null
+  averageRating?: number
+  viewCount?: number
+  downloadCount?: number
+  alias?: string[]
+}) => {
+  addItemToLocalCollection(collectionId, game)
+  return listLocalCollections()
+})
+
+handleWithLog('tg-local-collections-remove-item', async (_event, collectionId: number, uniqueId: string) => {
+  removeItemFromLocalCollection(collectionId, uniqueId)
+  return listLocalCollections()
 })

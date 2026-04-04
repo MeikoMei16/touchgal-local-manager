@@ -4,6 +4,35 @@ export interface LocalFolder {
   tg_id: string | null;
 }
 
+export interface LocalCollectionItem {
+  gameId: number;
+  resourceId: number;
+  uniqueId: string;
+  name: string;
+  banner: string | null;
+  averageRating: number;
+  viewCount: number;
+  downloadCount: number;
+}
+
+export interface LocalCollection {
+  id: number;
+  name: string;
+  itemCount: number;
+  items: LocalCollectionItem[];
+}
+
+export interface LocalCollectionGameInput {
+  id: number;
+  uniqueId: string;
+  name: string;
+  banner?: string | null;
+  averageRating?: number;
+  viewCount?: number;
+  downloadCount?: number;
+  alias?: string[];
+}
+
 export interface ElectronAPI {
   // Local File System
   scanLocalLibrary: (paths: string[]) => Promise<LocalFolder[]>;
@@ -20,6 +49,7 @@ export interface ElectronAPI {
   verifyCaptcha: (sessionId: string, selectedIds: string[]) => Promise<any>;
   login: (username: string, password: string, captcha: string) => Promise<any>;
   logout: () => Promise<{ success: boolean }>;
+  clearPersistedAuth: () => Promise<{ success: boolean }>;
   searchTags: (keyword: string) => Promise<any>;
   getUserStatus: (id: number) => Promise<any>;
   getUserStatusSelf: () => Promise<any>;
@@ -27,6 +57,11 @@ export interface ElectronAPI {
   getUserRatings: (uid: number, page: number, limit: number) => Promise<any>;
   getUserResources: (uid: number, page: number, limit: number) => Promise<any>;
   getFavoriteFolders: (uid: number) => Promise<any>;
+  getLocalCollections: () => Promise<LocalCollection[]>;
+  createLocalCollection: (name: string) => Promise<LocalCollection[]>;
+  deleteLocalCollection: (collectionId: number) => Promise<LocalCollection[]>;
+  addLocalCollectionItem: (collectionId: number, game: LocalCollectionGameInput) => Promise<LocalCollection[]>;
+  removeLocalCollectionItem: (collectionId: number, uniqueId: string) => Promise<LocalCollection[]>;
 }
 
 declare global {

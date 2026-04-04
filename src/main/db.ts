@@ -5,6 +5,35 @@ import { existsSync, mkdirSync } from 'node:fs'
 
 let db: Database.Database
 
+export interface LocalCollectionGamePayload {
+  id: number
+  uniqueId: string
+  name: string
+  banner?: string | null
+  averageRating?: number
+  viewCount?: number
+  downloadCount?: number
+  alias?: string[]
+}
+
+export interface LocalCollectionItemRecord {
+  gameId: number
+  resourceId: number
+  uniqueId: string
+  name: string
+  banner: string | null
+  averageRating: number
+  viewCount: number
+  downloadCount: number
+}
+
+export interface LocalCollectionRecord {
+  id: number
+  name: string
+  itemCount: number
+  items: LocalCollectionItemRecord[]
+}
+
 export const initDb = () => {
   const userDataPath = app.getPath('userData')
   const dbPath = join(userDataPath, 'touchgal.db')
@@ -231,4 +260,98 @@ export const getCachedDetail = (uniqueId: string) => {
   const db = getDb()
   const row = db.prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string | null } | undefined
   return row?.detail_json ? JSON.parse(row.detail_json) : null
+}
+
+export const listLocalCollections = (): LocalCollectionRecord[] => {
+  const db = getDb()
+  const collections = db.prepare(`
+    SELECT c.id, c.name
+    FROM collections c
+    ORDER BY c.id DESC
+  `).all() as Array<{ id: number; name: string }>
+
+  const itemStmt = db.prepare(`
+    SELECT
+      g.id AS gameId,
+      g.id AS resourceId,
+      g.unique_id AS uniqueId,
+      g.name AS name,
+      g.banner_url AS banner,
+      g.avg_rating AS averageRating,
+      g.view_count AS viewCount,
+      g.download_count AS downloadCount
+    FROM collection_items ci
+    JOIN games g ON g.id = ci.game_id
+    WHERE ci.collection_id = ?
+    ORDER BY ci.rowid DESC
+  `)
+
+  return collections.map((collection) => {
+    const items = itemStmt.all(collection.id) as LocalCollectionItemRecord[]
+    return {
+      ...collection,
+      itemCount: items.length,
+      items
+    }
+  })
+}
+
+export const createLocalCollection = (name: string): LocalCollectionRecord => {
+  const db = getDb()
+  const normalizedName = name.trim()
+  if (!normalizedName) {
+    throw new Error('Collection name is required')
+  }
+
+  const result = db.prepare(`
+    INSERT INTO collections (name)
+    VALUES (?)
+  `).run(normalizedName)
+
+  const id = Number(result.lastInsertRowid)
+  return {
+    id,
+    name: normalizedName,
+    itemCount: 0,
+    items: []
+  }
+}
+
+export const deleteLocalCollection = (collectionId: number) => {
+  const db = getDb()
+  const transaction = db.transaction((id: number) => {
+    db.prepare('DELETE FROM collection_items WHERE collection_id = ?').run(id)
+    db.prepare('DELETE FROM collections WHERE id = ?').run(id)
+  })
+
+  transaction(collectionId)
+  return { success: true }
+}
+
+export const addItemToLocalCollection = (collectionId: number, game: LocalCollectionGamePayload) => {
+  const db = getDb()
+  upsertGame(game)
+
+  const existingGame = db.prepare('SELECT id FROM games WHERE unique_id = ?').get(game.uniqueId) as { id: number } | undefined
+  if (!existingGame) {
+    throw new Error('Game metadata not found after upsert')
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO collection_items (collection_id, game_id)
+    VALUES (?, ?)
+  `).run(collectionId, existingGame.id)
+
+  return { success: true }
+}
+
+export const removeItemFromLocalCollection = (collectionId: number, uniqueId: string) => {
+  const db = getDb()
+  db.prepare(`
+    DELETE FROM collection_items
+    WHERE collection_id = ?
+      AND game_id = (SELECT id FROM games WHERE unique_id = ?)
+  `).run(collectionId, uniqueId)
+
+  return { success: true }
 }

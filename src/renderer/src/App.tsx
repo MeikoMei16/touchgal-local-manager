@@ -5,6 +5,7 @@ import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
 import { LoginModal } from './components/LoginModal';
 import { SearchView } from './components/SearchView';
+import { FavoritesView } from './components/FavoritesView';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
 import { useAuthStore } from './store/useTouchGalStore';
@@ -104,7 +105,7 @@ const App: React.FC = () => {
           {activeTab === 'home' && <Home />}
           {activeTab === 'search' && <SearchView />}
           {activeTab === 'library' && <Library />}
-          {activeTab === 'favorites' && <Home />}
+          {activeTab === 'favorites' && <FavoritesView />}
           {activeTab === 'profile' && <ProfileView />}
           {activeTab === 'settings' && <SettingsView />}
         </section>

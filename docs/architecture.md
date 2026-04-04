@@ -56,11 +56,13 @@ Rules:
 Session handling notes:
 
 - the main process stores the TouchGal token under Electron `userData`
+- the main process also persists the upstream auth-cookie jar under Electron `userData` so app restarts can replay the full auth context, not only the bearer token
 - token input is normalized before persistence so legacy `Bearer ...`, full cookie strings, and whitespace-polluted values do not poison request headers
 - upstream browse/search requests attach a `Cookie` header for the NSFW preference cookie even when there is no auth token
-- the auth cookie segment is attached only when there is a valid normalized auth token to send
+- auth cookie construction prefers the persisted upstream auth-cookie jar and falls back to the normalized token-derived cookie only when no cookie jar exists
 - logout is finalized in the main process by clearing the in-memory token and removing persisted token files through `tg-logout`
 - renderer startup must not trust previously persisted `user` objects as proof of login; it should revalidate through the main-process session instead
+- if startup revalidation reports that the saved session is invalid, renderer now asks the main process to clear persisted auth artifacts so stale credentials do not loop forever
 
 ### Preload
 
@@ -88,6 +90,7 @@ Owns:
 Renderer state implementation is now split:
 
 - [`src/renderer/src/store/authStore.ts`](../src/renderer/src/store/authStore.ts): auth UI state
+- [`src/renderer/src/store/localCollectionStore.ts`](../src/renderer/src/store/localCollectionStore.ts): local collections state and CRUD
 - [`src/renderer/src/store/uiStore.ts`](../src/renderer/src/store/uiStore.ts): UI store assembly and persistence
 - [`src/renderer/src/store/uiActions/`](../src/renderer/src/store/uiActions): browse, detail, and advanced action modules
 - [`src/renderer/src/store/useTouchGalStore.ts`](../src/renderer/src/store/useTouchGalStore.ts): compatibility bridge only
@@ -102,6 +105,7 @@ Key frontend state split:
 - advanced checkpoint state inside each dataset cache: `catalogTotalPages`, `catalogCompletedPages`, `enrichmentCompletedIds`
 - current result view: `resources`, `totalResources`, `currentPage`, `homeMode`
 - auth modal state: captcha payloads, login errors, and session-expired UI state
+- local collection state: dedicated SQLite-backed user-authored local favorites collections
 - detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
 - persisted interaction preference: `detailSecondaryClickAction`
 
@@ -112,12 +116,14 @@ Renderer code split:
 - advanced-filter pure helpers: [`src/renderer/src/features/home/advancedDataset.ts`](../src/renderer/src/features/home/advancedDataset.ts)
 - detail normalization helpers: [`src/renderer/src/features/detail/detailResource.ts`](../src/renderer/src/features/detail/detailResource.ts)
 - detail overlay subcomponents: [`src/renderer/src/components/detail/`](../src/renderer/src/components/detail)
+- Favorites page: [`src/renderer/src/components/FavoritesView.tsx`](../src/renderer/src/components/FavoritesView.tsx)
 
 Renderer persistence notes:
 
 - active left-nav tab is persisted in renderer `localStorage` so refresh returns to the same primary section
 - homepage UI state is persisted through Zustand in renderer `localStorage`
 - auth UI state is persisted separately from the encrypted token managed by the main process
+- local collections are persisted in SQLite via main-process CRUD rather than renderer `localStorage`
 - renderer auth persistence is intentionally narrow and must not treat stored `user` profile data as authoritative session state across app restart
 - renderer logout must clear both layers: renderer auth state and the main-process token
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
@@ -181,8 +187,10 @@ Renderer session restore behavior:
 
 1. On app startup, renderer calls `getUserStatusSelf()` through the main-process relay instead of trusting persisted `user` state as proof of login.
 2. If the main-process token is still valid, renderer rebuilds `user` and `userProfile` from the resolved self identity and profile payload.
-3. If self-status fails or returns no usable id, renderer clears auth state so the app does not present a stale logged-in UI.
-4. This keeps detail discussion/rating gating aligned with the real main-process session after app restart.
+3. The main process restores both the normalized token and any persisted upstream auth cookies before that self-status request runs.
+4. If self-status fails or returns no usable id, renderer clears auth state so the app does not present a stale logged-in UI.
+5. If the failure is a true restore failure, renderer also clears persisted auth artifacts in the main process so the next startup does not keep replaying a known-bad session.
+6. This keeps detail discussion/rating gating aligned with the real main-process session after app restart.
 
 Advanced homepage browsing:
 
@@ -244,6 +252,16 @@ Login and captcha flow:
 3. Credential failures after a successful captcha solve clear the captcha UI and return the user to the login form with an error, rather than immediately chaining into another captcha prompt.
 4. Successful login clears captcha UI state while token/session handling remains in the main process.
 5. Logout clears the persisted TouchGal token in the main process in addition to resetting renderer auth state.
+6. Successful login may also rotate additional upstream auth cookies; those are now persisted together with the token for later restore.
+
+Favorites architecture:
+
+1. The `favorites` primary nav now owns a dedicated page rather than reusing homepage browse UI.
+2. Favorites are modeled as two parallel domains instead of one merged abstraction.
+3. Local collections are always available, stored in SQLite, and writable without login.
+4. Cloud favorite folders remain upstream-owned and are currently shown as a read-only companion section when logged in.
+5. Detail-header favorite interaction opens a menu that prioritizes local collection add/remove actions and also surfaces current cloud folder visibility state.
+6. Local collection item writes upsert the minimal game shell into SQLite before linking the game to a collection so collection foreign keys do not depend on broader browse-cache rollout.
 
 Profile loading:
 
@@ -329,6 +347,7 @@ Current schema areas include:
 - `play_sessions`
 - `personal_metadata`
 - `collections`
+- `collection_items`
 
 Status note:
 
@@ -339,6 +358,7 @@ Status note:
 - Near-term persistence should stay narrow and local-first:
   renderer UI restore state
   main-process auth/session artifacts
+  local collections
   download queue state
   local installation/link metadata
   explicitly user-authored local metadata once that UI is implemented
