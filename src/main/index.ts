@@ -1162,8 +1162,10 @@ handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number,
   return ensureValidResponse(response.data)
 })
 
-handleWithLog('tg-get-favorite-folders', async (_event, uid: number) => {
-  const response = await API_CLIENT.get('/user/profile/favorite/folder', { params: { uid } })
+handleWithLog('tg-get-favorite-folders', async (_event, uid: number, patchId?: number) => {
+  const response = await API_CLIENT.get('/user/profile/favorite/folder', {
+    params: patchId ? { uid, patchId } : { uid }
+  })
   return ensureValidResponse(response.data)
 })
 

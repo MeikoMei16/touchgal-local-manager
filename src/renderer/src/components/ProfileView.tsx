@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/useTouchGalStore';
 import { useUIStore } from '../store/uiStore';
-import { MessageSquare, Star, Package, Heart, Coins, Users, User } from 'lucide-react';
+import { MessageSquare, Star, Package, Heart, Coins, Users, User, Loader2 } from 'lucide-react';
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 import type { TouchGalResource } from '../types';
 
@@ -34,6 +34,7 @@ const ProfileView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections'>('comments');
   const [selectedCloudCollection, setSelectedCloudCollection] = useState<any | null>(null);
+  const [openingCloudCollectionId, setOpeningCloudCollectionId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user && !userProfile) {
@@ -71,6 +72,11 @@ const ProfileView: React.FC = () => {
   const counts = userProfile?._count || {};
   const handleOpenCloudResource = async (resource: TouchGalResource) => {
     await selectResource(resource.uniqueId, resource);
+  };
+
+  const handleOpenCloudCollection = (folder: any) => {
+    setOpeningCloudCollectionId(folder.id);
+    setSelectedCloudCollection(folder);
   };
 
   return (
@@ -219,8 +225,12 @@ const ProfileView: React.FC = () => {
                     userCollections.map(folder => (
                       <button
                         key={folder.id}
-                        className="flex w-full items-center justify-between p-5 bg-surface-container-low rounded-2xl border border-outline-variant hover:border-emerald-200 transition-all group cursor-pointer text-left"
-                        onClick={() => setSelectedCloudCollection(folder)}
+                        className={`flex w-full items-center justify-between p-5 rounded-2xl border transition-all group cursor-pointer text-left ${
+                          selectedCloudCollection?.id === folder.id
+                            ? 'border-emerald-300 bg-white shadow-lg shadow-emerald-100/70'
+                            : 'border-outline-variant bg-surface-container-low hover:border-emerald-200'
+                        }`}
+                        onClick={() => handleOpenCloudCollection(folder)}
                         type="button"
                       >
                         <div className="flex items-center gap-4">
@@ -232,8 +242,16 @@ const ProfileView: React.FC = () => {
                               <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">{folder.is_public ? 'Public' : 'Private'} Collection</p>
                            </div>
                         </div>
-                        <div className="bg-white px-3 py-1 rounded-full text-xs font-black text-on-surface-variant shadow-sm">
-                           {folder._count?.patch || 0}
+                        <div className="flex items-center gap-3">
+                           {openingCloudCollectionId === folder.id && (
+                             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-black text-emerald-700">
+                               <Loader2 size={12} className="animate-spin" />
+                               打开中
+                             </div>
+                           )}
+                           <div className="bg-white px-3 py-1 rounded-full text-xs font-black text-on-surface-variant shadow-sm">
+                              {folder._count?.patch || 0}
+                           </div>
                         </div>
                       </button>
                     ))
@@ -248,7 +266,10 @@ const ProfileView: React.FC = () => {
         <CloudCollectionOverlay
           allFolders={userCollections}
           folder={selectedCloudCollection}
-          onClose={() => setSelectedCloudCollection(null)}
+          onClose={() => {
+            setSelectedCloudCollection(null);
+            setOpeningCloudCollectionId(null);
+          }}
           onCollectionMutated={async () => {
             await fetchUserActivity('collections');
           }}

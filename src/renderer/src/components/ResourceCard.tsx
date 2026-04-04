@@ -91,20 +91,20 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
           </div>
         )}
 
-        <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[13px] font-bold text-slate-500 transition-colors group-hover:text-slate-700">
-          <div className="flex items-center gap-1.5 whitespace-nowrap" title="浏览数">
+        <div className="mt-auto grid grid-cols-4 items-center gap-2 pt-1 text-[13px] font-bold text-slate-500 transition-colors group-hover:text-slate-700">
+          <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap" title="浏览数">
              <Eye size={14} />
              <span>{formatStat(resource.viewCount || (resource as any).view || 0)}</span>
           </div>
-          <div className="flex items-center gap-1.5 whitespace-nowrap" title="下载数">
+          <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap" title="下载数">
              <Download size={14} />
              <span>{formatStat(resource.downloadCount || (resource as any).download || 0)}</span>
           </div>
-          <div className="flex items-center gap-1.5 whitespace-nowrap" title="收藏数">
+          <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap" title="收藏数">
              <Heart size={14} />
              <span>{formatStat(resource.favoriteCount)}</span>
           </div>
-          <div className="flex items-center gap-1.5 whitespace-nowrap" title="评论数">
+          <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap" title="评论数">
              <MessageSquare size={14} />
              <span>{formatStat(resource.commentCount || (resource as any).comments || 0)}</span>
           </div>

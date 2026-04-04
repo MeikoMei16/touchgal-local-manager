@@ -7,6 +7,7 @@ import {
   FolderOpen,
   FolderPlus,
   Heart,
+  Loader2,
   Lock,
   Search,
   Trash2,
@@ -714,6 +715,7 @@ export const FavoritesView: React.FC = () => {
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [selectedCollectionId, setSelectedCollectionId] = React.useState<number | null>(null);
   const [selectedCloudCollection, setSelectedCloudCollection] = React.useState<any | null>(null);
+  const [openingCloudCollectionId, setOpeningCloudCollectionId] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     if (!hasLoaded) {
@@ -838,6 +840,11 @@ export const FavoritesView: React.FC = () => {
         await handleDeleteCloudCollection(folder.id);
       }
     });
+  };
+
+  const handleOpenCloudCollection = (folder: any) => {
+    setOpeningCloudCollectionId(folder.id);
+    setSelectedCloudCollection(folder);
   };
 
   const handleConfirmDialog = async () => {
@@ -1094,35 +1101,56 @@ export const FavoritesView: React.FC = () => {
                   {userCollections.map((folder: any) => (
                     <article
                       key={folder.id}
-                      className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all hover:border-emerald-200 hover:bg-white"
+                      className={`rounded-[1.5rem] border p-4 transition-all ${
+                        selectedCloudCollection?.id === folder.id
+                          ? 'border-emerald-200 bg-white shadow-lg shadow-emerald-100/70'
+                          : 'border-slate-100 bg-slate-50 hover:border-emerald-200 hover:bg-white hover:shadow-md hover:shadow-slate-200/60'
+                      }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-start justify-between gap-3">
                         <button
-                          className="min-w-0 flex-1 text-left"
-                          onClick={() => setSelectedCloudCollection(folder)}
+                          className="min-w-0 flex-1 rounded-[1.25rem] text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                          onClick={() => handleOpenCloudCollection(folder)}
                           type="button"
                         >
-                          <div className="truncate text-base font-black text-slate-900">{folder.name}</div>
-                          <div className="mt-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                            {folder.is_public ? 'Public' : 'Private'}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-base font-black text-slate-900">{folder.name}</div>
+                              <div className="mt-1 text-[11px] font-black tracking-[0.18em] text-slate-400">
+                                {folder.is_public ? '公开收藏夹' : '私有收藏夹'}
+                              </div>
+                            </div>
+                            <div className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 shadow-sm">
+                              {folder._count?.patch || 0} 项
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <div className="text-xs font-bold text-slate-400">
+                              {openingCloudCollectionId === folder.id ? '正在打开云端收藏夹...' : '点击查看该收藏夹中的全部游戏'}
+                            </div>
+                            <div
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-black transition-all ${
+                                openingCloudCollectionId === folder.id
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {openingCloudCollectionId === folder.id ? <Loader2 size={12} className="animate-spin" /> : <FolderOpen size={12} />}
+                              {openingCloudCollectionId === folder.id ? '载入中' : '查看内容'}
+                            </div>
                           </div>
                         </button>
-                        <div className="flex items-center gap-2">
-                          <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 shadow-sm">
-                            {folder._count?.patch || 0} 项
-                          </div>
-                          <button
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              requestDeleteCloudCollection(folder);
-                            }}
-                            type="button"
-                          >
-                            <Trash2 size={12} />
-                            删除
-                          </button>
-                        </div>
+                        <button
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            requestDeleteCloudCollection(folder);
+                          }}
+                          type="button"
+                        >
+                          <Trash2 size={12} />
+                          删除
+                        </button>
                       </div>
                     </article>
                   ))}
@@ -1149,7 +1177,10 @@ export const FavoritesView: React.FC = () => {
         <CloudCollectionOverlay
           allFolders={userCollections}
           folder={selectedCloudCollection}
-          onClose={() => setSelectedCloudCollection(null)}
+          onClose={() => {
+            setSelectedCloudCollection(null);
+            setOpeningCloudCollectionId(null);
+          }}
           onCollectionMutated={async () => {
             if (user) {
               await fetchUserActivity('collections');

@@ -82,8 +82,8 @@ export const TouchGalClient = {
     return await window.api.getUserResources(uid, pageNum, limitNum);
   },
 
-  getFavoriteFolders: async (uid: number) => {
-    return await window.api.getFavoriteFolders(uid);
+  getFavoriteFolders: async (uid: number, patchId?: number) => {
+    return await window.api.getFavoriteFolders(uid, patchId);
   },
 
   createFavoriteFolder: async (input: { name: string; description?: string; isPublic?: boolean }) => {

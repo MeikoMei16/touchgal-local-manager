@@ -56,7 +56,7 @@ export interface ElectronAPI {
   getUserComments: (uid: number, page: number, limit: number) => Promise<any>;
   getUserRatings: (uid: number, page: number, limit: number) => Promise<any>;
   getUserResources: (uid: number, page: number, limit: number) => Promise<any>;
-  getFavoriteFolders: (uid: number) => Promise<any>;
+  getFavoriteFolders: (uid: number, patchId?: number) => Promise<any>;
   createFavoriteFolder: (input: { name: string; description?: string; isPublic?: boolean }) => Promise<any>;
   deleteFavoriteFolder: (folderId: number) => Promise<any>;
   getFavoriteFolderPatches: (folderId: number, page: number, limit: number) => Promise<any>;

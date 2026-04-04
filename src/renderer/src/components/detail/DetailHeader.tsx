@@ -1,9 +1,11 @@
 import React from 'react';
-import { Download, Globe, Heart, MessageSquare, Share2, Star } from 'lucide-react';
+import { Check, Download, Globe, Heart, Loader2, MessageSquare, Star } from 'lucide-react';
 import { TouchGalDetail } from '../../types';
 import { RatingHistogram } from '../RatingHistogram';
 import { useAuthStore } from '../../store/authStore';
 import { useLocalCollectionStore } from '../../store/localCollectionStore';
+import type { DetailTabType } from './DetailTabs';
+import { TouchGalClient } from '../../data/TouchGalClient';
 
 const RESOURCE_SECTION_LABELS: Record<string, string> = {
   galgame: 'PC游戏',
@@ -46,9 +48,10 @@ const mapResourcePlatformLabel = (value: string) => RESOURCE_PLATFORM_LABELS[val
 interface DetailHeaderProps {
   resource: TouchGalDetail;
   onImageClick?: (url: string) => void;
+  onNavigateTab?: (tab: DetailTabType) => void;
 }
 
-export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageClick }) => {
+export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageClick, onNavigateTab }) => {
   const { ratingSummary } = resource;
   const {
     collections,
@@ -59,11 +62,14 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
     addToCollection,
     removeFromCollection
   } = useLocalCollectionStore();
-  const { user, userCollections, fetchUserActivity, setIsLoginOpen } = useAuthStore();
+  const { user, fetchUserActivity, setIsLoginOpen } = useAuthStore();
   const [isCollectionMenuOpen, setIsCollectionMenuOpen] = React.useState(false);
   const [newCollectionName, setNewCollectionName] = React.useState('');
   const [collectionError, setCollectionError] = React.useState<string | null>(null);
   const [isSavingCollection, setIsSavingCollection] = React.useState(false);
+  const [isCloudCollectionsLoading, setIsCloudCollectionsLoading] = React.useState(false);
+  const [activeCloudFolderId, setActiveCloudFolderId] = React.useState<number | null>(null);
+  const [cloudFolders, setCloudFolders] = React.useState<any[]>([]);
   const resourceTags = React.useMemo(() => {
     const seen = new Set<string>();
     const tags: string[] = [];
@@ -98,9 +104,38 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
   }, [fetchCollections, hasLoaded]);
 
   React.useEffect(() => {
-    if (!isCollectionMenuOpen || !user || userCollections.length > 0) return;
-    void fetchUserActivity('collections');
-  }, [fetchUserActivity, isCollectionMenuOpen, user, userCollections.length]);
+    if (!isCollectionMenuOpen || !user || !resource.id) return;
+
+    let isMounted = true;
+
+    const loadCloudFolders = async () => {
+      setIsCloudCollectionsLoading(true);
+      setCollectionError(null);
+      try {
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
+        const folders = await TouchGalClient.getFavoriteFolders(Number(uid), resource.id);
+        if (isMounted) {
+          setCloudFolders(Array.isArray(folders) ? folders : []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setCollectionError(error instanceof Error ? error.message : 'Failed to load cloud collections');
+          setCloudFolders([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsCloudCollectionsLoading(false);
+        }
+      }
+    };
+
+    void loadCloudFolders();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isCollectionMenuOpen, resource.id, user]);
 
   const resourcePayload = React.useMemo(() => ({
     id: resource.id,
@@ -145,10 +180,35 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
     }
   };
 
+  const handleAddToCloudCollection = async (folderId: number) => {
+    if (!user || !resource.id) return;
+
+    setCollectionError(null);
+    setActiveCloudFolderId(folderId);
+    try {
+      await TouchGalClient.togglePatchFavorite(resource.id, folderId);
+
+      const uid = user?.uid || user?.id;
+      if (uid) {
+        const folders = await TouchGalClient.getFavoriteFolders(Number(uid), resource.id);
+        setCloudFolders(Array.isArray(folders) ? folders : []);
+      }
+      await fetchUserActivity('collections');
+    } catch (error) {
+      setCollectionError(error instanceof Error ? error.message : 'Failed to update cloud collection');
+    } finally {
+      setActiveCloudFolderId(null);
+    }
+  };
+
+  const routeToTab = (tab: DetailTabType) => {
+    onNavigateTab?.(tab);
+  };
+
   return (
-    <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 grid grid-cols-1 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
+    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 grid grid-cols-1 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
       <div
-        className={`relative aspect-[16/10] sm:aspect-[5/3] xl:min-h-full xl:aspect-auto bg-slate-100 overflow-hidden ${resource.banner ? 'cursor-zoom-in' : ''}`}
+        className={`relative aspect-[16/10] overflow-hidden rounded-t-[2rem] bg-slate-100 sm:aspect-[5/3] xl:min-h-full xl:aspect-auto xl:rounded-l-[2rem] xl:rounded-tr-none ${resource.banner ? 'cursor-zoom-in' : ''}`}
         onClick={() => {
           if (resource.banner) onImageClick?.(resource.banner)
         }}
@@ -189,11 +249,19 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
             </div>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
+              <button
+                className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95"
+                onClick={() => routeToTab('links')}
+                type="button"
+              >
                 <Download size={18} />
                 <span>下载</span>
               </button>
-              <button className="bg-blue-50 text-blue-600 px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 border border-blue-100 hover:bg-blue-100 transition-all active:scale-95">
+              <button
+                className="bg-blue-50 text-blue-600 px-6 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 border border-blue-100 hover:bg-blue-100 transition-all active:scale-95"
+                onClick={() => routeToTab('evaluation')}
+                type="button"
+              >
                 <Star size={18} />
                 <span>评分</span>
               </button>
@@ -290,21 +358,61 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
                             登录后可查看云端收藏夹。
                           </div>
                         )}
-                        {user && userCollections.length === 0 && (
-                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
-                            暂无云端收藏夹，当前版本先展示列表。
+                        {user && isCloudCollectionsLoading && (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
+                            正在读取云端收藏夹...
                           </div>
                         )}
-                        {userCollections.slice(0, 4).map((folder: any) => (
-                          <div
-                            key={folder.id}
-                            className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600"
-                          >
-                            <span className="font-black text-slate-800">{folder.name}</span>
-                            <span className="text-[11px] font-black uppercase tracking-wide text-slate-400">
-                              {folder._count?.patch || 0} 项
-                            </span>
+                        {user && !isCloudCollectionsLoading && cloudFolders.length === 0 && (
+                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
+                            暂无云端收藏夹。
                           </div>
+                        )}
+                        {cloudFolders.map((folder: any) => (
+                          <button
+                            key={folder.id}
+                            className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-all ${
+                              folder.isAdd
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-slate-200 text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-slate-900'
+                            }`}
+                            disabled={activeCloudFolderId !== null}
+                            onClick={() => void handleAddToCloudCollection(folder.id)}
+                            type="button"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate font-black text-slate-800">{folder.name}</div>
+                              <div className="mt-1 text-[11px] font-bold text-slate-400">
+                                {folder.isAdd ? '再次点击可从这个云端收藏夹移除' : '点击直接加入这个云端收藏夹'}
+                              </div>
+                            </div>
+                            <div className="ml-3 flex shrink-0 items-center gap-2">
+                              <span className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                {folder._count?.patch || 0} 项
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                                  folder.isAdd
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {activeCloudFolderId === folder.id ? (
+                                  <>
+                                    <Loader2 size={12} className="animate-spin" />
+                                    处理中
+                                  </>
+                                ) : folder.isAdd ? (
+                                  <>
+                                    <Check size={12} />
+                                    已加入
+                                  </>
+                                ) : (
+                                  '加入'
+                                )}
+                              </span>
+                            </div>
+                          </button>
                         ))}
                       </div>
 
@@ -316,11 +424,13 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ resource, onImageCli
                     </div>
                   )}
                 </div>
-                {[Share2, MessageSquare].map((Icon, i) => (
-                  <button key={i} className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 active:scale-95">
-                    <Icon size={20} />
-                  </button>
-                ))}
+                <button
+                  className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 active:scale-95"
+                  onClick={() => routeToTab('board')}
+                  type="button"
+                >
+                  <MessageSquare size={20} />
+                </button>
               </div>
             </div>
           </div>

@@ -68,6 +68,12 @@ Current main-process relay:
 Parameters:
 
 - `uid`
+- `patchId` (optional)
+
+Important behavior:
+
+- when `patchId` is present, upstream returns folder rows decorated with current-game membership state such as `isAdd`
+- the detail-header favorite menu now relies on this variant so cloud folder rows can behave as add/remove toggles for the active game
 - `page`
 - `limit`
 
@@ -221,6 +227,7 @@ The renderer currently consumes these methods:
 - `getUserRatings(uid, page, limit)`
 - `getUserResources(uid, page, limit)`
 - `getFavoriteFolders(uid)`
+- `getFavoriteFolders(uid, patchId?)`
 - `createFavoriteFolder({ name, description, isPublic })`
 - `deleteFavoriteFolder(folderId)`
 - `getFavoriteFolderPatches(folderId, page, limit)`
@@ -232,4 +239,5 @@ The renderer currently consumes these methods:
 - profile summary counts in the renderer prefer `_count.patch_favorite` for favorite-folder totals, with fallback handling for older payload shapes
 - cloud folder counts should be refreshed after mutation so overlay contents and parent folder cards stay aligned
 - Favorites-page cloud folder cards now own their own delete action; the page no longer uses a separate shared header-level delete selector
+- the detail overlay now fetches folder rows with `patchId` so the cloud favorite menu can show and toggle exact per-folder membership for the current game
 - If new user endpoints are added to `window.api`, update this document in the same change.

@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   getUserComments: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-comments', uid, page, limit),
   getUserRatings: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-ratings', uid, page, limit),
   getUserResources: (uid: number, page: number, limit: number) => ipcRenderer.invoke('tg-get-user-resources', uid, page, limit),
-  getFavoriteFolders: (uid: number) => ipcRenderer.invoke('tg-get-favorite-folders', uid),
+  getFavoriteFolders: (uid: number, patchId?: number) => ipcRenderer.invoke('tg-get-favorite-folders', uid, patchId),
   createFavoriteFolder: (input: { name: string; description?: string; isPublic?: boolean }) =>
     ipcRenderer.invoke('tg-create-favorite-folder', input),
   deleteFavoriteFolder: (folderId: number) => ipcRenderer.invoke('tg-delete-favorite-folder', folderId),

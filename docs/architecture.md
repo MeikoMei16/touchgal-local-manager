@@ -280,6 +280,9 @@ Favorites architecture:
 22. Cloud folder deletion is now exposed from each cloud folder card, not from a shared header-level delete control, so the destructive action is visually bound to the folder it will remove.
 23. Both local and cloud folder deletion paths use a shared confirmation dialog that explicitly states the folder and all folder-item relations will be removed.
 24. To avoid invalid nested interactive markup, cloud folder list cards now render as non-button containers with separate open and delete button targets.
+25. The detail-header cloud favorites section now fetches `/user/profile/favorite/folder` with both `uid` and `patchId` when the menu opens, mirroring the upstream site so each folder row carries membership state for the current game.
+26. That detail-header cloud list behaves as a true toggle: clicking a folder adds the current game when absent and removes it when already present, matching the local collection mental model and the upstream `isAdd` UX.
+27. Detail-header cloud-folder rows also render per-row in-flight feedback so slow network IO does not look like a dead click target.
 
 Profile loading:
 

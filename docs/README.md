@@ -35,6 +35,7 @@ Current cross-cutting topics covered here:
 - cloud favorite folder mutation through upstream `/patch/favorite` toggle semantics
 - cloud favorite folder create/delete lifecycle through the upstream folder endpoints
 - cloud overlay batch move/remove behavior and current count-refresh rules
+- detail-overlay favorite menu now queries cloud folders with `patchId` and supports per-folder add/remove toggle behavior that matches the upstream site
 - current login and captcha interaction constraints
 - startup auth/session restore hardening, including persisted cookie restore and stale-auth cleanup
 - profile-shell and profile-tab loading states

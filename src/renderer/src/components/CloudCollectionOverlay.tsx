@@ -325,6 +325,22 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
                   </div>
                 </div>
 
+                {isLoading && (
+                  <div className="rounded-[1.35rem] border border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-slate-50 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm">
+                        <Loader2 size={18} className="animate-spin" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900">正在连接云端收藏夹</div>
+                        <div className="mt-1 text-xs font-bold text-slate-500">
+                          正在读取「{folder?.name || '未命名收藏夹'}」中的游戏列表，网络较慢时会稍等一下。
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="flex flex-wrap gap-3">
                     <button
