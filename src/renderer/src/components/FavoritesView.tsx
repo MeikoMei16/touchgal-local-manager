@@ -1,9 +1,21 @@
 import React from 'react';
-import { FolderOpen, FolderPlus, Heart, Lock, Search, Trash2, User, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  FolderCog,
+  FolderOpen,
+  FolderPlus,
+  Heart,
+  Lock,
+  Search,
+  Trash2,
+  User,
+  X
+} from 'lucide-react';
 import type { TouchGalResource } from '../types';
 import { useAuthStore, useUIStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
-import type { LocalCollection, LocalCollectionItem } from '../types/electron';
+import type { LocalCollection, LocalCollectionGameInput, LocalCollectionItem } from '../types/electron';
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 
 const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
@@ -26,6 +38,16 @@ const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
   ratingSummary: null
 });
 
+const toCollectionGameInput = (item: LocalCollectionItem): LocalCollectionGameInput => ({
+  id: item.resourceId,
+  uniqueId: item.uniqueId,
+  name: item.name,
+  banner: item.banner,
+  averageRating: item.averageRating,
+  viewCount: item.viewCount,
+  downloadCount: item.downloadCount
+});
+
 const summarizeCollection = (collection: LocalCollection) => {
   const totalDownloads = collection.items.reduce((sum, item) => sum + item.downloadCount, 0);
   const ratedItems = collection.items.filter((item) => item.averageRating > 0);
@@ -39,7 +61,9 @@ const summarizeCollection = (collection: LocalCollection) => {
 
 interface CollectionOverlayProps {
   actionError: string | null;
+  allCollections: LocalCollection[];
   collection: LocalCollection;
+  onAddToCollection: (collectionId: number, game: LocalCollectionGameInput) => Promise<void>;
   onClose: () => void;
   onDeleteCollection: (collectionId: number) => Promise<void>;
   onOpenResource: (item: LocalCollectionItem) => Promise<void>;
@@ -48,19 +72,33 @@ interface CollectionOverlayProps {
 
 const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
   actionError,
+  allCollections,
   collection,
+  onAddToCollection,
   onClose,
   onDeleteCollection,
   onOpenResource,
   onRemoveItem
 }) => {
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [activeUniqueId, setActiveUniqueId] = React.useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = React.useState(false);
+  const [bulkTargetId, setBulkTargetId] = React.useState<string>('');
+  const [activeActionKey, setActiveActionKey] = React.useState<string | null>(null);
+  const [activeManageId, setActiveManageId] = React.useState<string | null>(null);
+  const [manageTargetId, setManageTargetId] = React.useState<Record<string, string>>({});
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     scrollRef.current?.focus();
   }, []);
+
+  React.useEffect(() => {
+    setSelectedIds([]);
+    setSelectionMode(false);
+    setBulkTargetId('');
+    setActiveManageId(null);
+  }, [collection.id]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -81,34 +119,148 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
       })
     : collection.items;
   const { totalDownloads, averageRating } = summarizeCollection(collection);
+  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedItems = collection.items.filter((item) => selectedSet.has(item.uniqueId));
+  const otherCollections = allCollections.filter((candidate) => candidate.id !== collection.id);
+  const hasSelected = selectedIds.length > 0;
+  const allVisibleSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedSet.has(item.uniqueId));
+
+  React.useEffect(() => {
+    setSelectedIds((current) => current.filter((uniqueId) => collection.items.some((item) => item.uniqueId === uniqueId)));
+  }, [collection.items]);
 
   const handleOpenResource = async (item: LocalCollectionItem) => {
-    setActiveUniqueId(item.uniqueId);
+    setActiveActionKey(`open:${item.uniqueId}`);
     try {
       await onOpenResource(item);
     } finally {
-      setActiveUniqueId(null);
+      setActiveActionKey((current) => (current === `open:${item.uniqueId}` ? null : current));
     }
   };
 
   const handleRemoveItem = async (uniqueId: string) => {
-    setActiveUniqueId(uniqueId);
+    setActiveActionKey(`remove:${uniqueId}`);
     try {
       await onRemoveItem(collection.id, uniqueId);
+      setSelectedIds((current) => current.filter((id) => id !== uniqueId));
     } finally {
-      setActiveUniqueId(null);
+      setActiveActionKey((current) => (current === `remove:${uniqueId}` ? null : current));
     }
   };
 
   const handleDeleteCollection = async () => {
-    await onDeleteCollection(collection.id);
-    onClose();
+    setActiveActionKey('delete-collection');
+    try {
+      await onDeleteCollection(collection.id);
+      onClose();
+    } finally {
+      setActiveActionKey((current) => (current === 'delete-collection' ? null : current));
+    }
+  };
+
+  const toggleItemSelection = (uniqueId: string) => {
+    setSelectedIds((current) =>
+      current.includes(uniqueId) ? current.filter((id) => id !== uniqueId) : [...current, uniqueId]
+    );
+  };
+
+  const handleToggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      const visibleIds = new Set(filteredItems.map((item) => item.uniqueId));
+      setSelectedIds((current) => current.filter((id) => !visibleIds.has(id)));
+      return;
+    }
+
+    const merged = new Set(selectedIds);
+    filteredItems.forEach((item) => merged.add(item.uniqueId));
+    setSelectedIds(Array.from(merged));
+  };
+
+  const runBatch = async (items: LocalCollectionItem[], runner: (item: LocalCollectionItem) => Promise<void>) => {
+    for (const item of items) {
+      await runner(item);
+    }
+  };
+
+  const handleCopyItem = async (item: LocalCollectionItem, targetCollectionId: number) => {
+    setActiveActionKey(`copy:${item.uniqueId}:${targetCollectionId}`);
+    try {
+      await onAddToCollection(targetCollectionId, toCollectionGameInput(item));
+      setActiveManageId(null);
+    } finally {
+      setActiveActionKey((current) =>
+        current === `copy:${item.uniqueId}:${targetCollectionId}` ? null : current
+      );
+    }
+  };
+
+  const handleMoveItem = async (item: LocalCollectionItem, targetCollectionId: number) => {
+    setActiveActionKey(`move:${item.uniqueId}:${targetCollectionId}`);
+    try {
+      await onAddToCollection(targetCollectionId, toCollectionGameInput(item));
+      await onRemoveItem(collection.id, item.uniqueId);
+      setSelectedIds((current) => current.filter((id) => id !== item.uniqueId));
+      setActiveManageId(null);
+    } finally {
+      setActiveActionKey((current) =>
+        current === `move:${item.uniqueId}:${targetCollectionId}` ? null : current
+      );
+    }
+  };
+
+  const handleBulkRemove = async () => {
+    if (!hasSelected) return;
+    setActiveActionKey('bulk-remove');
+    try {
+      await runBatch(selectedItems, async (item) => {
+        await onRemoveItem(collection.id, item.uniqueId);
+      });
+      setSelectedIds([]);
+      setSelectionMode(false);
+    } finally {
+      setActiveActionKey((current) => (current === 'bulk-remove' ? null : current));
+    }
+  };
+
+  const handleBulkCopy = async () => {
+    const targetCollectionId = Number(bulkTargetId);
+    if (!targetCollectionId || !hasSelected) return;
+    setActiveActionKey(`bulk-copy:${targetCollectionId}`);
+    try {
+      await runBatch(selectedItems, async (item) => {
+        await onAddToCollection(targetCollectionId, toCollectionGameInput(item));
+      });
+      setActiveManageId(null);
+    } finally {
+      setActiveActionKey((current) =>
+        current === `bulk-copy:${targetCollectionId}` ? null : current
+      );
+    }
+  };
+
+  const handleBulkMove = async () => {
+    const targetCollectionId = Number(bulkTargetId);
+    if (!targetCollectionId || !hasSelected) return;
+    setActiveActionKey(`bulk-move:${targetCollectionId}`);
+    try {
+      await runBatch(selectedItems, async (item) => {
+        await onAddToCollection(targetCollectionId, toCollectionGameInput(item));
+        await onRemoveItem(collection.id, item.uniqueId);
+      });
+      setSelectedIds([]);
+      setSelectionMode(false);
+      setBulkTargetId('');
+    } finally {
+      setActiveActionKey((current) =>
+        current === `bulk-move:${targetCollectionId}` ? null : current
+      );
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[1100] flex justify-center bg-slate-950/55 backdrop-blur-md" onClick={onClose}>
       <div
-        className="relative flex h-full w-full max-w-6xl flex-col overflow-hidden bg-slate-50 shadow-2xl"
+        className="relative flex h-full w-full max-w-7xl flex-col overflow-hidden bg-[#f7f4ee] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="absolute right-4 top-4 z-20">
@@ -124,65 +276,173 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
         <div
           ref={scrollRef}
           tabIndex={0}
-          className="flex-1 overflow-y-auto p-5 outline-none md:p-8"
+          className="flex-1 overflow-y-auto p-4 outline-none md:p-8"
         >
-          <div className="mx-auto flex max-w-5xl flex-col gap-6">
-            <section className="rounded-[2rem] border border-slate-200 bg-linear-to-r from-white via-slate-50 to-rose-50 p-6 shadow-sm">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.25em] text-slate-500 shadow-sm">
-                    <FolderOpen size={14} className="text-rose-500" />
-                    Collection
+          <div className="mx-auto flex max-w-6xl flex-col gap-6">
+            <section className="overflow-hidden rounded-[2.25rem] border border-[#e8e0d2] bg-white shadow-sm">
+              <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="relative min-h-[240px] overflow-hidden bg-linear-to-br from-[#d8c7ad] via-[#bca17c] to-[#7f6344] p-6 text-white">
+                  {collection.items[0]?.banner ? (
+                    <img
+                      alt={collection.items[0].name}
+                      className="absolute inset-0 h-full w-full object-cover opacity-30"
+                      src={collection.items[0].banner}
+                    />
+                  ) : null}
+                  <div className="absolute inset-0 bg-linear-to-tr from-black/45 via-black/10 to-transparent" />
+                  <div className="relative flex h-full flex-col justify-between">
+                    <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-[11px] font-black uppercase tracking-[0.28em] text-white/90 backdrop-blur-sm">
+                      <FolderOpen size={14} />
+                      Local Collection
+                    </div>
+
+                    <div>
+                      <h3 className="max-w-2xl text-4xl font-black tracking-tight">{collection.name}</h3>
+                      <p className="mt-3 max-w-xl text-sm font-bold leading-6 text-white/80">
+                        像画廊一样浏览这个收藏夹，支持批量选择、快速换文件夹、移出当前收藏夹，以及直接叠层打开详情页。
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{collection.name}</h3>
-                  <p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-slate-500">
-                    这里是这个本地收藏夹的完整视图。可以搜索、打开详情、移除游戏，或者直接删除整个收藏夹。
-                  </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 lg:w-[360px]">
-                  <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
+                <div className="grid grid-cols-2 gap-3 p-6">
+                  <div className="rounded-[1.6rem] bg-[#faf6ef] p-4">
                     <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Games</div>
-                    <div className="mt-3 text-2xl font-black text-slate-900">{collection.itemCount}</div>
+                    <div className="mt-3 text-3xl font-black text-slate-900">{collection.itemCount}</div>
                   </div>
-                  <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
+                  <div className="rounded-[1.6rem] bg-[#faf6ef] p-4">
                     <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Avg</div>
-                    <div className="mt-3 text-2xl font-black text-amber-600">
+                    <div className="mt-3 text-3xl font-black text-amber-600">
                       {averageRating > 0 ? averageRating.toFixed(1) : '–'}
                     </div>
                   </div>
-                  <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
+                  <div className="rounded-[1.6rem] bg-[#faf6ef] p-4">
                     <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Downloads</div>
-                    <div className="mt-3 text-2xl font-black text-slate-900">{totalDownloads.toLocaleString()}</div>
+                    <div className="mt-3 text-3xl font-black text-slate-900">{totalDownloads.toLocaleString()}</div>
+                  </div>
+                  <div className="flex flex-col justify-between rounded-[1.6rem] bg-[#faf6ef] p-4">
+                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Manage</div>
+                    <button
+                      className="mt-3 rounded-2xl bg-rose-500 px-4 py-3 text-sm font-black text-white transition-all hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={activeActionKey === 'delete-collection'}
+                      onClick={() => void handleDeleteCollection()}
+                      type="button"
+                    >
+                      {activeActionKey === 'delete-collection' ? '处理中...' : '删除收藏夹'}
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative lg:max-w-md lg:flex-1">
-                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-blue-300"
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="搜索收藏夹里的游戏"
-                    value={searchQuery}
-                  />
+              <div className="border-t border-[#efe8db] bg-[#fcfaf6] p-5">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="relative xl:max-w-md xl:flex-1">
+                    <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      className="w-full rounded-2xl border border-[#e8e0d2] bg-white px-11 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-[#b99867]"
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="搜索这个收藏夹里的游戏"
+                      value={searchQuery}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      className={`rounded-2xl px-4 py-3 text-sm font-black transition-all ${
+                        selectionMode || hasSelected
+                          ? 'bg-slate-900 text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                      }`}
+                      onClick={() => {
+                        if (selectionMode && !hasSelected) {
+                          setSelectionMode(false);
+                          return;
+                        }
+                        setSelectionMode((current) => !current);
+                        if (selectionMode && !hasSelected) {
+                          setSelectedIds([]);
+                        }
+                      }}
+                      type="button"
+                    >
+                      {selectionMode || hasSelected ? `批量模式 ${selectedIds.length}` : '开启批量选择'}
+                    </button>
+                    <button
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:border-slate-300 hover:text-slate-900"
+                      onClick={onClose}
+                      type="button"
+                    >
+                      返回收藏页
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:border-slate-300 hover:text-slate-900"
-                    onClick={onClose}
-                    type="button"
-                  >
-                    返回收藏页
-                  </button>
-                  <button
-                    className="rounded-2xl bg-rose-500 px-4 py-3 text-sm font-black text-white transition-all hover:bg-rose-600"
-                    onClick={() => void handleDeleteCollection()}
-                    type="button"
-                  >
-                    删除收藏夹
-                  </button>
+
+                <div className="mt-4 flex flex-col gap-3 rounded-[1.75rem] border border-[#eee6d8] bg-white p-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition-all hover:border-[#c7af85] hover:text-slate-900"
+                      onClick={handleToggleSelectAllVisible}
+                      type="button"
+                    >
+                      {allVisibleSelected ? '取消全选当前结果' : '全选当前结果'}
+                    </button>
+                    <button
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition-all hover:border-slate-300 hover:text-slate-900"
+                      onClick={() => {
+                        setSelectedIds([]);
+                        setSelectionMode(false);
+                      }}
+                      type="button"
+                    >
+                      清空选择
+                    </button>
+                    <div className="rounded-full bg-[#f5efe5] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                      {filteredItems.length === collection.items.length
+                        ? `共 ${collection.items.length} 项`
+                        : `筛选 ${filteredItems.length} / ${collection.items.length}`}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                    <select
+                      className="rounded-2xl border border-[#e8e0d2] bg-white px-4 py-2.5 text-sm font-bold text-slate-700 outline-none"
+                      onChange={(event) => setBulkTargetId(event.target.value)}
+                      value={bulkTargetId}
+                    >
+                      <option value="">选择目标收藏夹</option>
+                      {otherCollections.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition-all hover:border-[#c7af85] hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!hasSelected || !bulkTargetId || !!activeActionKey}
+                        onClick={() => void handleBulkCopy()}
+                        type="button"
+                      >
+                        批量复制
+                      </button>
+                      <button
+                        className="rounded-2xl bg-[#b17c3d] px-4 py-2.5 text-sm font-black text-white transition-all hover:bg-[#99652f] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!hasSelected || !bulkTargetId || !!activeActionKey}
+                        onClick={() => void handleBulkMove()}
+                        type="button"
+                      >
+                        批量移动
+                      </button>
+                      <button
+                        className="rounded-2xl bg-rose-500 px-4 py-2.5 text-sm font-black text-white transition-all hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!hasSelected || !!activeActionKey}
+                        onClick={() => void handleBulkRemove()}
+                        type="button"
+                      >
+                        批量移出
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -193,99 +453,180 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
               </div>
             )}
 
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h4 className="text-xl font-black tracking-tight text-slate-900">游戏列表</h4>
-                  <p className="text-sm font-bold text-slate-400">
-                    {filteredItems.length === collection.items.length
-                      ? `共 ${collection.items.length} 项`
-                      : `筛选结果 ${filteredItems.length} / ${collection.items.length}`}
-                  </p>
-                </div>
+            {filteredItems.length === 0 ? (
+              <div className="rounded-[2rem] border border-dashed border-[#ddd1be] bg-white px-6 py-16 text-center shadow-sm">
+                <div className="text-lg font-black text-slate-800">没有匹配到结果</div>
+                <div className="mt-2 text-sm font-bold text-slate-400">换个关键词试试，或者清空搜索。</div>
               </div>
+            ) : (
+              <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredItems.map((item) => {
+                  const isSelected = selectedSet.has(item.uniqueId);
+                  const manageTargetValue = manageTargetId[item.uniqueId] ?? '';
+                  const openKey = `open:${item.uniqueId}`;
+                  const removeKey = `remove:${item.uniqueId}`;
+                  const copyKey = manageTargetValue ? `copy:${item.uniqueId}:${manageTargetValue}` : '';
+                  const moveKey = manageTargetValue ? `move:${item.uniqueId}:${manageTargetValue}` : '';
 
-              {filteredItems.length === 0 ? (
-                <div className="mt-5 rounded-[1.75rem] border border-dashed border-slate-200 px-6 py-14 text-center">
-                  <div className="text-lg font-black text-slate-800">没有匹配到结果</div>
-                  <div className="mt-2 text-sm font-bold text-slate-400">换个关键词试试，或者清空搜索。</div>
-                </div>
-              ) : (
-                <div className="mt-5 grid gap-4">
-                  {filteredItems.map((item, index) => (
+                  return (
                     <article
                       key={`${collection.id}-${item.uniqueId}`}
-                      className="grid gap-4 rounded-[1.75rem] border border-slate-100 bg-slate-50 p-4 transition-all hover:border-blue-200 hover:bg-white hover:shadow-md md:grid-cols-[28px_112px_minmax(0,1fr)_auto]"
+                      className={`group overflow-hidden rounded-[2rem] border bg-white shadow-sm transition-all ${
+                        isSelected
+                          ? 'border-[#c99d65] shadow-lg shadow-[#cfb289]/20'
+                          : 'border-[#e8e0d2] hover:-translate-y-1 hover:border-[#d5b486] hover:shadow-lg hover:shadow-[#d9c5a0]/20'
+                      }`}
                     >
-                      <div className="hidden items-start justify-center pt-1 text-xs font-black text-slate-300 md:flex">
-                        {String(index + 1).padStart(2, '0')}
+                      <div className="relative">
+                        <button
+                          className="block h-52 w-full overflow-hidden bg-[#ebe3d5]"
+                          onClick={() => void handleOpenResource(item)}
+                          type="button"
+                        >
+                          {item.banner ? (
+                            <img
+                              alt={item.name}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                              src={item.banner}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                              No Cover
+                            </div>
+                          )}
+                        </button>
+
+                        <button
+                          className={`absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${
+                            isSelected
+                              ? 'border-white bg-slate-900 text-white'
+                              : 'border-white/70 bg-white/85 text-slate-500 hover:text-slate-900'
+                          }`}
+                          onClick={() => toggleItemSelection(item.uniqueId)}
+                          type="button"
+                        >
+                          <Check size={16} />
+                        </button>
+
+                        <button
+                          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/85 text-slate-500 transition-all hover:bg-rose-50 hover:text-rose-500"
+                          disabled={activeActionKey === removeKey}
+                          onClick={() => void handleRemoveItem(item.uniqueId)}
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
 
-                      <button
-                        className="h-24 w-full overflow-hidden rounded-2xl bg-slate-200 md:w-28"
-                        onClick={() => void handleOpenResource(item)}
-                        type="button"
-                      >
-                        {item.banner ? (
-                          <img alt={item.name} className="h-full w-full object-cover transition-transform duration-500 hover:scale-105" src={item.banner} />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                            No Cover
-                          </div>
-                        )}
-                      </button>
-
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <button
-                              className="truncate text-left text-lg font-black text-slate-900 transition-colors hover:text-blue-600"
-                              onClick={() => void handleOpenResource(item)}
-                              type="button"
-                            >
-                              {item.name}
-                            </button>
-                            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                              {item.uniqueId}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs font-black">
-                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-600">
-                              {item.averageRating ? item.averageRating.toFixed(1) : '暂无评分'}
-                            </span>
-                            <span className="rounded-full bg-slate-200 px-3 py-1 text-slate-600">
-                              {item.viewCount.toLocaleString()} 浏览
-                            </span>
-                            <span className="rounded-full bg-slate-200 px-3 py-1 text-slate-600">
-                              {item.downloadCount.toLocaleString()} 下载
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap gap-3">
+                      <div className="space-y-4 p-5">
+                        <div>
                           <button
-                            className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={activeUniqueId === item.uniqueId}
+                            className="line-clamp-2 text-left text-lg font-black leading-6 text-slate-900 transition-colors hover:text-[#9a6230]"
                             onClick={() => void handleOpenResource(item)}
                             type="button"
                           >
-                            {activeUniqueId === item.uniqueId ? '打开中...' : '打开详情'}
+                            {item.name}
                           </button>
+                          <div className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                            {item.uniqueId}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-xs font-black">
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-600">
+                            {item.averageRating ? item.averageRating.toFixed(1) : '暂无评分'}
+                          </span>
+                          <span className="rounded-full bg-[#f5efe5] px-3 py-1 text-slate-600">
+                            {item.viewCount.toLocaleString()} 浏览
+                          </span>
+                          <span className="rounded-full bg-[#f5efe5] px-3 py-1 text-slate-600">
+                            {item.downloadCount.toLocaleString()} 下载
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
                           <button
-                            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={activeUniqueId === item.uniqueId}
-                            onClick={() => void handleRemoveItem(item.uniqueId)}
+                            className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition-all hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={!!activeActionKey && activeActionKey !== openKey}
+                            onClick={() => void handleOpenResource(item)}
                             type="button"
                           >
-                            {activeUniqueId === item.uniqueId ? '处理中...' : '移出收藏夹'}
+                            {activeActionKey === openKey ? '打开中...' : '打开详情'}
+                          </button>
+                          <button
+                            className={`rounded-2xl border px-4 py-3 text-sm font-black transition-all ${
+                              activeManageId === item.uniqueId
+                                ? 'border-[#b17c3d] bg-[#f7efe4] text-[#8a5b27]'
+                                : 'border-[#e8e0d2] bg-white text-slate-600 hover:border-[#cdb38d] hover:text-slate-900'
+                            }`}
+                            onClick={() =>
+                              setActiveManageId((current) => (current === item.uniqueId ? null : item.uniqueId))
+                            }
+                            type="button"
+                          >
+                            <span className="inline-flex items-center gap-2">
+                              <FolderCog size={16} />
+                              更换收藏夹
+                            </span>
                           </button>
                         </div>
+
+                        {activeManageId === item.uniqueId && (
+                          <div className="rounded-[1.6rem] border border-[#e8e0d2] bg-[#fcfaf6] p-4">
+                            {otherCollections.length === 0 ? (
+                              <div className="text-sm font-bold text-slate-400">
+                                先创建第二个本地收藏夹，才能执行快速转移。
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <select
+                                  className="w-full rounded-2xl border border-[#e8e0d2] bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none"
+                                  onChange={(event) =>
+                                    setManageTargetId((current) => ({
+                                      ...current,
+                                      [item.uniqueId]: event.target.value
+                                    }))
+                                  }
+                                  value={manageTargetValue}
+                                >
+                                  <option value="">选择目标收藏夹</option>
+                                  {otherCollections.map((candidate) => (
+                                    <option key={candidate.id} value={candidate.id}>
+                                      {candidate.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <button
+                                    className="rounded-2xl border border-[#d7c0a1] bg-white px-4 py-3 text-sm font-black text-[#9a6230] transition-all hover:bg-[#f7efe4] disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={!manageTargetValue || !!activeActionKey}
+                                    onClick={() => void handleCopyItem(item, Number(manageTargetValue))}
+                                    type="button"
+                                  >
+                                    <span className="inline-flex items-center gap-2">
+                                      <Copy size={15} />
+                                      {activeActionKey === copyKey ? '复制中...' : '复制过去'}
+                                    </span>
+                                  </button>
+                                  <button
+                                    className="rounded-2xl bg-[#b17c3d] px-4 py-3 text-sm font-black text-white transition-all hover:bg-[#99652f] disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={!manageTargetValue || !!activeActionKey}
+                                    onClick={() => void handleMoveItem(item, Number(manageTargetValue))}
+                                    type="button"
+                                  >
+                                    {activeActionKey === moveKey ? '移动中...' : '移动过去'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </article>
-                  ))}
-                </div>
-              )}
-            </section>
+                  );
+                })}
+              </section>
+            )}
           </div>
         </div>
       </div>
@@ -302,6 +643,7 @@ export const FavoritesView: React.FC = () => {
     fetchCollections,
     createCollection,
     deleteCollection,
+    addToCollection,
     removeFromCollection
   } = useLocalCollectionStore();
   const { selectResource } = useUIStore();
@@ -351,6 +693,15 @@ export const FavoritesView: React.FC = () => {
       await deleteCollection(collectionId);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to delete collection');
+    }
+  };
+
+  const handleAddToCollection = async (collectionId: number, game: LocalCollectionGameInput) => {
+    setActionError(null);
+    try {
+      await addToCollection(collectionId, game);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to update collection');
     }
   };
 
@@ -591,7 +942,9 @@ export const FavoritesView: React.FC = () => {
       {selectedCollection && (
         <CollectionOverlay
           actionError={actionError}
+          allCollections={collections}
           collection={selectedCollection}
+          onAddToCollection={handleAddToCollection}
           onClose={() => setSelectedCollectionId(null)}
           onDeleteCollection={handleDeleteCollection}
           onOpenResource={handleOpenResource}

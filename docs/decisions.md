@@ -125,6 +125,20 @@ Reason:
 - stale persisted renderer auth can make the app look logged in while discussion/rating endpoints still fail with session-expired behavior
 - startup revalidation keeps visible auth state aligned with the actual request credentials used by detail social endpoints
 
+### Local and cloud favorites stay parallel, not merged
+
+Rule:
+
+- the `favorites` page should continue to present local collections and cloud favorite folders as separate domains
+- local collection organization UX such as bulk select, move, copy, and remove belongs to the local overlay flow only
+- opening a game from a collection overlay must stack the shared detail overlay above that collection surface instead of replacing it or rendering beneath it
+
+Reason:
+
+- local collections are SQLite-backed and writable offline, while cloud folders are upstream-owned and currently read-only in this app
+- forcing a merged abstraction would blur auth requirements and complicate fast local-management flows
+- stacked modal behavior preserves context so users can inspect a game and return to the same collection management state
+
 ### Stage ownership is fixed
 
 - Stage 1 fields belong upstream

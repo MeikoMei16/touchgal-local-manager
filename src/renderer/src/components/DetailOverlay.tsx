@@ -96,7 +96,7 @@ export const DetailOverlay: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[1000] flex justify-center backdrop-blur-md animate-in fade-in duration-300" onClick={clearSelected}>
+    <div className="fixed inset-0 bg-black/50 z-[1300] flex justify-center backdrop-blur-md animate-in fade-in duration-300" onClick={clearSelected}>
       <div
         className="bg-slate-50 w-full max-w-7xl h-full flex flex-col overflow-hidden animate-in slide-in-from-bottom-[100px] ease-out-expo duration-500 shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}

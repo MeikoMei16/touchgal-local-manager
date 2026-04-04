@@ -264,6 +264,10 @@ Favorites architecture:
 6. That cloud-folder content flow mirrors the current `kun-touchgal-next` pattern: folder list first, folder contents second.
 7. Detail-header favorite interaction opens a menu that prioritizes local collection add/remove actions and also surfaces current cloud folder visibility state.
 8. Local collection item writes upsert the minimal game shell into SQLite before linking the game to a collection so collection foreign keys do not depend on broader browse-cache rollout.
+9. Opening a local collection now uses a dedicated gallery-style overlay with per-card quick actions instead of a plain list.
+10. Local collection cards support inline `move`, `copy`, and `remove` workflows so users can reorganize a folder without leaving the overlay.
+11. Local collection overlays also support bulk select for `move`, `copy`, and `remove` against the current filtered result set.
+12. Detail overlays intentionally stack above collection overlays so opening a game from inside a collection behaves like a second-layer drill-down instead of disappearing underneath the parent modal.
 
 Profile loading:
 
