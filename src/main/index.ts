@@ -460,6 +460,12 @@ const normalizeResource = (resource: any) => {
   }
 }
 
+const normalizeDownloadType = (value: unknown) => {
+  if (typeof value !== 'string') return null
+  if (value === 'row') return 'raw'
+  return value
+}
+
 const normalizeDownloads = (downloads: RawDownload[]) =>
   downloads.map((download) => ({
     id: download.id ?? 0,
@@ -469,7 +475,9 @@ const normalizeDownloads = (downloads: RawDownload[]) =>
     url: download.url ?? download.content ?? null,
     content: download.content ?? download.url ?? null,
     storage: download.storage ?? null,
-    type: asArray(download.type),
+    type: asArray(download.type)
+      .map(normalizeDownloadType)
+      .filter((value): value is string => Boolean(value)),
     language: asArray(download.language),
     code: download.code ?? null,
     password: download.password ?? null,

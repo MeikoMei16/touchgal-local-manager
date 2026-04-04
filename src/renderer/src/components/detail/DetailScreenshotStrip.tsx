@@ -3,7 +3,7 @@ import { Maximize2 } from 'lucide-react';
 
 interface DetailScreenshotStripProps {
   screenshots: string[];
-  onImageClick: (url: string) => void;
+  onImageClick: (index: number) => void;
 }
 
 export const DetailScreenshotStrip: React.FC<DetailScreenshotStripProps> = ({
@@ -64,7 +64,7 @@ export const DetailScreenshotStrip: React.FC<DetailScreenshotStripProps> = ({
             type="button"
             onClick={() => {
               if (suppressClickRef.current) return;
-              onImageClick(url);
+              onImageClick(idx);
             }}
             className="group relative block shrink-0 w-[340px] md:w-[440px] aspect-video overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-100 shadow-sm transition-all hover:shadow-md active:scale-[0.98] snap-start cursor-zoom-in"
           >

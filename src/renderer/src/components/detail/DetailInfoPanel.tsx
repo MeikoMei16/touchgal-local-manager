@@ -7,7 +7,7 @@ import { DetailPvPanel } from './DetailPvPanel';
 interface DetailInfoPanelProps {
   resource: TouchGalDetail;
   onTagClick: (tag: string) => void;
-  onImageClick: (url: string) => void;
+  onImageClick: (index: number) => void;
 }
 
 export const DetailInfoPanel: React.FC<DetailInfoPanelProps> = ({

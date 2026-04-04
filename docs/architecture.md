@@ -51,6 +51,7 @@ Rules:
 - Renderer must not call TouchGal upstream APIs directly.
 - Normalization of inconsistent upstream payloads belongs here.
 - Upstream auth cookie/header construction belongs here.
+- Download metadata enum cleanup such as upstream `row -> raw` normalization also belongs here.
 
 Session handling notes:
 
@@ -250,11 +251,12 @@ Detail loading:
    - `GET /patch/introduction?uniqueId=...` for introduction HTML, auxiliary ids/tags/company data, and `resourceUpdateTime`
    - `GET /patch/resource?patchId=...` for resource-link cards
 5. Main-process normalization extracts screenshot URLs and PV URLs from introduction HTML so the renderer can present them as dedicated sections instead of inline HTML fragments.
-6. UI-store detail actions fetch the normalized detail payload first.
-7. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
-8. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
-9. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
-10. Search-page result cards pass their current card resource into the detail action as a fallback shell, so opening detail from search no longer waits for homepage-owned store state.
+6. Main-process normalization also canonicalizes inconsistent download metadata values from `/patch/resource`, including upstream `type: "row"` variants that should render as `生肉资源`.
+7. UI-store detail actions fetch the normalized detail payload first.
+8. UI-store detail actions derive the final patch id from the resolved detail payload, then fetch comments and ratings with that id.
+9. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
+10. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
+11. Search-page result cards pass their current card resource into the detail action as a fallback shell, so opening detail from search no longer waits for homepage-owned store state.
 
 Detail discussion / evaluation session behavior:
 
@@ -271,6 +273,7 @@ Detail interaction behavior:
 - the renderer settings page currently owns detail secondary-click behavior as a persisted interaction preference
 - the default setting maps right click to back in the detail overlay and full-screen screenshot viewer
 - interactive targets such as links and buttons keep their native context behavior even when right click is mapped to back
+- the full-screen screenshot viewer also supports keyboard `ArrowLeft` / `ArrowRight` navigation and on-screen previous/next arrows when multiple screenshots exist
 
 Detail header layout:
 
@@ -285,6 +288,7 @@ Detail header layout:
 Detail info and links presentation:
 
 - screenshots are rendered through a dedicated horizontal strip component instead of being left inside sanitized introduction HTML
+- clicking a screenshot opens a full-screen viewer bound to the same screenshot list, with previous/next navigation and keyboard arrow support
 - PV links are rendered through a dedicated panel that supports direct video URLs and common embedded-player URLs
 - the info tab shows published time, release time, resource update time, and outbound VNDB/Bangumi/Steam links as separate metadata rows
 - resource links are rendered from `/patch/resource` data and first split into `Galgame 资源` and `Galgame 补丁` tabs by `section`

@@ -18,7 +18,9 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - checkpoint-based advanced-build resume with page/resource progress retention
 - homepage resource cards with compact 3-tag chips, inline stat icons, hover-revealed right-edge action tabs, and page-change scroll reset
 - detail overlay for introduction, extracted screenshots/PV media, sectioned resource links, ratings, comments, session-aware gating, and configurable right-click back behavior
+- full-screen screenshot viewer with previous/next navigation and keyboard arrow support
 - detail resource metadata chips normalized to field-aware Chinese labels with duplicate labels removed
+- detail resource type chips normalized against upstream enum drift such as `row` rendering as `生肉资源`
 - renderer settings page for interaction preferences
 - early local SQLite and download-manager scaffolding
 
@@ -95,6 +97,8 @@ Implemented or active:
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
 - homepage cards redesigned around feed-level browse data rather than detail-only metadata
 - detail overlay with comments, ratings, screenshots, PV extraction, sectioned resource links, and session-aware discussion/evaluation gating
+- full-screen screenshot navigation with on-screen arrows and keyboard left/right support
+- detail resource chip fallback for upstream `row` type variants so resource cards render `生肉资源` instead of leaking raw API values
 - settings-backed detail right-click behavior
 
 Still in progress:
@@ -123,7 +127,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, search-page scope/sort controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
+The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, search-page scope/sort controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
 
 Lint note:
 

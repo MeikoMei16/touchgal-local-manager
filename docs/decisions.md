@@ -32,6 +32,20 @@ Reason:
 - keeps legacy token formats and migrated disk state from breaking the app on startup
 - avoids renderer-only logout that leaves upstream requests authenticated
 
+### Main-process download metadata normalization owns upstream enum cleanup
+
+Rule:
+
+- normalize inconsistent upstream download metadata in the main process before it reaches renderer UI
+- treat upstream download type variant `row` as the same semantic value as `raw`
+- renderer labels may keep defensive fallbacks, but the canonical fix belongs in main-process normalization
+
+Reason:
+
+- TouchGal upstream download resources can expose inconsistent enum values such as `row` for what should render as `生肉资源`
+- letting raw variants leak into renderer chips produces visibly broken labels and spreads cleanup logic across UI components
+- keeping enum cleanup in the relay preserves a single source of truth for all detail/resource consumers
+
 ## Advanced Filtering
 
 ### Tags are strict filters, not search terms
@@ -291,6 +305,20 @@ Reason:
 
 - keeps detail presentation changes localized
 - avoids mixing tab UI, session gating, and content-specific markup in one large component
+
+### Full-screen screenshot viewing should stay list-aware
+
+Rule:
+
+- the full-screen screenshot viewer should receive the whole screenshot list plus the active index, not only a single image URL
+- expanded screenshot viewing must support previous/next navigation by both on-screen controls and keyboard left/right arrows
+- banner zoom may still use the same viewer shell as a single-image case
+
+Reason:
+
+- once the user expands one screenshot, forcing them to close and re-open for every adjacent image is poor detail-media UX
+- list-aware navigation keeps the screenshot strip and the full-screen viewer aligned as two views of the same dataset
+- keyboard navigation is an expected desktop affordance for image viewers inside an Electron app
 
 ### Detail discussion and evaluation are gated content, not empty content
 

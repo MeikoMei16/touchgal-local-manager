@@ -30,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   mobile: '手机游戏',
   app: '直装资源',
   raw: '生肉资源',
+  row: '生肉资源',
   tool: '游戏工具',
   other: '其它',
 };

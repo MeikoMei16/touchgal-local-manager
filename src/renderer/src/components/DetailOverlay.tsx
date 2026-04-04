@@ -21,7 +21,7 @@ export const DetailOverlay: React.FC = () => {
     isDetailLoading, patchComments, patchRatings, detailSecondaryClickAction
   } = useUIStore();
   const { user, sessionError, setIsLoginOpen } = useAuthStore();
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageViewerState, setImageViewerState] = useState<{ images: string[]; index: number } | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTabType>('info');
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const socialRefreshKeyRef = React.useRef<string | null>(null);
@@ -52,6 +52,19 @@ export const DetailOverlay: React.FC = () => {
     void refreshSelectedResourceSocial();
   }, [isDetailLoading, refreshSelectedResourceSocial, selectedResource, sessionError, user]);
 
+  React.useEffect(() => {
+    if (!selectedResource || imageViewerState) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      clearSelected();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [clearSelected, imageViewerState, selectedResource]);
+
   if (!selectedResource) return null;
 
   const isLoggedIn = !!user;
@@ -59,6 +72,16 @@ export const DetailOverlay: React.FC = () => {
   const handleTagClick = (tag: string) => {
     addTagFilter(tag);
     clearSelected();
+  };
+
+  const openBannerViewer = (url: string) => {
+    setImageViewerState({ images: [url], index: 0 });
+  };
+
+  const openScreenshotViewer = (index: number) => {
+    const screenshots = selectedResource.screenshots ?? [];
+    if (!screenshots[index]) return;
+    setImageViewerState({ images: screenshots, index });
   };
 
   const handleSecondaryBack = (
@@ -114,7 +137,7 @@ export const DetailOverlay: React.FC = () => {
           className="flex-1 overflow-y-auto scroll-smooth outline-none focus:ring-0 p-4 md:p-8"
         >
           <div className="max-w-6xl mx-auto flex flex-col gap-6">
-            <DetailHeader resource={selectedResource} onImageClick={setSelectedImage} />
+            <DetailHeader resource={selectedResource} onImageClick={openBannerViewer} />
             <DetailTabs activeTab={activeTab} onChange={setActiveTab} />
 
             {/* Tab Content */}
@@ -123,7 +146,7 @@ export const DetailOverlay: React.FC = () => {
                 <DetailInfoPanel
                   resource={selectedResource}
                   onTagClick={handleTagClick}
-                  onImageClick={setSelectedImage}
+                  onImageClick={openScreenshotViewer}
                 />
               )}
 
@@ -151,10 +174,14 @@ export const DetailOverlay: React.FC = () => {
           </div>
         </div>
       </div>
-      {selectedImage && (
+      {imageViewerState && (
         <DetailImageViewer
-          url={selectedImage}
-          onDismiss={() => setSelectedImage(null)}
+          images={imageViewerState.images}
+          currentIndex={imageViewerState.index}
+          onSelectIndex={(index) =>
+            setImageViewerState((current) => (current ? { ...current, index } : current))
+          }
+          onDismiss={() => setImageViewerState(null)}
           secondaryClickAction={detailSecondaryClickAction as DetailSecondaryClickAction}
         />
       )}
