@@ -248,6 +248,9 @@ const ProfileView: React.FC = () => {
         <CloudCollectionOverlay
           folder={selectedCloudCollection}
           onClose={() => setSelectedCloudCollection(null)}
+          onCollectionMutated={async () => {
+            await fetchUserActivity('collections');
+          }}
           onOpenResource={handleOpenCloudResource}
         />
       )}

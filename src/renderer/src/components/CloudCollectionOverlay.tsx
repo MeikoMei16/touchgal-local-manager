@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Cloud, Lock, Unlock, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Cloud, Loader2, Lock, Trash2, Unlock, X } from 'lucide-react';
 import { TouchGalClient } from '../data/TouchGalClient';
 import type { TouchGalResource } from '../types';
 
@@ -7,6 +7,7 @@ interface CloudCollectionOverlayProps {
   folder: any;
   onClose: () => void;
   onOpenResource: (resource: TouchGalResource) => Promise<void>;
+  onCollectionMutated?: () => Promise<void> | void;
 }
 
 const PAGE_SIZE = 24;
@@ -14,7 +15,8 @@ const PAGE_SIZE = 24;
 export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
   folder,
   onClose,
-  onOpenResource
+  onOpenResource,
+  onCollectionMutated
 }) => {
   const [page, setPage] = React.useState(1);
   const [items, setItems] = React.useState<TouchGalResource[]>([]);
@@ -22,6 +24,31 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeUniqueId, setActiveUniqueId] = React.useState<string | null>(null);
+  const [removingUniqueId, setRemovingUniqueId] = React.useState<string | null>(null);
+
+  const loadPage = React.useCallback(
+    async (targetPage: number, { silent = false }: { silent?: boolean } = {}) => {
+      if (!folder?.id) return;
+      if (!silent) {
+        setIsLoading(true);
+      }
+      setError(null);
+      try {
+        const response = await TouchGalClient.getFavoriteFolderPatches(folder.id, targetPage, PAGE_SIZE);
+        setItems(Array.isArray(response?.patches) ? response.patches : []);
+        setTotal(typeof response?.total === 'number' ? response.total : 0);
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load cloud collection');
+        setItems([]);
+        setTotal(0);
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [folder?.id]
+  );
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -39,36 +66,10 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
   }, [folder?.id]);
 
   React.useEffect(() => {
-    let cancelled = false;
+    void loadPage(page);
+  }, [loadPage, page]);
 
-    const load = async () => {
-      if (!folder?.id) return;
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await TouchGalClient.getFavoriteFolderPatches(folder.id, page, PAGE_SIZE);
-        if (cancelled) return;
-        setItems(Array.isArray(response?.patches) ? response.patches : []);
-        setTotal(typeof response?.total === 'number' ? response.total : 0);
-      } catch (fetchError) {
-        if (cancelled) return;
-        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load cloud collection');
-        setItems([]);
-        setTotal(0);
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [folder?.id, page]);
-
-  const patchCount = folder?._count?.patch || 0;
+  const patchCount = typeof total === 'number' && total >= 0 ? total : folder?._count?.patch || 0;
   const isPublic = Boolean(folder?.is_public);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -78,6 +79,35 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
       await onOpenResource(resource);
     } finally {
       setActiveUniqueId(null);
+    }
+  };
+
+  const handleRemoveFromFolder = async (resource: TouchGalResource) => {
+    if (!resource.id || !folder?.id) return;
+    setRemovingUniqueId(resource.uniqueId);
+    setError(null);
+    try {
+      const result = await TouchGalClient.togglePatchFavorite(resource.id, folder.id);
+      if (result?.added === true) {
+        throw new Error('Cloud favorite toggle returned add instead of remove');
+      }
+
+      const nextTotal = Math.max(0, total - 1);
+      const nextPage = nextTotal > 0 ? Math.min(page, Math.max(1, Math.ceil(nextTotal / PAGE_SIZE))) : 1;
+
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await loadPage(nextPage, { silent: true });
+      }
+
+      if (onCollectionMutated) {
+        await onCollectionMutated();
+      }
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'Failed to remove game from cloud collection');
+    } finally {
+      setRemovingUniqueId(null);
     }
   };
 
@@ -107,7 +137,7 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
 
               <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{folder?.name || 'Untitled Collection'}</h3>
               <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-                已接通云端收藏夹内容接口。这里展示当前文件夹里的游戏列表，并支持分页和打开详情。
+                已接通云端收藏夹内容接口。这里展示当前文件夹里的游戏列表，并支持分页、打开详情和直接移出云收藏夹。
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -181,8 +211,17 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
                   {items.map((item) => (
                     <article
                       key={item.uniqueId}
-                      className="flex gap-4 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all hover:border-emerald-200 hover:bg-white hover:shadow-md"
+                      className="relative flex gap-4 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all hover:border-emerald-200 hover:bg-white hover:shadow-md"
                     >
+                      <button
+                        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!!removingUniqueId || isLoading}
+                        onClick={() => void handleRemoveFromFolder(item)}
+                        type="button"
+                      >
+                        {removingUniqueId === item.uniqueId ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                      </button>
+
                       <button
                         className="h-24 w-28 shrink-0 overflow-hidden rounded-2xl bg-slate-200"
                         onClick={() => void handleOpenResource(item)}
@@ -197,7 +236,7 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
                         )}
                       </button>
 
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 pr-12">
                         <button
                           className="truncate text-left text-lg font-black text-slate-900 transition-colors hover:text-emerald-600"
                           onClick={() => void handleOpenResource(item)}
@@ -217,14 +256,22 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
                             {item.downloadCount.toLocaleString()} 下载
                           </span>
                         </div>
-                        <div className="mt-4">
+                        <div className="mt-4 flex flex-wrap gap-3">
                           <button
                             className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={activeUniqueId === item.uniqueId}
+                            disabled={activeUniqueId === item.uniqueId || removingUniqueId === item.uniqueId}
                             onClick={() => void handleOpenResource(item)}
                             type="button"
                           >
                             {activeUniqueId === item.uniqueId ? '打开中...' : '打开详情'}
+                          </button>
+                          <button
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={!!removingUniqueId || activeUniqueId === item.uniqueId}
+                            onClick={() => void handleRemoveFromFolder(item)}
+                            type="button"
+                          >
+                            {removingUniqueId === item.uniqueId ? '移除中...' : '从云收藏夹移除'}
                           </button>
                         </div>
                       </div>

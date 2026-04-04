@@ -1199,6 +1199,11 @@ handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number,
   }
 })
 
+handleWithLog('tg-toggle-patch-favorite', async (_event, patchId: number, folderId: number) => {
+  const response = await API_CLIENT.put('/patch/favorite', { patchId, folderId })
+  return ensureValidResponse(response.data)
+})
+
 handleWithLog('tg-local-collections-list', async () => {
   return listLocalCollections()
 })

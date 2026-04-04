@@ -88,5 +88,9 @@ export const TouchGalClient = {
 
   getFavoriteFolderPatches: async (folderId: number, pageNum: number, limitNum: number) => {
     return await window.api.getFavoriteFolderPatches(folderId, pageNum, limitNum);
+  },
+
+  togglePatchFavorite: async (patchId: number, folderId: number) => {
+    return await window.api.togglePatchFavorite(patchId, folderId);
   }
 };

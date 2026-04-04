@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
   getFavoriteFolders: (uid: number) => ipcRenderer.invoke('tg-get-favorite-folders', uid),
   getFavoriteFolderPatches: (folderId: number, page: number, limit: number) =>
     ipcRenderer.invoke('tg-get-favorite-folder-patches', folderId, page, limit),
+  togglePatchFavorite: (patchId: number, folderId: number) =>
+    ipcRenderer.invoke('tg-toggle-patch-favorite', patchId, folderId),
 
   getLocalCollections: () => ipcRenderer.invoke('tg-local-collections-list'),
   createLocalCollection: (name: string) => ipcRenderer.invoke('tg-local-collections-create', name),

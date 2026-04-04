@@ -955,6 +955,11 @@ export const FavoritesView: React.FC = () => {
         <CloudCollectionOverlay
           folder={selectedCloudCollection}
           onClose={() => setSelectedCloudCollection(null)}
+          onCollectionMutated={async () => {
+            if (user) {
+              await fetchUserActivity('collections');
+            }
+          }}
           onOpenResource={async (resource) => {
             await selectResource(resource.uniqueId, resource);
           }}
