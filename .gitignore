@@ -21,6 +21,8 @@ out/
 *.tmp
 *.bak
 
+download/
+
 # Reference Projects
 reference_project/
 astrbot_plugin_touchgal/
