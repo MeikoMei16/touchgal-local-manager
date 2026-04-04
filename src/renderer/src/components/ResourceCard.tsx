@@ -1,9 +1,10 @@
 import React from 'react';
-import { TouchGalResource } from '../types';
+import { TouchGalDownload, TouchGalResource } from '../types';
 import { Check, Lock, Star, Download, Eye, Heart, Loader2, MessageSquare, Plus, X } from 'lucide-react';
 import { useUIStore, useAuthStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import { TouchGalClient } from '../data/TouchGalClient';
+import { getDownloadDisplayName, getOfficialGalgameDownloads } from '../features/downloads/downloadHelpers';
 
 interface ResourceCardProps {
   resource: TouchGalResource;
@@ -24,6 +25,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   const selectedResource = useUIStore((state) => state.selectedResource);
   const isDetailLoading = useUIStore((state) => state.isDetailLoading);
   const setDetailOpenIntent = useUIStore((state) => state.setDetailOpenIntent);
+  const downloadPathOverride = useUIStore((state) => state.downloadPathOverride);
+  const pushToast = useUIStore((state) => state.pushToast);
   const { user, setIsLoginOpen } = useAuthStore();
   const {
     collections,
@@ -40,11 +43,16 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   const [isCollectMenuOpen, setIsCollectMenuOpen] = React.useState(false);
   const [newCollectionName, setNewCollectionName] = React.useState('');
   const [quickError, setQuickError] = React.useState<string | null>(null);
+  const [downloadQuickError, setDownloadQuickError] = React.useState<string | null>(null);
   const [activeLocalCollectionId, setActiveLocalCollectionId] = React.useState<number | null>(null);
   const [isCreatingLocalCollection, setIsCreatingLocalCollection] = React.useState(false);
   const [cloudFolders, setCloudFolders] = React.useState<any[]>([]);
   const [isCloudFoldersLoading, setIsCloudFoldersLoading] = React.useState(false);
   const [activeCloudFolderId, setActiveCloudFolderId] = React.useState<number | null>(null);
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = React.useState(false);
+  const [isDownloadMenuLoading, setIsDownloadMenuLoading] = React.useState(false);
+  const [officialDownloads, setOfficialDownloads] = React.useState<TouchGalDownload[]>([]);
+  const [activeDownloadIndex, setActiveDownloadIndex] = React.useState<number | null>(null);
   const [collectMenuSide, setCollectMenuSide] = React.useState<'left' | 'right'>('right');
   const cardRef = React.useRef<HTMLDivElement>(null);
 
@@ -92,20 +100,21 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   }, [fetchCollections, hasLoaded]);
 
   React.useEffect(() => {
-    if (!isCollectMenuOpen) return;
+    if (!isCollectMenuOpen && !isDownloadMenuOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       if (!cardRef.current?.contains(event.target as Node)) {
         setIsCollectMenuOpen(false);
+        setIsDownloadMenuOpen(false);
       }
     };
 
     window.addEventListener('mousedown', handlePointerDown);
     return () => window.removeEventListener('mousedown', handlePointerDown);
-  }, [isCollectMenuOpen]);
+  }, [isCollectMenuOpen, isDownloadMenuOpen]);
 
   React.useEffect(() => {
-    if (!isCollectMenuOpen) return;
+    if (!isCollectMenuOpen && !isDownloadMenuOpen) return;
 
     const updateCollectMenuSide = () => {
       const rect = cardRef.current?.getBoundingClientRect();
@@ -117,7 +126,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
     updateCollectMenuSide();
     window.addEventListener('resize', updateCollectMenuSide);
     return () => window.removeEventListener('resize', updateCollectMenuSide);
-  }, [isCollectMenuOpen]);
+  }, [isCollectMenuOpen, isDownloadMenuOpen]);
 
   React.useEffect(() => {
     if (!isCollectMenuOpen || hasLoaded) return;
@@ -157,6 +166,36 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       cancelled = true;
     };
   }, [isCollectMenuOpen, resource.id, user]);
+
+  React.useEffect(() => {
+    if (!isDownloadMenuOpen || !isClickable) return;
+
+    let cancelled = false;
+
+    const loadOfficialDownloads = async () => {
+      setIsDownloadMenuLoading(true);
+      setDownloadQuickError(null);
+      try {
+        const detail = await TouchGalClient.getPatchDetail(resource.uniqueId);
+        if (cancelled) return;
+        setOfficialDownloads(getOfficialGalgameDownloads(detail.downloads ?? []));
+      } catch (error) {
+        if (cancelled) return;
+        setDownloadQuickError(error instanceof Error ? error.message : 'Failed to load official downloads');
+        setOfficialDownloads([]);
+      } finally {
+        if (!cancelled) {
+          setIsDownloadMenuLoading(false);
+        }
+      }
+    };
+
+    void loadOfficialDownloads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isClickable, isDownloadMenuOpen, resource.uniqueId]);
 
   const handleToggleLocalCollection = async (collectionId: number, isSelected: boolean) => {
     setQuickError(null);
@@ -209,10 +248,43 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
     }
   };
 
+  const handleQueueOfficialDownload = async (download: TouchGalDownload, index: number) => {
+    setDownloadQuickError(null);
+    setActiveDownloadIndex(index);
+    try {
+      const fallbackDirectory = await window.api.getDefaultDownloadDirectory();
+      const targetDirectory = downloadPathOverride || fallbackDirectory;
+      const links = (download.content ?? download.url ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      let added = 0;
+      let reused = 0;
+      for (const link of links) {
+        const result = await window.api.queueDownload(resource.id ?? null, link, targetDirectory);
+        added += result.added;
+        reused += result.reused;
+      }
+
+      const headline = getDownloadDisplayName(download);
+      pushToast(
+        added > 0
+          ? `已加入下载队列: ${headline}（新增 ${added} 个文件${reused > 0 ? `，复用 ${reused} 个已存在任务` : ''}）`
+          : `下载任务已存在: ${headline}`
+      );
+      setIsDownloadMenuOpen(false);
+    } catch (error) {
+      setDownloadQuickError(error instanceof Error ? error.message : 'Failed to queue download');
+    } finally {
+      setActiveDownloadIndex(null);
+    }
+  };
+
   return (
     <div 
       ref={cardRef}
-      className={`group relative flex h-full w-full cursor-pointer flex-col overflow-visible rounded-[28px] border border-slate-200/90 bg-white shadow-[0_12px_32px_-24px_rgba(15,23,42,0.45)] transition-all duration-300 ease-out hover:not-disabled:z-30 hover:not-disabled:-translate-y-1.5 hover:not-disabled:border-primary/40 hover:not-disabled:shadow-[0_24px_48px_-24px_rgba(0,100,147,0.28)] ${isCollectMenuOpen ? 'z-40' : ''} ${!isClickable ? 'cursor-not-allowed grayscale opacity-60' : ''} ${isDetailLoadingForCard ? 'border-primary/60 ring-2 ring-primary/20 shadow-[0_24px_48px_-24px_rgba(0,100,147,0.28)]' : ''}`} 
+      className={`group relative flex h-full w-full cursor-pointer flex-col overflow-visible rounded-[28px] border border-slate-200/90 bg-white shadow-[0_12px_32px_-24px_rgba(15,23,42,0.45)] transition-all duration-300 ease-out hover:not-disabled:z-30 hover:not-disabled:-translate-y-1.5 hover:not-disabled:border-primary/40 hover:not-disabled:shadow-[0_24px_48px_-24px_rgba(0,100,147,0.28)] ${(isCollectMenuOpen || isDownloadMenuOpen) ? 'z-40' : ''} ${!isClickable ? 'cursor-not-allowed grayscale opacity-60' : ''} ${isDetailLoadingForCard ? 'border-primary/60 ring-2 ring-primary/20 shadow-[0_24px_48px_-24px_rgba(0,100,147,0.28)]' : ''}`} 
       onClick={() => openCardWithIntent('default')}
     >
       <div className="relative flex h-full flex-col overflow-hidden rounded-[28px] bg-white">
@@ -286,7 +358,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         </div>
 
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-0.5">
-          <div className={`flex flex-col gap-2 transition-transform duration-300 ease-out ${isCollectMenuOpen ? 'translate-x-0' : 'translate-x-9 group-hover:translate-x-0'}`}>
+          <div className={`flex flex-col gap-2 transition-transform duration-300 ease-out ${(isCollectMenuOpen || isDownloadMenuOpen) ? 'translate-x-0' : 'translate-x-9 group-hover:translate-x-0'}`}>
             <button
               className={`pointer-events-auto flex h-28 w-12 items-center justify-center rounded-l-[22px] border text-sm font-bold tracking-[0.2em] shadow-[0_10px_24px_-18px_rgba(15,23,42,0.5)] transition-colors duration-200 ${
                 isCollectMenuOpen || isFavoritedLocally
@@ -295,6 +367,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
               }`}
               onClick={(e) => {
                 e.stopPropagation();
+                setIsDownloadMenuOpen(false);
                 setIsCollectMenuOpen((current) => !current);
               }}
             >
@@ -304,7 +377,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
               className="pointer-events-auto flex h-32 w-12 items-center justify-center rounded-l-[22px] bg-primary text-sm font-black tracking-[0.2em] text-on-primary shadow-[0_14px_28px_-18px_rgba(0,100,147,0.7)] transition-colors duration-200 hover:bg-primary/90"
               onClick={(e) => {
                 e.stopPropagation();
-                openCardWithIntent('links');
+                setIsCollectMenuOpen(false);
+                setIsDownloadMenuOpen((current) => !current);
               }}
             >
               <span className="[writing-mode:vertical-rl]">下载</span>
@@ -473,6 +547,87 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
             {quickError && (
               <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-600">
                 {quickError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isDownloadMenuOpen && (
+        <div
+          className={`absolute top-4 z-50 flex max-h-[calc(100%-2rem)] w-[380px] max-w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[28px] border border-slate-200/90 bg-white/98 shadow-[0_30px_60px_-28px_rgba(15,23,42,0.42)] ring-1 ring-white/80 backdrop-blur-xl ${
+            collectMenuSide === 'right' ? 'left-[calc(100%+1rem)]' : 'right-[calc(100%+1rem)]'
+          }`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="border-b border-slate-100 bg-linear-to-r from-sky-50 via-white to-blue-50/70 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Quick Download</div>
+                <div className="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-900">{resource.name}</div>
+                <div className="mt-2 flex items-center gap-2 text-[11px] font-bold text-slate-400">
+                  <span className="rounded-full bg-white px-2.5 py-1 shadow-sm">仅 TouchGal 官方</span>
+                  <span>仅游戏本体资源</span>
+                </div>
+              </div>
+              <button
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:scale-105 hover:text-slate-700"
+                onClick={() => setIsDownloadMenuOpen(false)}
+                type="button"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+            <section className="space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">官方下载入口</div>
+                <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">
+                  {officialDownloads.length} 条
+                </div>
+              </div>
+
+              {isDownloadMenuLoading ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-500">
+                  <Loader2 size={13} className="animate-spin" />
+                  正在读取 TouchGal 官方资源...
+                </div>
+              ) : officialDownloads.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
+                  当前游戏没有可直接加入队列的 TouchGal 官方本体资源。
+                </div>
+              ) : (
+                officialDownloads.map((download, index) => {
+                  const isBusy = activeDownloadIndex === index;
+                  return (
+                    <button
+                      key={`${download.id}-${download.content ?? download.url ?? index}`}
+                      className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-left transition-all hover:border-sky-300 hover:bg-sky-50"
+                      disabled={activeDownloadIndex !== null}
+                      onClick={() => void handleQueueOfficialDownload(download, index)}
+                      type="button"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-black text-slate-900">{getDownloadDisplayName(download)}</div>
+                        <div className="mt-1 text-[11px] font-bold text-slate-400">
+                          {download.size || '未知大小'} · {download.platform.join(' / ') || '多平台'} · 直接加入下载页
+                        </div>
+                      </div>
+                      <div className="ml-3 inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-black text-sky-700">
+                        {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                        <span>{isBusy ? '处理中' : '加入'}</span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </section>
+
+            {downloadQuickError && (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-600">
+                {downloadQuickError}
               </div>
             )}
           </div>

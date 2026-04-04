@@ -1,5 +1,5 @@
 import React from 'react';
-import { MousePointer2, RotateCcw, SquareMousePointer } from 'lucide-react';
+import { Download, FolderSearch, MousePointer2, RotateCcw, SquareMousePointer } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 import type { DetailSecondaryClickAction } from '../store/uiStoreTypes';
 
@@ -24,7 +24,39 @@ const OPTIONS: Array<{
 ];
 
 const SettingsView: React.FC = () => {
-  const { detailSecondaryClickAction, setDetailSecondaryClickAction } = useUIStore();
+  const { detailSecondaryClickAction, setDetailSecondaryClickAction, downloadPathOverride, setDownloadPathOverride, pushToast } = useUIStore();
+  const [defaultDownloadPath, setDefaultDownloadPath] = React.useState('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadDefaultPath = async () => {
+      try {
+        const value = await window.api.getDefaultDownloadDirectory();
+        if (!cancelled) setDefaultDownloadPath(value);
+      } catch {
+        if (!cancelled) setDefaultDownloadPath('');
+      }
+    };
+
+    void loadDefaultPath();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handlePickDownloadDirectory = async () => {
+    try {
+      const selectedPath = await window.api.pickDownloadDirectory();
+      if (!selectedPath) return;
+      setDownloadPathOverride(selectedPath);
+      pushToast('下载目录已更新');
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : '无法选择下载目录');
+    }
+  };
+
+  const resolvedDownloadPath = downloadPathOverride || defaultDownloadPath || '读取中...';
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 md:p-8">
@@ -89,6 +121,49 @@ const SettingsView: React.FC = () => {
               </label>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+            <Download size={22} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xl font-black text-slate-900">Download Path</h2>
+            <p className="text-sm font-medium leading-7 text-slate-500">
+              快速下载默认保存到项目根目录下的 <span className="font-mono text-[13px]">download</span> 文件夹。你也可以在这里改成任意自定义目录。
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-4">
+          <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Current Download Directory</div>
+          <div className="mt-3 break-all rounded-2xl bg-white px-4 py-3 font-mono text-[13px] font-bold text-slate-700 shadow-sm">
+            {resolvedDownloadPath}
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-blue-700"
+            onClick={() => void handlePickDownloadDirectory()}
+            type="button"
+          >
+            <FolderSearch size={17} />
+            选择目录
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50"
+            onClick={() => {
+              setDownloadPathOverride(null);
+              pushToast('已恢复默认下载目录');
+            }}
+            type="button"
+          >
+            <RotateCcw size={17} />
+            恢复默认
+          </button>
         </div>
       </section>
     </div>

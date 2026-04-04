@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { TouchGalClient } from '../data/TouchGalClient';
 import type { TouchGalResource } from '../types';
+import QuickDownloadPopoverButton from './QuickDownloadPopoverButton';
 
 interface CloudCollectionOverlayProps {
   folder: any;
@@ -463,25 +464,36 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
                             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/10 via-black/0 to-transparent" />
                           </button>
 
-                          <div className="min-w-0">
-                            <button
-                              className="line-clamp-2 text-left text-[1.45rem] leading-7 font-black tracking-tight text-slate-900 transition-colors hover:text-emerald-600"
-                              onClick={() => void handleOpenResource(item)}
-                              type="button"
-                            >
-                              {item.name}
-                            </button>
-                            <div className="mt-1.5 text-[12px] font-black uppercase tracking-[0.24em] text-slate-400">{item.uniqueId}</div>
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
-                              <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-600">
-                                {item.averageRating ? item.averageRating.toFixed(1) : '暂无评分'}
-                              </span>
-                              <span className="rounded-full bg-slate-200 px-3 py-1.5 text-slate-600">
-                                {item.viewCount.toLocaleString()} 浏览
-                              </span>
-                              <span className="rounded-full bg-slate-200 px-3 py-1.5 text-slate-600">
-                                {item.downloadCount.toLocaleString()} 下载
-                              </span>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <button
+                                className="line-clamp-2 text-left text-[1.45rem] leading-7 font-black tracking-tight text-slate-900 transition-colors hover:text-emerald-600"
+                                onClick={() => void handleOpenResource(item)}
+                                type="button"
+                              >
+                                {item.name}
+                              </button>
+                              <div className="mt-1.5 text-[12px] font-black uppercase tracking-[0.24em] text-slate-400">{item.uniqueId}</div>
+                              <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
+                                <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-600">
+                                  {item.averageRating ? item.averageRating.toFixed(1) : '暂无评分'}
+                                </span>
+                                <span className="rounded-full bg-slate-200 px-3 py-1.5 text-slate-600">
+                                  {item.viewCount.toLocaleString()} 浏览
+                                </span>
+                                <span className="rounded-full bg-slate-200 px-3 py-1.5 text-slate-600">
+                                  {item.downloadCount.toLocaleString()} 下载
+                                </span>
+                              </div>
+                            </div>
+                            <div className="shrink-0 pt-1">
+                              <QuickDownloadPopoverButton
+                                resourceId={item.id}
+                                resourceName={item.name}
+                                uniqueId={item.uniqueId}
+                                buttonClassName="inline-flex h-11 w-11 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-700 transition-all hover:bg-sky-100"
+                                iconOnly
+                              />
                             </div>
                           </div>
                         </div>

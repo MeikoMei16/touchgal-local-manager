@@ -20,6 +20,7 @@ import { useAuthStore, useUIStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import type { LocalCollection, LocalCollectionGameInput, LocalCollectionItem } from '../types/electron';
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
+import QuickDownloadPopoverButton from './QuickDownloadPopoverButton';
 
 const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
   id: item.resourceId,
@@ -529,7 +530,7 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
                   return (
                     <article
                       key={`${collection.id}-${item.uniqueId}`}
-                      className={`group overflow-hidden rounded-[2rem] border bg-white shadow-sm transition-all ${
+                      className={`group overflow-visible rounded-[2rem] border bg-white shadow-sm transition-all ${
                         isSelected
                           ? 'border-[#c99d65] shadow-lg shadow-[#cfb289]/20'
                           : 'border-[#e8e0d2] hover:-translate-y-1 hover:border-[#d5b486] hover:shadow-lg hover:shadow-[#d9c5a0]/20'
@@ -577,16 +578,27 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
                       </div>
 
                       <div className="space-y-4 p-5">
-                        <div>
-                          <button
-                            className="line-clamp-2 text-left text-lg font-black leading-6 text-slate-900 transition-colors hover:text-[#9a6230]"
-                            onClick={() => void handleOpenResource(item)}
-                            type="button"
-                          >
-                            {item.name}
-                          </button>
-                          <div className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                            {item.uniqueId}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <button
+                              className="line-clamp-2 text-left text-lg font-black leading-6 text-slate-900 transition-colors hover:text-[#9a6230]"
+                              onClick={() => void handleOpenResource(item)}
+                              type="button"
+                            >
+                              {item.name}
+                            </button>
+                            <div className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                              {item.uniqueId}
+                            </div>
+                          </div>
+                          <div className="shrink-0">
+                            <QuickDownloadPopoverButton
+                              resourceId={item.resourceId}
+                              resourceName={item.name}
+                              uniqueId={item.uniqueId}
+                              buttonClassName="inline-flex h-11 w-11 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-700 transition-all hover:bg-sky-100"
+                              iconOnly
+                            />
                           </div>
                         </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home as HomeIcon, Search, Library as LibraryIcon, Settings, Heart as HeartIcon, User as UserIcon } from 'lucide-react';
+import { Download as DownloadIcon, Home as HomeIcon, Search, Library as LibraryIcon, Settings, Heart as HeartIcon, User as UserIcon } from 'lucide-react';
 import { Home } from './components/Home';
 import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
@@ -8,10 +8,12 @@ import { SearchView } from './components/SearchView';
 import { FavoritesView } from './components/FavoritesView';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
+import DownloadsView from './components/DownloadsView';
+import AppToastViewport from './components/AppToastViewport';
 import { useAuthStore } from './store/useTouchGalStore';
 
 const APP_NAV_STORAGE_KEY = 'touchgal-active-nav-tab';
-const APP_NAV_IDS = ['home', 'search', 'library', 'favorites', 'profile', 'settings'] as const;
+const APP_NAV_IDS = ['home', 'search', 'library', 'downloads', 'favorites', 'profile', 'settings'] as const;
 type AppNavTab = typeof APP_NAV_IDS[number];
 
 const normalizeAppNavTab = (value: unknown): AppNavTab =>
@@ -30,6 +32,7 @@ const App: React.FC = () => {
     { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },
     { id: 'search', icon: <Search size={24} />, label: 'Search' },
     { id: 'library', icon: <LibraryIcon size={24} />, label: 'Library' },
+    { id: 'downloads', icon: <DownloadIcon size={24} />, label: 'Downloads' },
     { id: 'favorites', icon: <HeartIcon size={24} />, label: 'Favorites' },
     { id: 'profile', icon: <UserIcon size={24} />, label: 'Profile' },
   ];
@@ -105,6 +108,7 @@ const App: React.FC = () => {
           {activeTab === 'home' && <Home />}
           {activeTab === 'search' && <SearchView />}
           {activeTab === 'library' && <Library />}
+          {activeTab === 'downloads' && <DownloadsView />}
           {activeTab === 'favorites' && <FavoritesView />}
           {activeTab === 'profile' && <ProfileView />}
           {activeTab === 'settings' && <SettingsView />}
@@ -112,6 +116,7 @@ const App: React.FC = () => {
       </main>
 
       <DetailOverlay />
+      <AppToastViewport />
       {isLoginOpen && <LoginModal />}
     </div>
   );

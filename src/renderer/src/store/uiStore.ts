@@ -66,8 +66,21 @@ export const useUIStore = create<UIState>()(
         all: defaultAdvancedDatasetCache()
       },
       lastHomeQuery: defaultHomeQuery(),
+      downloadPathOverride: null,
+      toasts: [],
       setDetailSecondaryClickAction: (action) => set({ detailSecondaryClickAction: normalizeDetailSecondaryClickAction(action) }),
       setDetailOpenIntent: (intent) => set({ detailOpenIntent: normalizeDetailOpenIntent(intent) }),
+      setDownloadPathOverride: (downloadPathOverride) => set({ downloadPathOverride }),
+      pushToast: (message) => {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        set((state) => ({
+          toasts: [...state.toasts, { id, message }]
+        }))
+        return id
+      },
+      dismissToast: (id) => set((state) => ({
+        toasts: state.toasts.filter((toast) => toast.id !== id)
+      })),
       ...createBrowseActions(set, get),
       ...createDetailActions(set, get),
       ...createAdvancedActions(set, get)
@@ -78,7 +91,8 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         currentPage: state.currentPage,
         lastHomeQuery: state.lastHomeQuery,
-        detailSecondaryClickAction: state.detailSecondaryClickAction
+        detailSecondaryClickAction: state.detailSecondaryClickAction,
+        downloadPathOverride: state.downloadPathOverride
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydratedUi(true);
@@ -95,7 +109,8 @@ export const useUIStore = create<UIState>()(
           hasHydratedUi: true,
           currentPage: normalizePage(persistedSlice?.currentPage),
           lastHomeQuery: coerceLegacyHomepageDefaults(persistedQuery),
-          detailSecondaryClickAction: normalizeDetailSecondaryClickAction(persistedSlice?.detailSecondaryClickAction)
+          detailSecondaryClickAction: normalizeDetailSecondaryClickAction(persistedSlice?.detailSecondaryClickAction),
+          downloadPathOverride: typeof persistedSlice?.downloadPathOverride === 'string' ? persistedSlice.downloadPathOverride : null
         };
       }
     }

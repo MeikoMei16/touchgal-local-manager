@@ -46,6 +46,20 @@ Reason:
 - letting raw variants leak into renderer chips produces visibly broken labels and spreads cleanup logic across UI components
 - keeping enum cleanup in the relay preserves a single source of truth for all detail/resource consumers
 
+### Download queue state belongs to local SQLite, not upstream browse cache
+
+Rule:
+
+- persist download tasks, progress bytes, output paths, and error state in SQLite
+- do not treat SQLite as the source of truth for TouchGal browse/detail/resource metadata
+- download jobs may store only the minimal identifiers and resolved source URLs needed to continue local file work
+
+Reason:
+
+- download queue state is user-owned local operational state with a clear persistence story
+- it benefits from restart survival, retry history, and per-file progress retention
+- broader TouchGal metadata caching still lacks a stable ownership boundary and should remain network-first for now
+
 ## Advanced Filtering
 
 ### Tags are strict filters, not search terms
@@ -170,6 +184,33 @@ Reason:
 - folder lifecycle is owned by upstream TouchGal, not by the local SQLite layer
 - using the same endpoints as the reference web product reduces behavioral drift
 - explicit post-mutation refresh keeps Favorites and Profile views from showing stale folder counts
+
+### Quick download surfaces are official-resource filters, not generic link browsers
+
+Rule:
+
+- homepage and collection-card quick-download entry points should surface only TouchGal official `galgame` resources
+- quick-download should enqueue file jobs directly instead of opening the full detail links tab
+- community resources and patch-only resources remain available from the detail overlay links panel rather than the quick-download shortcut
+
+Reason:
+
+- the quick-download affordance is meant to be fast, predictable, and safe from noisy community-link variance
+- limiting the shortcut to official game resources keeps the queue flow aligned with the downloader’s direct Cloudreve resolution path
+- the full detail links panel still exists for exhaustive browsing when users want every available resource
+
+### Collection-card floating download panels should use body-level portals
+
+Rule:
+
+- collection-card quick-download panels should render through `document.body` and position from the trigger button
+- do not rely solely on nested card/overlay overflow rules for those panels
+
+Reason:
+
+- Favorites and cloud collection overlays contain multiple nested clipping and stacking contexts
+- portal-based positioning is more robust than trying to tune every ancestor’s overflow/z-index just to let a quick panel escape
+- homepage cards can keep their card-local quick-panel model because their hover-side rail already owns that layout
 
 ### Stage ownership is fixed
 

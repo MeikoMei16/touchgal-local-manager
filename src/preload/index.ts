@@ -47,6 +47,18 @@ contextBridge.exposeInMainWorld('api', {
   togglePatchFavorite: (patchId: number, folderId: number) =>
     ipcRenderer.invoke('tg-toggle-patch-favorite', patchId, folderId),
 
+  getDefaultDownloadDirectory: () => ipcRenderer.invoke('tg-get-default-download-directory'),
+  pickDownloadDirectory: () => ipcRenderer.invoke('tg-pick-download-directory'),
+  queueDownload: (gameId: number | null, sourceUrl: string, downloadRoot?: string) =>
+    ipcRenderer.invoke('tg-queue-download', gameId, sourceUrl, downloadRoot),
+  getDownloadQueue: () => ipcRenderer.invoke('tg-get-download-queue'),
+  resumeDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-resume-download-task', taskId),
+  retryDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-retry-download-task', taskId),
+  pauseDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-pause-download-task', taskId),
+  deleteDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-delete-download-task', taskId),
+  clearFinishedDownloadTasks: () => ipcRenderer.invoke('tg-clear-finished-download-tasks'),
+  revealDownloadTask: (outputPath: string) => ipcRenderer.invoke('tg-reveal-download-task', outputPath),
+
   getLocalCollections: () => ipcRenderer.invoke('tg-local-collections-list'),
   createLocalCollection: (name: string) => ipcRenderer.invoke('tg-local-collections-create', name),
   deleteLocalCollection: (collectionId: number) => ipcRenderer.invoke('tg-local-collections-delete', collectionId),

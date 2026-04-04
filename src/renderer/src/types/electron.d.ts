@@ -33,6 +33,22 @@ export interface LocalCollectionGameInput {
   alias?: string[];
 }
 
+export interface DownloadQueueTask {
+  id: number;
+  gameId: number | null;
+  sourceUrl: string;
+  storageUrl: string;
+  remotePath: string | null;
+  displayName: string;
+  outputPath: string;
+  status: 'queued' | 'downloading' | 'paused' | 'verifying' | 'extracting' | 'done' | 'error';
+  progressBytes: number;
+  totalBytes: number | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ElectronAPI {
   // Local File System
   scanLocalLibrary: (paths: string[]) => Promise<LocalFolder[]>;
@@ -61,6 +77,20 @@ export interface ElectronAPI {
   deleteFavoriteFolder: (folderId: number) => Promise<any>;
   getFavoriteFolderPatches: (folderId: number, page: number, limit: number) => Promise<any>;
   togglePatchFavorite: (patchId: number, folderId: number) => Promise<any>;
+  getDefaultDownloadDirectory: () => Promise<string>;
+  pickDownloadDirectory: () => Promise<string | null>;
+  queueDownload: (gameId: number | null, sourceUrl: string, downloadRoot?: string) => Promise<{
+    added: number;
+    reused: number;
+    tasks: DownloadQueueTask[];
+  }>;
+  getDownloadQueue: () => Promise<DownloadQueueTask[]>;
+  resumeDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;
+  retryDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;
+  pauseDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;
+  deleteDownloadTask: (taskId: number) => Promise<{ success: boolean }>;
+  clearFinishedDownloadTasks: () => Promise<{ success: boolean }>;
+  revealDownloadTask: (outputPath: string) => Promise<{ success: boolean }>;
   getLocalCollections: () => Promise<LocalCollection[]>;
   createLocalCollection: (name: string) => Promise<LocalCollection[]>;
   deleteLocalCollection: (collectionId: number) => Promise<LocalCollection[]>;

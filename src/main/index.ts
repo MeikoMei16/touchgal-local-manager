@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, safeStorage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { join } from 'node:path'
@@ -1042,17 +1042,64 @@ handleWithLog('tg-parse-links', (_event, content: string) => {
   return downloadManager.parseLink(content)
 })
 
-handleWithLog('tg-add-to-queue', (_event, gameId: number, storageUrl: string) => {
-  try {
-    const id = downloadManager.addTask(gameId, storageUrl)
-    return { success: true, id }
-  } catch (error) {
-    return { success: false, error: String(error) }
+handleWithLog('tg-get-default-download-directory', () => {
+  return downloadManager.getDefaultDownloadDirectory()
+})
+
+handleWithLog('tg-pick-download-directory', async () => {
+  const result = win
+    ? await dialog.showOpenDialog(win, {
+        properties: ['openDirectory', 'createDirectory'],
+        defaultPath: downloadManager.getDefaultDownloadDirectory()
+      })
+    : await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+    defaultPath: downloadManager.getDefaultDownloadDirectory()
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
   }
+
+  return result.filePaths[0]
+})
+
+handleWithLog('tg-queue-download', async (_event, gameId: number | null, sourceUrl: string, downloadRoot?: string) => {
+  return downloadManager.queueDownload({
+    gameId,
+    sourceUrl,
+    downloadRoot: downloadRoot && downloadRoot.trim() ? downloadRoot : downloadManager.getDefaultDownloadDirectory()
+  })
 })
 
 handleWithLog('tg-get-download-queue', () => {
   return downloadManager.getQueue()
+})
+
+handleWithLog('tg-resume-download-task', async (_event, taskId: number) => {
+  return downloadManager.resumeTask(taskId)
+})
+
+handleWithLog('tg-retry-download-task', async (_event, taskId: number) => {
+  return downloadManager.retryTask(taskId)
+})
+
+handleWithLog('tg-pause-download-task', async (_event, taskId: number) => {
+  return downloadManager.pauseTask(taskId)
+})
+
+handleWithLog('tg-delete-download-task', async (_event, taskId: number) => {
+  return downloadManager.deleteTask(taskId)
+})
+
+handleWithLog('tg-clear-finished-download-tasks', async () => {
+  return downloadManager.clearFinishedTasks()
+})
+
+handleWithLog('tg-reveal-download-task', async (_event, outputPath: string) => {
+  if (!outputPath) return { success: false }
+  shell.showItemInFolder(outputPath)
+  return { success: true }
 })
 
 handleWithLog('tg-fetch-captcha', async () => {

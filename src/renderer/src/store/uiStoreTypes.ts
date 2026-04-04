@@ -12,6 +12,11 @@ import type {
 export type DetailSecondaryClickAction = 'back' | 'native';
 export type DetailOpenIntent = 'default' | 'links' | 'favorite';
 
+export interface AppToast {
+  id: string;
+  message: string;
+}
+
 export interface UIState {
   hasHydratedUi: boolean;
   resources: TouchGalResource[];
@@ -32,6 +37,8 @@ export interface UIState {
   advancedBuildProgress: AdvancedBuildProgress;
   advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
   lastHomeQuery: HomeQueryState;
+  downloadPathOverride: string | null;
+  toasts: AppToast[];
   fetchResources: (page?: number, query?: Partial<HomeQueryState>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: any) => Promise<void>;
   selectResource: (uniqueId: string, fallbackResource?: TouchGalResource) => Promise<void>;
@@ -54,6 +61,9 @@ export interface UIState {
   setLastHomeQuery: (query: Partial<HomeQueryState>) => void;
   setCurrentPage: (page: number) => void;
   setHasHydratedUi: (hydrated: boolean) => void;
+  setDownloadPathOverride: (path: string | null) => void;
+  pushToast: (message: string) => string;
+  dismissToast: (id: string) => void;
 }
 
 export type UISetState = StoreApi<UIState>['setState'];

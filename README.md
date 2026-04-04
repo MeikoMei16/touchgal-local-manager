@@ -25,11 +25,13 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - startup session restore that rebuilds renderer auth state from main-process session validation instead of trusting persisted renderer login state
 - persisted auth-cookie jar alongside the normalized token so dev restarts can restore upstream session context more faithfully
 - automatic clearing of stale persisted auth artifacts when startup revalidation reports an invalid session
-- renderer settings page for interaction preferences
+- renderer settings page for interaction preferences and download-directory selection
 - dedicated Favorites page with parallel local-collection and cloud-folder sections
 - detail-header favorite menu for adding/removing resources from local collections without login
 - cloud favorite folders can now open paginated folder contents through the upstream folder-patch API
-- early local SQLite and download-manager scaffolding
+- official-resource quick-download popovers on homepage cards and collection cards
+- dedicated Downloads page with persisted per-file queue, progress, pause/resume/retry, and completion cleanup
+- local SQLite-backed download queue with direct Cloudreve share resolution, presigned object downloads, and concurrent workers
 
 ## Stack
 
@@ -113,11 +115,14 @@ Implemented or active:
 - full-screen screenshot navigation with on-screen arrows and keyboard left/right support
 - detail resource chip fallback for upstream `row` type variants so resource cards render `生肉资源` instead of leaking raw API values
 - settings-backed detail right-click behavior
+- settings-backed download directory selection with default project-root `download/`
+- homepage quick-download popover limited to TouchGal official `galgame` resources
+- local-collection and cloud-collection card quick-download buttons
+- Downloads nav/page with persisted task queue, progress, pause/resume/retry/delete, and clear-finished actions
 
 Still in progress:
 
 - broader use of the local metadata cache
-- downloader flow beyond the current scaffold / persistence layer
 - more complete local-first and offline-friendly browsing flows
 
 Known issue:
@@ -128,8 +133,8 @@ Known issue:
 
 Persistence status note:
 
-- SQLite exists today as schema/bootstrap groundwork, not as the primary source of truth for browse/detail data
-- the first user-owned SQLite feature now shipped is local collections/favorites, managed in parallel with read-only cloud favorite folders
+- SQLite exists today as local persistence for user-owned app state, not as the primary source of truth for browse/detail data
+- shipped SQLite-owned features now include local collections/favorites plus the download queue and per-file task state
 - browse/detail resource persistence is still intentionally deferred as a primary source of truth until broader local-first flows are defined more concretely
 - for now, persistent data with a clear local ownership story includes renderer UI restore state, main-process auth/session artifacts, local collections, download tasks, local file links, and future user-authored metadata
 
@@ -141,7 +146,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
+The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, official-resource quick-download surfaces across homepage and collection cards, download-directory settings, the persisted concurrent download queue, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
 
 Lint note:
 

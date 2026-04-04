@@ -65,6 +65,23 @@ Implementation note:
 - current homepage cards are styled primarily in [`src/renderer/src/components/ResourceCard.tsx`](../src/renderer/src/components/ResourceCard.tsx)
 - the rating badge currently uses a pale amber surface with dark amber foreground for stable contrast across varied banner artwork
 
+## Floating Quick Panels
+
+Current quick-action floating panels now follow two patterns:
+
+- homepage card quick-collect remains card-local and computes a left/right side based on viewport position
+- collection-card quick-download popovers render through `document.body` with fixed viewport positioning so card/overlay clipping does not confine them
+
+Reason:
+
+- homepage cards already reserve explicit side rails for hover actions
+- collection overlays and gallery cards use denser nested containers, so portaled positioning is more reliable there than local overflow rules alone
+
+Implementation note:
+
+- homepage card quick actions live in [`src/renderer/src/components/ResourceCard.tsx`](../src/renderer/src/components/ResourceCard.tsx)
+- shared collection quick-download popup behavior lives in [`src/renderer/src/components/QuickDownloadPopoverButton.tsx`](../src/renderer/src/components/QuickDownloadPopoverButton.tsx)
+
 ## Note
 
 If you touch theme tokens, keep this document and `index.css` in sync. The CSS file is the source of truth.

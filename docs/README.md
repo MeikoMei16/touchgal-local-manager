@@ -42,6 +42,7 @@ Current cross-cutting topics covered here:
 - profile-shell and profile-tab loading states
 - detail discussion/evaluation session gating and post-login social refresh behavior
 - renderer settings page and persisted interaction preferences
+- renderer settings page and persisted download-directory selection
 - guarded detail loading and current detail-overlay composition rules
 - detail secondary-click behavior with default right-click-to-back handling
 - layer-aware `Escape` handling for detail overlay and full-screen screenshot viewer
@@ -49,6 +50,9 @@ Current cross-cutting topics covered here:
 - invalid nested-button avoidance in Favorites folder cards
 - detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
 - homepage quick-collect panel keeps card clipping intact while allowing the panel itself to float across the grid and auto-flip left/right by viewport position
+- homepage quick-download panel limited to TouchGal official game resources
+- collection-card quick-download buttons and body-level floating download panels
+- persisted download queue, concurrent worker behavior, resume/retry/delete semantics, and the dedicated Downloads page
 
 ## API Notes
 

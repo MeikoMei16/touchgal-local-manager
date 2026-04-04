@@ -18,7 +18,7 @@ TouchGal Local Manager is an Electron desktop app that proxies TouchGal upstream
 src/main/
   index.ts        IPC hub, upstream API relay, response normalization
   db.ts           SQLite schema bootstrap and cache helpers
-  downloader.ts   Early-stage download queue manager
+  downloader.ts   Download queue manager, Cloudreve resolver, and concurrent file worker
   utils.ts        Filesystem helpers
 
 src/preload/
@@ -97,7 +97,7 @@ Renderer state implementation is now split:
 
 Key frontend state split:
 
-- persisted app-level left-nav tab: active primary section (`home` / `search` / `library` / `favorites` / `profile` / `settings`)
+- persisted app-level left-nav tab: active primary section (`home` / `search` / `library` / `downloads` / `favorites` / `profile` / `settings`)
 - persisted homepage query: `lastHomeQuery`
 - persisted homepage page index: `currentPage`
 - advanced draft state: `advancedFilterDraft`
@@ -108,6 +108,8 @@ Key frontend state split:
 - local collection state: dedicated SQLite-backed user-authored local favorites collections
 - detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
 - persisted interaction preference: `detailSecondaryClickAction`
+- persisted download-directory override: `downloadPathOverride`
+- transient global toast viewport state: `toasts`
 
 Renderer code split:
 
@@ -117,6 +119,7 @@ Renderer code split:
 - detail normalization helpers: [`src/renderer/src/features/detail/detailResource.ts`](../src/renderer/src/features/detail/detailResource.ts)
 - detail overlay subcomponents: [`src/renderer/src/components/detail/`](../src/renderer/src/components/detail)
 - Favorites page: [`src/renderer/src/components/FavoritesView.tsx`](../src/renderer/src/components/FavoritesView.tsx)
+- Downloads page: [`src/renderer/src/components/DownloadsView.tsx`](../src/renderer/src/components/DownloadsView.tsx)
 
 Renderer persistence notes:
 
@@ -128,6 +131,7 @@ Renderer persistence notes:
 - renderer logout must clear both layers: renderer auth state and the main-process token
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
 - renderer interaction preferences such as `detailSecondaryClickAction` are also persisted in renderer `localStorage`
+- renderer download-directory override is persisted in renderer `localStorage`, while the default path is resolved by the main process to project-root `download/`
 - hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
 - `uiStore.ts` owns the persistence configuration, but action implementations are delegated to `uiActions/*`
 
@@ -147,6 +151,7 @@ Important note:
 - `TouchGalClient.ts` is the renderer-side source of truth for the preload bridge surface used by browse, auth, and profile flows; new renderer network/IPC calls should be added there instead of reaching for `window.api` directly
 - homepage cards currently render at most 3 browse tags from the feed item itself; the card does not assume feed tags are equivalent to the fuller taxonomy exposed by `/patch/introduction`
 - both homepage and dedicated search now scroll the shared app content container back to top whenever pagination changes page
+- collection-card quick-download buttons reuse a shared renderer helper that resolves official TouchGal game resources on demand
 
 ## Data Flow
 
@@ -234,6 +239,8 @@ Homepage card behavior:
 7. That quick-collect surface can overflow beyond the card bounds and float over the homepage grid, while the card body itself keeps its original rounded clipping.
 8. Quick-collect automatically chooses whether to open left or right based on the card's viewport position so cards on the right half do not push the panel off-screen.
 9. Quick-collect currently supports direct local collection toggle, inline local-folder creation, login-gated cloud-folder toggle, and per-row loading/error feedback without leaving the homepage.
+10. The homepage `下载` hover tab now opens a floating quick-download panel instead of jumping directly to the detail links tab.
+11. That quick-download panel loads only TouchGal official `galgame` resources and queues them directly into the dedicated Downloads page.
 
 Advanced filter interaction behavior:
 
@@ -287,6 +294,7 @@ Favorites architecture:
 25. The detail-header cloud favorites section now fetches `/user/profile/favorite/folder` with both `uid` and `patchId` when the menu opens, mirroring the upstream site so each folder row carries membership state for the current game.
 26. That detail-header cloud list behaves as a true toggle: clicking a folder adds the current game when absent and removes it when already present, matching the local collection mental model and the upstream `isAdd` UX.
 27. Detail-header cloud-folder rows also render per-row in-flight feedback so slow network IO does not look like a dead click target.
+28. Local collection cards and cloud collection cards now expose the same official quick-download action as homepage cards, but their floating panel is implemented through a shared body-level portal so it can escape nested card/overlay clipping.
 
 Profile loading:
 
@@ -356,6 +364,19 @@ Detail info and links presentation:
 - raw upstream resource metadata codes such as `pc`, `chinese`, `zh-Hans`, and `windows` are normalized into field-aware labels such as `PC游戏`, `汉化资源`, `简体中文`, and `Windows`
 - duplicate labels are removed after normalization so equivalent values from different metadata fields do not render twice in the same chip row
 
+Download queue flow:
+
+1. Renderer quick-download surfaces resolve official TouchGal `galgame` resources lazily from `/patch/resource` through the existing detail payload path.
+2. The renderer sends queue requests to the main process with the chosen source URL and the current download directory.
+3. The main-process download manager detects Cloudreve share URLs and resolves them into one or more presigned object-storage file URLs.
+4. Single-file shares are resolved by `PUT /api/v3/share/download/<key>`.
+5. Directory shares are resolved by listing `GET /api/v3/share/list/<key>/?path=...` and then resolving each file individually with `PUT /api/v3/share/download/<key>?path=...`.
+6. Each resolved file becomes its own persisted SQLite `download_tasks` row with output path, progress bytes, status, and error state.
+7. The downloader runs a small concurrent worker pool instead of a single-file serial queue.
+8. Before resume/retry, Cloudreve source URLs are refreshed so expired presigned object URLs do not strand old tasks.
+9. File downloads use HTTP range requests when partial files already exist, so pause/resume and retry can continue from local bytes already on disk when the upstream object server still permits range requests.
+10. The dedicated Downloads page polls queue state, renders per-file progress, and exposes pause, resume, retry, delete, clear-finished, and reveal-in-folder actions.
+
 ## Local Persistence
 
 SQLite is initialized in [`src/main/db.ts`](../src/main/db.ts).
@@ -377,6 +398,9 @@ Current schema areas include:
 - `collection_items`
 
 Status note:
+
+- SQLite is now intentionally used for user-owned local features with a clear persistence boundary, including local collections and download tasks.
+- browse/detail/resource metadata remains network-first and is not yet promoted to SQLite as the source of truth.
 
 - The schema is broader than currently shipped UI features.
 - Some tables support planned local-first capabilities that are only partially wired today.
@@ -412,7 +436,7 @@ Status note:
 - Checkpoint-based advanced-build resume for catalog and enrichment phases
 - Rating-sort stabilization through the same local advanced dataset pipeline
 - Basic SQLite bootstrap
-- Basic download queue persistence and link parsing scaffold
+- Persisted download queue with Cloudreve share resolution, concurrent workers, and per-file task controls
 - Dedicated Favorites page with parallel local and cloud collection domains
 - SQLite-backed local collection CRUD and detail-header add/remove integration
 - Local collection gallery overlay with single-item and batch move/copy/remove flows

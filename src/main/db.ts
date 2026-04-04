@@ -34,6 +34,22 @@ export interface LocalCollectionRecord {
   items: LocalCollectionItemRecord[]
 }
 
+export interface DownloadTaskRecord {
+  id: number
+  game_id: number | null
+  source_url: string
+  storage_url: string
+  remote_path: string | null
+  display_name: string
+  output_path: string
+  status: 'queued' | 'downloading' | 'paused' | 'verifying' | 'extracting' | 'done' | 'error'
+  progress_bytes: number
+  total_bytes: number | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+
 export const initDb = () => {
   const userDataPath = app.getPath('userData')
   const dbPath = join(userDataPath, 'touchgal.db')
@@ -127,11 +143,17 @@ export const initDb = () => {
     CREATE TABLE IF NOT EXISTS download_tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         game_id INTEGER REFERENCES games(id),
+        source_url TEXT,
         storage_url TEXT NOT NULL,
+        remote_path TEXT,
+        display_name TEXT,
+        output_path TEXT,
         status TEXT CHECK(status IN ('queued','downloading','paused','verifying','extracting','done','error')),
         progress_bytes INTEGER DEFAULT 0,
         total_bytes INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        error_message TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     -- Play tracking
@@ -182,6 +204,24 @@ export const initDb = () => {
   } catch (e) { /* already exists */ }
   try {
     db.exec(`ALTER TABLE games ADD COLUMN last_detailed_at DATETIME;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN source_url TEXT;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN remote_path TEXT;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN display_name TEXT;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN output_path TEXT;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN error_message TEXT;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;`)
   } catch (e) { /* already exists */ }
 
   console.log('[DB] Database initialized at', dbPath)
