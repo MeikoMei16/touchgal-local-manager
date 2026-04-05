@@ -50,6 +50,31 @@ export interface DownloadTaskRecord {
   updated_at: string
 }
 
+export interface LibraryRootRecord {
+  id: number
+  path: string
+  created_at: string
+  last_scanned_at: string | null
+}
+
+export interface LinkedLocalGameRecord {
+  id: number
+  path: string
+  exe_path: string | null
+  size_bytes: number | null
+  linked_at: string
+  source: 'scan' | 'download' | 'manual'
+  status: 'discovered' | 'linked' | 'verified' | 'broken'
+  last_verified_at: string | null
+  game_id: number | null
+  unique_id: string | null
+  name: string | null
+  banner_url: string | null
+  avg_rating: number | null
+  view_count: number | null
+  download_count: number | null
+}
+
 export const initDb = () => {
   const userDataPath = app.getPath('userData')
   const dbPath = join(userDataPath, 'touchgal.db')
@@ -183,6 +208,13 @@ export const initDb = () => {
         collection_id INTEGER REFERENCES collections(id),
         game_id INTEGER REFERENCES games(id),
         PRIMARY KEY(collection_id, game_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS library_roots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT NOT NULL UNIQUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_scanned_at DATETIME
     );
 
     -- Triggers for FTS5 sync
@@ -480,4 +512,77 @@ export const linkLocalPath = (gamePath: string, gameId: number, source: 'scan' |
       source = excluded.source,
       status = 'linked'
   `).run(gamePath, gameId, source)
+}
+
+export const listLibraryRoots = (): LibraryRootRecord[] => {
+  const db = getDb()
+  return db.prepare(`
+    SELECT id, path, created_at, last_scanned_at
+    FROM library_roots
+    ORDER BY created_at ASC, id ASC
+  `).all() as LibraryRootRecord[]
+}
+
+export const addLibraryRoot = (rootPath: string) => {
+  const db = getDb()
+  const normalizedPath = rootPath.trim()
+  if (!normalizedPath) {
+    throw new Error('Library root path is required')
+  }
+
+  db.prepare(`
+    INSERT INTO library_roots (path)
+    VALUES (?)
+    ON CONFLICT(path) DO NOTHING
+  `).run(normalizedPath)
+
+  return listLibraryRoots()
+}
+
+export const removeLibraryRoot = (rootId: number) => {
+  const db = getDb()
+  db.prepare('DELETE FROM library_roots WHERE id = ?').run(rootId)
+  return listLibraryRoots()
+}
+
+export const markLibraryRootsScanned = (paths: string[]) => {
+  const db = getDb()
+  const updateStmt = db.prepare(`
+    UPDATE library_roots
+    SET last_scanned_at = CURRENT_TIMESTAMP
+    WHERE path = ?
+  `)
+
+  const transaction = db.transaction((items: string[]) => {
+    for (const item of items) {
+      updateStmt.run(item)
+    }
+  })
+
+  transaction(paths)
+}
+
+export const listLinkedLocalGames = (): LinkedLocalGameRecord[] => {
+  const db = getDb()
+  return db.prepare(`
+    SELECT
+      lp.id,
+      lp.path,
+      lp.exe_path,
+      lp.size_bytes,
+      lp.linked_at,
+      lp.source,
+      lp.status,
+      lp.last_verified_at,
+      lp.game_id,
+      g.unique_id,
+      g.name,
+      g.banner_url,
+      g.avg_rating,
+      g.view_count,
+      g.download_count
+    FROM local_paths lp
+    LEFT JOIN games g ON g.id = lp.game_id
+    ORDER BY lp.linked_at DESC, lp.id DESC
+  `).all() as LinkedLocalGameRecord[]
 }

@@ -7,14 +7,19 @@ import axios from 'axios'
 import log from 'electron-log'
 import {
   addItemToLocalCollection,
+  addLibraryRoot,
   clearBrowseHistory,
   createLocalCollection,
   deleteLocalCollection,
   getBrowseHistory,
   getDb,
   initDb,
+  listLibraryRoots,
+  listLinkedLocalGames,
   listLocalCollections,
+  markLibraryRootsScanned,
   recordBrowseHistory,
+  removeLibraryRoot,
   removeItemFromLocalCollection
 } from './db'
 import {
@@ -793,7 +798,70 @@ handleWithLog('scan-local-library', async (_event, paths: string[]) => {
   })
 
   transaction(folders)
+  markLibraryRootsScanned(paths)
   return folders
+})
+
+handleWithLog('tg-library-list-roots', () => {
+  return listLibraryRoots()
+})
+
+handleWithLog('tg-library-add-root', (_event, rootPath: string) => {
+  return addLibraryRoot(rootPath)
+})
+
+handleWithLog('tg-library-remove-root', (_event, rootId: number) => {
+  return removeLibraryRoot(rootId)
+})
+
+handleWithLog('tg-library-pick-root', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths[0]
+})
+
+handleWithLog('tg-library-rescan', async (_event, rootPaths?: string[]) => {
+  const paths = Array.isArray(rootPaths) && rootPaths.length > 0
+    ? rootPaths
+    : listLibraryRoots().map((root) => root.path)
+
+  const folders = await scanForGalgameFolders(paths)
+  const db = getDb()
+
+  const insertPath = db.prepare(`
+    INSERT INTO local_paths (path, game_id, source, status, last_verified_at)
+    VALUES (?, (SELECT id FROM games WHERE unique_id = ?), 'scan', CASE WHEN ? IS NULL THEN 'discovered' ELSE 'linked' END, CURRENT_TIMESTAMP)
+    ON CONFLICT(path) DO UPDATE SET
+      game_id = COALESCE(excluded.game_id, local_paths.game_id),
+      source = 'scan',
+      status = CASE WHEN excluded.game_id IS NULL THEN local_paths.status ELSE 'linked' END,
+      last_verified_at = CURRENT_TIMESTAMP
+  `)
+
+  const transaction = db.transaction((items: Array<{ path: string; tg_id: string | null }>) => {
+    for (const item of items) {
+      insertPath.run(item.path, item.tg_id, item.tg_id)
+    }
+  })
+
+  transaction(folders)
+  markLibraryRootsScanned(paths)
+
+  return {
+    roots: listLibraryRoots(),
+    folders,
+    linkedGames: listLinkedLocalGames()
+  }
+})
+
+handleWithLog('tg-library-list-linked-games', () => {
+  return listLinkedLocalGames()
 })
 
 handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {

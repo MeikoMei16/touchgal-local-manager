@@ -404,9 +404,10 @@ Post-download extraction pipeline:
 Local game library architecture:
 
 1. The `games` table acts as the central identity hub; `local_paths`, `collections`, and `download_tasks` all reference it.
-2. `local_paths` now carries `source` (`scan` / `download` / `manual`), `status` (`discovered` / `linked` / `verified` / `broken`), and `last_verified_at`.
-3. The `.tg_id` marker file written into extracted folders allows future library scans to directly link a folder to its `games` row without FTS matching.
-4. Matching pre-existing local game folders from unknown sources (renamed, no `.tg_id`) to TouchGal entries is **explicitly deferred** to a later sprint.
+2. `library_roots` stores user-owned watch directories for the Library page and records `last_scanned_at` after rescans.
+3. `local_paths` now carries `source` (`scan` / `download` / `manual`), `status` (`discovered` / `linked` / `verified` / `broken`), and `last_verified_at`.
+4. The `.tg_id` marker file written into extracted folders allows future library scans to directly link a folder to its `games` row without FTS matching.
+5. Matching pre-existing local game folders from unknown sources (renamed, no `.tg_id`) to TouchGal entries is **explicitly deferred** to a later sprint.
 
 ## Local Persistence
 
@@ -419,6 +420,7 @@ Current schema areas include:
 - `tags` + `game_tags`
 - `external_ids`
 - `local_paths` (path UNIQUE, source, status, last_verified_at)
+- `library_roots` (persisted scan/watch directory list)
 - `media_cache`
 - `download_tasks` (extracted_path)
 - `play_sessions`
@@ -481,11 +483,12 @@ Status note:
 - Homepage quick-collect popover for local/cloud folder toggle directly from the browse card hover rail
 - **Browse history** — SQLite-backed, recorded on every detail open, shown in Profile History tab (default tab, login-not-required), clearable
 - **Post-download extraction pipeline** — Bandizip CLI detection, 3-tier password probe, multi-part handling, file-count verification, folder rename, `.tg_id` injection, `local_paths` insertion
+- **Local Library manager** — persisted watch-directory list, native directory picker, bulk rescan across saved roots, linked local-install cards, and a last-scan unresolved-folder report
 
 ### Partial / In Progress
 
 - Local metadata cache usage is still limited
-- Library UI rewrite — persistent watch-dir management and linked/unlinked game grid are not yet implemented
+- Library scanning still only inspects one directory level under each watched root
 - Offline-first search is not yet the main browse path
 - Deciding which upstream resource payloads deserve durable SQLite storage is still deferred work, not a settled requirement
 - Homepage rating sort can still miss resources when the upstream rating candidate feed itself is incomplete

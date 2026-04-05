@@ -4,6 +4,37 @@ export interface LocalFolder {
   tg_id: string | null;
 }
 
+export interface LibraryRoot {
+  id: number;
+  path: string;
+  created_at: string;
+  last_scanned_at: string | null;
+}
+
+export interface LinkedLocalGame {
+  id: number;
+  path: string;
+  exe_path: string | null;
+  size_bytes: number | null;
+  linked_at: string;
+  source: 'scan' | 'download' | 'manual';
+  status: 'discovered' | 'linked' | 'verified' | 'broken';
+  last_verified_at: string | null;
+  game_id: number | null;
+  unique_id: string | null;
+  name: string | null;
+  banner_url: string | null;
+  avg_rating: number | null;
+  view_count: number | null;
+  download_count: number | null;
+}
+
+export interface LibraryRescanResult {
+  roots: LibraryRoot[];
+  folders: LocalFolder[];
+  linkedGames: LinkedLocalGame[];
+}
+
 export interface LocalCollectionItem {
   gameId: number;
   resourceId: number;
@@ -63,6 +94,12 @@ export interface ElectronAPI {
   // Local File System
   scanLocalLibrary: (paths: string[]) => Promise<LocalFolder[]>;
   tagFolder: (folderPath: string, id: string) => Promise<{ success: boolean; error?: any }>;
+  listLibraryRoots: () => Promise<LibraryRoot[]>;
+  addLibraryRoot: (rootPath: string) => Promise<LibraryRoot[]>;
+  removeLibraryRoot: (rootId: number) => Promise<LibraryRoot[]>;
+  pickLibraryRoot: () => Promise<string | null>;
+  rescanLibrary: (rootPaths?: string[]) => Promise<LibraryRescanResult>;
+  listLinkedLocalGames: () => Promise<LinkedLocalGame[]>;
 
   // TouchGal API Relay (Bypass CORS)
   fetchResources: (page: number, limit: number, query: any) => Promise<any>;

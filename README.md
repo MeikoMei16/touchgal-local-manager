@@ -32,6 +32,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - official-resource quick-download popovers on homepage cards and collection cards
 - dedicated Downloads page with persisted per-file queue, progress, pause/resume/retry, and completion cleanup
 - local SQLite-backed download queue with direct Cloudreve share resolution, presigned object downloads, and concurrent workers
+- local Library page with persisted watch directories, rescans, linked-install cards, and unresolved-folder reporting
 
 ## Stack
 
@@ -119,11 +120,13 @@ Implemented or active:
 - homepage quick-download popover limited to TouchGal official `galgame` resources
 - local-collection and cloud-collection card quick-download buttons
 - Downloads nav/page with persisted task queue, progress, pause/resume/retry/delete, and clear-finished actions
+- Library page with persisted watch roots, native directory picking, rescan workflow, linked local-path inventory, and unresolved last-scan reporting
 
 Still in progress:
 
 - broader use of the local metadata cache
 - more complete local-first and offline-friendly browsing flows
+- deeper library scanning and unknown-source folder matching remain deferred beyond the current `.tg_id`-first workflow
 
 Known issue:
 
@@ -146,7 +149,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, official-resource quick-download surfaces across homepage and collection cards, download-directory settings, the persisted concurrent download queue, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
+The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, official-resource quick-download surfaces across homepage and collection cards, download-directory settings, the persisted concurrent download queue, the current local-library manager workflow, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
 
 Lint note:
 

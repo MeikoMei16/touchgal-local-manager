@@ -4,6 +4,12 @@ contextBridge.exposeInMainWorld('api', {
   // Local File System
   scanLocalLibrary: (paths: string[]) => ipcRenderer.invoke('scan-local-library', paths),
   tagFolder: (folderPath: string, id: string) => ipcRenderer.invoke('tag-folder', folderPath, id),
+  listLibraryRoots: () => ipcRenderer.invoke('tg-library-list-roots'),
+  addLibraryRoot: (rootPath: string) => ipcRenderer.invoke('tg-library-add-root', rootPath),
+  removeLibraryRoot: (rootId: number) => ipcRenderer.invoke('tg-library-remove-root', rootId),
+  pickLibraryRoot: () => ipcRenderer.invoke('tg-library-pick-root'),
+  rescanLibrary: (rootPaths?: string[]) => ipcRenderer.invoke('tg-library-rescan', rootPaths),
+  listLinkedLocalGames: () => ipcRenderer.invoke('tg-library-list-linked-games'),
 
   // TouchGal API Relay (Bypass CORS)
   fetchResources: (page: number, limit: number, query: Record<string, unknown>) =>

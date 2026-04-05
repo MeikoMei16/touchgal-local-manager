@@ -53,6 +53,7 @@ Current cross-cutting topics covered here:
 - homepage quick-download panel limited to TouchGal official game resources
 - collection-card quick-download buttons and body-level floating download panels
 - persisted download queue, concurrent worker behavior, resume/retry/delete semantics, and the dedicated Downloads page
+- local Library manager watch-root persistence, rescan flow, linked-install inventory, and unresolved-folder reporting
 
 ## API Notes
 
