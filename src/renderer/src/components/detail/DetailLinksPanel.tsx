@@ -9,46 +9,18 @@ import {
   MoreHorizontal,
   Package,
 } from 'lucide-react';
+import { useUIStore } from '../../store/useTouchGalStore';
+import {
+  getDownloadDisplayName,
+  getDownloadLinks,
+  getDownloadMetadataChips,
+  isOfficialDownload,
+} from '../../features/downloads/downloadHelpers';
 import { TouchGalDetail, TouchGalDownload } from '../../types';
 
 interface DetailLinksPanelProps {
   resource: TouchGalDetail;
 }
-
-const SECTION_LABELS: Record<string, string> = {
-  galgame: 'PC游戏',
-  patch: '补丁资源',
-  emulator: '模拟器资源',
-  android: '手机游戏',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  pc: 'PC游戏',
-  patch: '补丁资源',
-  emulator: '模拟器资源',
-  chinese: '汉化资源',
-  mobile: '手机游戏',
-  app: '直装资源',
-  raw: '生肉资源',
-  row: '生肉资源',
-  tool: '游戏工具',
-  other: '其它',
-};
-
-const LANGUAGE_LABELS: Record<string, string> = {
-  'zh-Hans': '简体中文',
-  'zh-Hant': '繁體中文',
-  ja: '日本語',
-  other: '其它',
-};
-
-const PLATFORM_LABELS: Record<string, string> = {
-  android: 'Android',
-  windows: 'Windows',
-  ios: 'iOS',
-  linux: 'Linux',
-  other: '其它',
-};
 
 const STORAGE_LABELS: Record<string, string> = {
   touchgal: 'TouchGal 官方',
@@ -60,57 +32,6 @@ const STORAGE_LABELS: Record<string, string> = {
 type ResourceBucket = 'galgame' | 'patch';
 const KUN_PATCH_WEBSITE_URL = 'https://www.moyu.moe/';
 const KUN_PATCH_WEBSITE_API = 'https://www.moyu.moe/api/hikari';
-
-const getLinks = (download: TouchGalDownload) =>
-  (download.content ?? download.url ?? '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-const getAccessCode = (download: TouchGalDownload) => download.code || null;
-const getPassword = (download: TouchGalDownload) => download.password || null;
-const getTypeLabel = (value: string) => TYPE_LABELS[value] ?? value;
-const getLanguageLabel = (value: string) => LANGUAGE_LABELS[value] ?? value;
-const getPlatformLabel = (value: string) => PLATFORM_LABELS[value] ?? value;
-
-const getDownloadMetadataChips = (download: TouchGalDownload) => {
-  const seen = new Set<string>();
-  const chips: Array<{ key: string; label: string; tone: 'section' | 'type' | 'language' | 'platform' }> = [];
-
-  const pushChip = (key: string, label: string | null, tone: 'section' | 'type' | 'language' | 'platform') => {
-    if (!label || seen.has(label)) return;
-    seen.add(label);
-    chips.push({ key, label, tone });
-  };
-
-  if (download.section) {
-    pushChip(`section:${download.section}`, SECTION_LABELS[download.section] ?? download.section, 'section');
-  }
-
-  for (const type of download.type ?? []) {
-    pushChip(`type:${type}`, getTypeLabel(type), 'type');
-  }
-
-  for (const language of download.language ?? []) {
-    pushChip(`language:${language}`, getLanguageLabel(language), 'language');
-  }
-
-  for (const platform of download.platform ?? []) {
-    pushChip(`platform:${platform}`, getPlatformLabel(platform), 'platform');
-  }
-
-  return chips;
-};
-
-const getDisplayName = (download: TouchGalDownload) => {
-  const explicitName = download.name.trim();
-  if (explicitName) return explicitName;
-
-  const section = download.section ? SECTION_LABELS[download.section] ?? download.section : null;
-  const type = download.type[0] ? getTypeLabel(download.type[0]) : null;
-  const platform = download.platform[0] ? getPlatformLabel(download.platform[0]) : null;
-  return [section, type, platform].filter(Boolean).join(' ') || '下载资源';
-};
 
 const formatRelative = (value: string | null) => {
   if (!value) return null;
@@ -143,19 +64,57 @@ const formatDate = (value: string | null) => {
   }).format(date);
 };
 
-const isOfficial = (download: TouchGalDownload) =>
-  (download.user?.role ?? 0) > 2 || download.storage === 'touchgal' || download.storage === 's3';
-
 const toBucket = (download: TouchGalDownload): ResourceBucket =>
   download.section === 'patch' ? 'patch' : 'galgame';
 
-const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) => {
-  const links = getLinks(download);
-  const accessCode = getAccessCode(download);
-  const password = getPassword(download);
-  const displayName = getDisplayName(download);
+const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDetail }> = ({ download, resource }) => {
+  const downloadPathOverride = useUIStore((state) => state.downloadPathOverride);
+  const pushToast = useUIStore((state) => state.pushToast);
+  const links = getDownloadLinks(download);
+  const displayName = getDownloadDisplayName(download);
   const created = formatRelative(download.created);
   const metadataChips = getDownloadMetadataChips(download);
+  const isOfficial = isOfficialDownload(download);
+  const [isQueueing, setIsQueueing] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+
+  const handleQueueDownload = async () => {
+    if (!isOfficial || links.length === 0 || isQueueing) return;
+
+    setActionError(null);
+    setIsQueueing(true);
+    try {
+      const fallbackDirectory = await window.api.getDefaultDownloadDirectory();
+      const targetDirectory = downloadPathOverride || fallbackDirectory;
+      let added = 0;
+      let reused = 0;
+
+      for (const link of links) {
+        const result = await window.api.queueDownload(resource.id ?? null, link, targetDirectory, {
+          id: resource.id ?? 0,
+          uniqueId: resource.uniqueId,
+          name: resource.name,
+          banner: resource.banner ?? null,
+          averageRating: resource.averageRating ?? 0,
+          viewCount: resource.viewCount ?? 0,
+          downloadCount: resource.downloadCount ?? 0,
+          alias: resource.alias ?? [],
+        });
+        added += result.added;
+        reused += result.reused;
+      }
+
+      pushToast(
+        added > 0
+          ? `已加入下载队列: ${displayName}（新增 ${added} 个文件${reused > 0 ? `，复用 ${reused} 个已存在任务` : ''}）`
+          : `下载任务已存在: ${displayName}`
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to queue download');
+    } finally {
+      setIsQueueing(false);
+    }
+  };
 
   return (
     <article className="rounded-[1.6rem] border border-slate-200 bg-white p-5 shadow-sm">
@@ -172,23 +131,17 @@ const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) =>
                       ? 'rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700'
                       : chip.tone === 'language'
                         ? 'inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700'
-                        : 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700'
+                        : chip.tone === 'platform'
+                          ? 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700'
+                          : chip.tone === 'code'
+                            ? 'rounded-full bg-sky-100 px-3 py-1 text-xs font-black text-sky-700'
+                            : 'rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700'
                 }
               >
                 {chip.tone === 'language' && <Languages size={12} />}
                 {chip.label}
               </span>
             ))}
-            {accessCode && (
-              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black text-sky-700">
-                提取码 {accessCode}
-              </span>
-            )}
-            {password && (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700">
-                解压码 {password}
-              </span>
-            )}
           </div>
 
           <div className="flex items-start gap-3">
@@ -204,7 +157,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) =>
             <div className="min-w-0 flex-1">
               <div className="text-[1.05rem] font-black text-slate-900">{displayName}</div>
               <div className="mt-1 text-sm font-semibold text-slate-500">
-                {download.user?.name ?? (isOfficial(download) ? 'TouchGal 官方' : '社区用户')}
+                {download.user?.name ?? (isOfficial ? 'TouchGal 官方' : '社区用户')}
               </div>
               <div className="text-xs font-bold text-slate-400">
                 {[created, download.user?.patchCount != null ? `已发布资源 ${download.user.patchCount} 个` : null]
@@ -232,6 +185,12 @@ const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) =>
             ))}
           </div>
 
+          {actionError ? (
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600">
+              {actionError}
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-3 text-sm font-bold text-slate-500">
             {download.storage && (
               <span className="inline-flex items-center gap-1.5">
@@ -258,14 +217,20 @@ const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) =>
               {download.likeCount ?? 0}
             </span>
             {links[0] && (
-              <a
-                href={links[0]}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
+              <button
+                className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:bg-blue-400"
+                disabled={isOfficial && isQueueing}
+                onClick={() => {
+                  if (isOfficial) {
+                    void handleQueueDownload();
+                    return;
+                  }
+                  window.open(links[0], '_blank', 'noopener,noreferrer');
+                }}
+                type="button"
               >
                 <Download size={18} />
-              </a>
+              </button>
             )}
           </div>
         </div>
@@ -274,41 +239,10 @@ const ResourceCard: React.FC<{ download: TouchGalDownload }> = ({ download }) =>
   );
 };
 
-const GroupCard: React.FC<{
-  title: string;
-  description: string;
-  avatarSrc: string;
-  resources: TouchGalDownload[];
-  resourceUpdateTime?: string | null;
-}> = ({ title, description, avatarSrc, resources, resourceUpdateTime }) => (
-  <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-      <div className="h-12 w-12 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
-        <img src={avatarSrc} alt={title} className="h-full w-full object-cover" />
-      </div>
-      <div>
-        <div className="text-xl font-black text-slate-900">{title}</div>
-        <div className="text-sm font-medium text-slate-500">{description}</div>
-        {resourceUpdateTime && (
-          <div className="mt-1 text-xs font-bold text-slate-400">
-            资源更新时间 {resourceUpdateTime}
-          </div>
-        )}
-      </div>
-    </div>
-
-    <div className="mt-4 space-y-4">
-      {resources.map((download) => (
-        <ResourceCard key={`${download.id}-${download.content ?? download.url}`} download={download} />
-      ))}
-    </div>
-  </section>
-);
-
 export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) => {
   const [selectedBucket, setSelectedBucket] = React.useState<ResourceBucket>('galgame');
   const downloads = Array.isArray(resource.downloads)
-    ? resource.downloads.filter((item) => getLinks(item).length > 0)
+    ? resource.downloads.filter((item) => getDownloadLinks(item).length > 0)
     : [];
 
   if (downloads.length === 0) {
@@ -322,8 +256,8 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
   }
 
   const bucketed = downloads.filter((download) => toBucket(download) === selectedBucket);
-  const official = bucketed.filter(isOfficial);
-  const community = bucketed.filter((download) => !isOfficial(download));
+  const official = bucketed.filter(isOfficialDownload);
+  const community = bucketed.filter((download) => !isOfficialDownload(download));
   const galgameCount = downloads.filter((download) => toBucket(download) === 'galgame').length;
   const patchCount = downloads.filter((download) => toBucket(download) === 'patch').length;
   const resourceUpdatedAt = formatDate(resource.resourceUpdateTime ?? null);
@@ -383,27 +317,63 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
       )}
 
       {official.length > 0 && (
-        <GroupCard
-          title={selectedBucket === 'patch' ? 'TouchGal 官方补丁资源' : 'TouchGal 官方（推荐下载）'}
-          description={
-            selectedBucket === 'patch'
-              ? '来自 TouchGal 的官方补丁资源'
-              : 'TouchGal 官方提供的 Galgame 下载资源'
-          }
-          avatarSrc={selectedBucket === 'patch' ? 'https://api.dicebear.com/7.x/icons/svg?seed=kun-patch' : '/favicon.ico'}
-          resources={official}
-          resourceUpdateTime={resourceUpdatedAt}
-        />
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <div className="h-12 w-12 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+              <img
+                src={selectedBucket === 'patch' ? 'https://api.dicebear.com/7.x/icons/svg?seed=kun-patch' : '/favicon.ico'}
+                alt={selectedBucket === 'patch' ? 'TouchGal 官方补丁资源' : 'TouchGal 官方（推荐下载）'}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div>
+              <div className="text-xl font-black text-slate-900">
+                {selectedBucket === 'patch' ? 'TouchGal 官方补丁资源' : 'TouchGal 官方（推荐下载）'}
+              </div>
+              <div className="text-sm font-medium text-slate-500">
+                {selectedBucket === 'patch'
+                  ? '来自 TouchGal 的官方补丁资源，点击下载会直接加入应用下载队列'
+                  : 'TouchGal 官方提供的 Galgame 下载资源，点击下载会直接加入应用下载队列'}
+              </div>
+              {resourceUpdatedAt && (
+                <div className="mt-1 text-xs font-bold text-slate-400">资源更新时间 {resourceUpdatedAt}</div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            {official.map((download) => (
+              <ResourceCard key={`${download.id}-${download.content ?? download.url}`} download={download} resource={resource} />
+            ))}
+          </div>
+        </section>
       )}
 
       {community.length > 0 && (
-        <GroupCard
-          title="TouchGal 社区下载资源"
-          description="来自 TouchGal 用户自行发布的下载资源"
-          avatarSrc="https://api.dicebear.com/7.x/bottts/svg?seed=touchgal-community"
-          resources={community}
-          resourceUpdateTime={resourceUpdatedAt}
-        />
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <div className="h-12 w-12 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+              <img
+                src="https://api.dicebear.com/7.x/bottts/svg?seed=touchgal-community"
+                alt="TouchGal 社区下载资源"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div>
+              <div className="text-xl font-black text-slate-900">TouchGal 社区下载资源</div>
+              <div className="text-sm font-medium text-slate-500">来自 TouchGal 用户自行发布的下载资源，点击下载会打开外部链接</div>
+              {resourceUpdatedAt && (
+                <div className="mt-1 text-xs font-bold text-slate-400">资源更新时间 {resourceUpdatedAt}</div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            {community.map((download) => (
+              <ResourceCard key={`${download.id}-${download.content ?? download.url}`} download={download} resource={resource} />
+            ))}
+          </div>
+        </section>
       )}
 
       {official.length === 0 && community.length === 0 && (

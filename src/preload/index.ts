@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('api', {
   pickLibraryRoot: () => ipcRenderer.invoke('tg-library-pick-root'),
   rescanLibrary: (rootPaths?: string[]) => ipcRenderer.invoke('tg-library-rescan', rootPaths),
   listLinkedLocalGames: () => ipcRenderer.invoke('tg-library-list-linked-games'),
+  getLinkedLocalGame: (localGameId: number) => ipcRenderer.invoke('tg-library-get-linked-game', localGameId),
+  openLocalGameWindow: (localGameId: number) => ipcRenderer.invoke('tg-open-local-game-window', localGameId),
+  deleteLibraryGamesAndFiles: (localPathIds: number[]) => ipcRenderer.invoke('tg-library-delete-games-and-files', localPathIds),
+  getExecutables: (folderPath: string) => ipcRenderer.invoke('tg-get-executables', folderPath),
+  launchGame: (folderPath: string, exeName: string) => ipcRenderer.invoke('tg-launch-game', folderPath, exeName),
+  revealPath: (targetPath: string) => ipcRenderer.invoke('tg-reveal-path', targetPath),
 
   // TouchGal API Relay (Bypass CORS)
   fetchResources: (page: number, limit: number, query: Record<string, unknown>) =>
@@ -55,15 +61,39 @@ contextBridge.exposeInMainWorld('api', {
 
   getDefaultDownloadDirectory: () => ipcRenderer.invoke('tg-get-default-download-directory'),
   pickDownloadDirectory: () => ipcRenderer.invoke('tg-pick-download-directory'),
-  queueDownload: (gameId: number | null, sourceUrl: string, downloadRoot?: string) =>
-    ipcRenderer.invoke('tg-queue-download', gameId, sourceUrl, downloadRoot),
+  getDownloadConcurrency: () => ipcRenderer.invoke('tg-get-download-concurrency'),
+  setDownloadConcurrency: (value: number) => ipcRenderer.invoke('tg-set-download-concurrency', value),
+  queueDownload: (
+    gameId: number | null,
+    sourceUrl: string,
+    downloadRoot?: string,
+    gameMetadata?: {
+      id: number,
+      uniqueId: string,
+      name: string,
+      banner?: string | null,
+      averageRating?: number,
+      viewCount?: number,
+      downloadCount?: number,
+      alias?: string[]
+    }
+  ) => ipcRenderer.invoke('tg-queue-download', gameId, sourceUrl, downloadRoot, gameMetadata),
   getDownloadQueue: () => ipcRenderer.invoke('tg-get-download-queue'),
   resumeDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-resume-download-task', taskId),
   retryDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-retry-download-task', taskId),
   pauseDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-pause-download-task', taskId),
   deleteDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-delete-download-task', taskId),
+  deleteDownloadTasksAndFiles: (taskIds: number[], downloadRoot: string) =>
+    ipcRenderer.invoke('tg-delete-download-tasks-and-files', taskIds, downloadRoot),
   clearFinishedDownloadTasks: () => ipcRenderer.invoke('tg-clear-finished-download-tasks'),
   revealDownloadTask: (outputPath: string) => ipcRenderer.invoke('tg-reveal-download-task', outputPath),
+  onDownloadQueueUpdated: (callback: (queue: unknown) => void) => {
+    const listener = (_event: unknown, queue: unknown) => callback(queue)
+    ipcRenderer.on('download-queue-updated', listener)
+    return () => {
+      ipcRenderer.removeListener('download-queue-updated', listener)
+    }
+  },
 
   getLocalCollections: () => ipcRenderer.invoke('tg-local-collections-list'),
   createLocalCollection: (name: string) => ipcRenderer.invoke('tg-local-collections-create', name),

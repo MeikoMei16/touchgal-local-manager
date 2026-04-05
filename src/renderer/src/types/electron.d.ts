@@ -1,7 +1,11 @@
 export interface LocalFolder {
+  rootPath: string;
   path: string;
   folderName: string;
   tg_id: string | null;
+  matchState: 'linked' | 'orphaned' | 'unresolved';
+  executableNames: string[];
+  depth: number;
 }
 
 export interface LibraryRoot {
@@ -64,6 +68,17 @@ export interface LocalCollectionGameInput {
   alias?: string[];
 }
 
+export interface DownloadQueueGameMetadata {
+  id: number;
+  uniqueId: string;
+  name: string;
+  banner?: string | null;
+  averageRating?: number;
+  viewCount?: number;
+  downloadCount?: number;
+  alias?: string[];
+}
+
 export interface DownloadQueueTask {
   id: number;
   gameId: number | null;
@@ -76,8 +91,24 @@ export interface DownloadQueueTask {
   progressBytes: number;
   totalBytes: number | null;
   errorMessage: string | null;
+  extractedPath: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExtractorCandidateStatus {
+  name: string;
+  path: string;
+  detected: boolean;
+  supported: boolean;
+}
+
+export interface ExtractorStatus {
+  found: boolean;
+  path: string | null;
+  name: string | null;
+  supported: boolean;
+  candidates: ExtractorCandidateStatus[];
 }
 
 
@@ -100,6 +131,17 @@ export interface ElectronAPI {
   pickLibraryRoot: () => Promise<string | null>;
   rescanLibrary: (rootPaths?: string[]) => Promise<LibraryRescanResult>;
   listLinkedLocalGames: () => Promise<LinkedLocalGame[]>;
+  getLinkedLocalGame: (localGameId: number) => Promise<LinkedLocalGame | null>;
+  openLocalGameWindow: (localGameId: number) => Promise<{ success: boolean }>;
+  deleteLibraryGamesAndFiles: (localPathIds: number[]) => Promise<{
+    success: boolean;
+    deletedIds: number[];
+    deletedPaths: string[];
+    skippedPaths: string[];
+  }>;
+  getExecutables: (folderPath: string) => Promise<string[]>;
+  launchGame: (folderPath: string, exeName: string) => Promise<{ success: boolean; pid?: number; error?: string }>;
+  revealPath: (targetPath: string) => Promise<{ success: boolean }>;
 
   // TouchGal API Relay (Bypass CORS)
   fetchResources: (page: number, limit: number, query: any) => Promise<any>;
@@ -126,7 +168,9 @@ export interface ElectronAPI {
   togglePatchFavorite: (patchId: number, folderId: number) => Promise<any>;
   getDefaultDownloadDirectory: () => Promise<string>;
   pickDownloadDirectory: () => Promise<string | null>;
-  queueDownload: (gameId: number | null, sourceUrl: string, downloadRoot?: string) => Promise<{
+  getDownloadConcurrency: () => Promise<number>;
+  setDownloadConcurrency: (value: number) => Promise<number>;
+  queueDownload: (gameId: number | null, sourceUrl: string, downloadRoot?: string, gameMetadata?: DownloadQueueGameMetadata) => Promise<{
     added: number;
     reused: number;
     tasks: DownloadQueueTask[];
@@ -136,8 +180,14 @@ export interface ElectronAPI {
   retryDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;
   pauseDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;
   deleteDownloadTask: (taskId: number) => Promise<{ success: boolean }>;
+  deleteDownloadTasksAndFiles: (taskIds: number[], downloadRoot: string) => Promise<{
+    success: boolean;
+    deletedTaskIds: number[];
+    deletedFiles: string[];
+  }>;
   clearFinishedDownloadTasks: () => Promise<{ success: boolean }>;
   revealDownloadTask: (outputPath: string) => Promise<{ success: boolean }>;
+  onDownloadQueueUpdated: (callback: (queue: DownloadQueueTask[]) => void) => () => void;
   getLocalCollections: () => Promise<LocalCollection[]>;
   createLocalCollection: (name: string) => Promise<LocalCollection[]>;
   deleteLocalCollection: (collectionId: number) => Promise<LocalCollection[]>;
@@ -150,7 +200,7 @@ export interface ElectronAPI {
   clearHistory: () => Promise<{ success: boolean }>;
 
   // Extractor
-  checkExtractor: () => Promise<{ found: boolean; path: string | null; name: string | null }>;
+  checkExtractor: () => Promise<ExtractorStatus>;
 }
 
 declare global {

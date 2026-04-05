@@ -46,6 +46,7 @@ export interface DownloadTaskRecord {
   progress_bytes: number
   total_bytes: number | null
   error_message: string | null
+  extracted_path?: string | null
   created_at: string
   updated_at: string
 }
@@ -284,6 +285,12 @@ export const initDb = () => {
       name TEXT NOT NULL,
       banner_url TEXT,
       viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `)
 
@@ -585,4 +592,79 @@ export const listLinkedLocalGames = (): LinkedLocalGameRecord[] => {
     LEFT JOIN games g ON g.id = lp.game_id
     ORDER BY lp.linked_at DESC, lp.id DESC
   `).all() as LinkedLocalGameRecord[]
+}
+
+export const getLinkedLocalGameById = (id: number): LinkedLocalGameRecord | null => {
+  const db = getDb()
+  const row = db.prepare(`
+    SELECT
+      lp.id,
+      lp.path,
+      lp.exe_path,
+      lp.size_bytes,
+      lp.linked_at,
+      lp.source,
+      lp.status,
+      lp.last_verified_at,
+      lp.game_id,
+      g.unique_id,
+      g.name,
+      g.banner_url,
+      g.avg_rating,
+      g.view_count,
+      g.download_count
+    FROM local_paths lp
+    LEFT JOIN games g ON g.id = lp.game_id
+    WHERE lp.id = ?
+    LIMIT 1
+  `).get(id) as LinkedLocalGameRecord | undefined
+
+  return row ?? null
+}
+
+export const deleteLocalPathsByIds = (ids: number[]) => {
+  if (ids.length === 0) return
+  const db = getDb()
+  const deleteStmt = db.prepare('DELETE FROM local_paths WHERE id = ?')
+  const transaction = db.transaction((items: number[]) => {
+    for (const id of items) {
+      deleteStmt.run(id)
+    }
+  })
+  transaction(ids)
+}
+
+const DEFAULT_DOWNLOAD_CONCURRENCY = 3
+const MIN_DOWNLOAD_CONCURRENCY = 1
+const MAX_DOWNLOAD_CONCURRENCY = 8
+
+const clampDownloadConcurrency = (value: number) =>
+  Math.min(MAX_DOWNLOAD_CONCURRENCY, Math.max(MIN_DOWNLOAD_CONCURRENCY, value))
+
+export const getDownloadConcurrencySetting = () => {
+  const db = getDb()
+  const row = db.prepare(`
+    SELECT value
+    FROM app_settings
+    WHERE key = 'download_concurrency'
+    LIMIT 1
+  `).get() as { value: string } | undefined
+
+  if (!row) return DEFAULT_DOWNLOAD_CONCURRENCY
+  const parsed = Number.parseInt(row.value, 10)
+  if (!Number.isFinite(parsed)) return DEFAULT_DOWNLOAD_CONCURRENCY
+  return clampDownloadConcurrency(parsed)
+}
+
+export const setDownloadConcurrencySetting = (value: number) => {
+  const db = getDb()
+  const normalized = clampDownloadConcurrency(Math.round(value))
+  db.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('download_concurrency', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(String(normalized))
+  return normalized
 }

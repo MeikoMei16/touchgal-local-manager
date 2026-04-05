@@ -1,10 +1,10 @@
 import React from 'react';
 import { TouchGalDownload, TouchGalResource } from '../types';
-import { Check, Lock, Star, Download, Eye, Heart, Loader2, MessageSquare, Plus, X } from 'lucide-react';
+import { Check, Lock, Star, Download, Eye, HardDrive, Heart, Languages, Loader2, MessageSquare, Plus, X } from 'lucide-react';
 import { useUIStore, useAuthStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import { TouchGalClient } from '../data/TouchGalClient';
-import { getDownloadDisplayName, getOfficialGalgameDownloads } from '../features/downloads/downloadHelpers';
+import { getDownloadDisplayName, getDownloadMetadataChips, getOfficialGalgameDownloads } from '../features/downloads/downloadHelpers';
 
 interface ResourceCardProps {
   resource: TouchGalResource;
@@ -262,7 +262,16 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       let added = 0;
       let reused = 0;
       for (const link of links) {
-        const result = await window.api.queueDownload(resource.id ?? null, link, targetDirectory);
+        const result = await window.api.queueDownload(resource.id ?? null, link, targetDirectory, {
+          id: resource.id ?? 0,
+          uniqueId: resource.uniqueId,
+          name: resource.name,
+          banner: resource.banner ?? null,
+          averageRating: resource.averageRating ?? 0,
+          viewCount: resource.viewCount ?? 0,
+          downloadCount: resource.downloadCount ?? 0,
+          alias: resource.alias ?? [],
+        });
         added += result.added;
         reused += result.reused;
       }
@@ -601,21 +610,50 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
               ) : (
                 officialDownloads.map((download, index) => {
                   const isBusy = activeDownloadIndex === index;
+                  const metadataChips = getDownloadMetadataChips(download);
                   return (
                     <button
                       key={`${download.id}-${download.content ?? download.url ?? index}`}
-                      className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-left transition-all hover:border-sky-300 hover:bg-sky-50"
+                      className="flex w-full items-start justify-between rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 text-left transition-all hover:border-sky-300 hover:bg-sky-50"
                       disabled={activeDownloadIndex !== null}
                       onClick={() => void handleQueueOfficialDownload(download, index)}
                       type="button"
                     >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-black text-slate-900">{getDownloadDisplayName(download)}</div>
-                        <div className="mt-1 text-[11px] font-bold text-slate-400">
-                          {download.size || '未知大小'} · {download.platform.join(' / ') || '多平台'} · 直接加入下载页
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap gap-2">
+                          {metadataChips.map((chip) => (
+                            <span
+                              key={chip.key}
+                              className={
+                                chip.tone === 'section'
+                                  ? 'rounded-full bg-sky-100 px-3 py-1 text-[11px] font-black text-sky-700'
+                                  : chip.tone === 'type'
+                                    ? 'rounded-full bg-blue-100 px-3 py-1 text-[11px] font-black text-blue-700'
+                                    : chip.tone === 'language'
+                                      ? 'inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-[11px] font-black text-violet-700'
+                                      : chip.tone === 'platform'
+                                        ? 'rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-black text-emerald-700'
+                                        : chip.tone === 'code'
+                                          ? 'rounded-full bg-sky-100 px-3 py-1 text-[11px] font-black text-sky-700'
+                                          : 'rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black text-amber-700'
+                              }
+                            >
+                              {chip.tone === 'language' && <Languages size={11} />}
+                              {chip.label}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="mt-3 text-base font-black leading-6 text-slate-900">{getDownloadDisplayName(download)}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-bold text-slate-500">
+                          <span className="inline-flex items-center gap-1.5">
+                            <HardDrive size={13} />
+                            TouchGal 官方
+                          </span>
+                          <span>{download.size || '未知大小'}</span>
+                          <span>直接加入下载页</span>
                         </div>
                       </div>
-                      <div className="ml-3 inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-black text-sky-700">
+                      <div className="ml-4 inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-3 py-1.5 text-[11px] font-black text-sky-700">
                         {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
                         <span>{isBusy ? '处理中' : '加入'}</span>
                       </div>

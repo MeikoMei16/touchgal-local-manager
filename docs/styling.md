@@ -71,11 +71,13 @@ Current quick-action floating panels now follow two patterns:
 
 - homepage card quick-collect remains card-local and computes a left/right side based on viewport position
 - collection-card quick-download popovers render through `document.body` with fixed viewport positioning so card/overlay clipping does not confine them
+- the shared quick-download popup now uses a deliberately wider panel footprint so full chip rows and longer resource titles remain legible
 
 Reason:
 
 - homepage cards already reserve explicit side rails for hover actions
 - collection overlays and gallery cards use denser nested containers, so portaled positioning is more reliable there than local overflow rules alone
+- once quick-download adopted the same metadata-chip model as the detail links panel, the earlier narrow popover no longer had enough horizontal room for the intended presentation
 
 Implementation note:
 

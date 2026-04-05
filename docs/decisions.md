@@ -191,25 +191,44 @@ Rule:
 
 - homepage and collection-card quick-download entry points should surface only TouchGal official `galgame` resources
 - quick-download should enqueue file jobs directly instead of opening the full detail links tab
+- quick-download rows should reuse the normalized metadata-chip presentation for section/type/language/platform and extraction-code badges rather than collapsing everything into one ambiguous text line
+- the detail overlay links panel should use the same split: TouchGal official resource actions enqueue in-app downloads, while community resources remain external-link launches
 - community resources and patch-only resources remain available from the detail overlay links panel rather than the quick-download shortcut
 
 Reason:
 
 - the quick-download affordance is meant to be fast, predictable, and safe from noisy community-link variance
 - limiting the shortcut to official game resources keeps the queue flow aligned with the downloader's direct Cloudreve resolution path
-- the full detail links panel still exists for exhaustive browsing when users want every available resource
+- keeping chip normalization aligned with the detail links model prevents quick-download from showing raw enum codes or hiding important extraction metadata
+- the full detail links panel still exists for exhaustive browsing when users want every available resource, but it should preserve the same safety split between official queueable resources and community external links
+
+### Download file deletion must stay inside the active download root
+
+Rule:
+
+- bulk deletion from the Downloads page may remove both task records and on-disk files, but only for paths that resolve inside the currently active download directory
+- batch delete must not remove extracted `library/` folders or any path outside the resolved download root
+- empty download subdirectories left behind by deleted files may be pruned, but only within that same root boundary
+
+Reason:
+
+- download-task cleanup is useful, but the file-deletion path is high-risk if root boundaries are not enforced
+- extracted installs under `library/` are a separate lifecycle from raw archives under `download/`
+- pruning only within the chosen download root keeps cleanup tidy without creating cross-root deletion surprises
 
 ### Collection-card floating download panels should use body-level portals
 
 Rule:
 
 - collection-card quick-download panels should render through `document.body` and position from the trigger button
+- shared quick-download popovers should use a wider panel size when metadata chips and long resource names would otherwise wrap too aggressively
 - do not rely solely on nested card/overlay overflow rules for those panels
 
 Reason:
 
 - Favorites and cloud collection overlays contain multiple nested clipping and stacking contexts
 - portal-based positioning is more robust than trying to tune every ancestor's overflow/z-index just to let a quick panel escape
+- the quick-download surface now carries the same richer metadata-chip set as the detail links view, so the older narrow width no longer fits the intended information density
 - homepage cards can keep their card-local quick-panel model because their hover-side rail already owns that layout
 
 ### Stage ownership is fixed
@@ -518,6 +537,20 @@ Reason:
 - the feed metadata available at browse time is intentionally lighter than the fully enriched detail payload
 - tighter browse cards reduce layout noise and improve title recognition in long lists
 
+### Library cards are local-entry components, not alternate detail cards
+
+Rule:
+
+- linked game cards in the Library page should prioritize local filesystem actions over TouchGal-detail navigation
+- the primary card button should reveal the actual local install directory in the system file browser
+- local launch remains a separate explicit action and should not be merged into the reveal action
+
+Reason:
+
+- the Library surface exists to manage and use local installs, not to duplicate the browse/detail flow already available elsewhere
+- opening the real folder is the safest default local action because it works whether or not the user wants to inspect files, launch manually, or troubleshoot an install
+- separating reveal and launch reduces accidental process starts and keeps local actions predictable
+
 ### Detail media should be extracted from introduction HTML before rendering
 
 Rule:
@@ -608,6 +641,9 @@ Rule:
 - extraction state (`extracting` status, `extracted_path`) belongs to `download_tasks`, not to a separate table
 - extraction must only run on archive extensions and first-part-or-single files; multi-part continuations must be silently skipped
 - extraction failures must leave the downloaded archive intact; only partial extraction output directories should be cleaned up
+- successful extraction output belongs under project-root `library/`, while archives stay under project-root `download/`
+- extraction must not overwrite or delete an existing library folder with the same game name; allocate a unique suffixed target directory instead
+- password probing currently tries only `""` and `"touchgal"`
 - the extracted folder must receive a `.tg_id` marker file before `local_paths` insertion so future library scans can link without FTS matching
 
 Reason:
@@ -615,6 +651,9 @@ Reason:
 - the download task already owns the output path, game id, and status lifecycle — extending it is less disruptive than introducing a new entity
 - skipping non-first parts prevents the pipeline from running multiple times on the same logical archive
 - preserving failed archives lets users attempt manual extraction without re-downloading
+- keeping archives and extracted installs in separate roots makes the Library surface cleaner and avoids mixing raw archives with playable content
+- collision-safe naming is safer than destructive replacement because users may already have a manual install or an older extracted copy they still want to keep
+- constraining the password probe set keeps behavior explicit and matches the currently targeted TouchGal archive conventions
 
 ### Unknown-source local folder matching is deferred
 

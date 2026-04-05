@@ -25,27 +25,35 @@ export const DownloadsView: React.FC = () => {
   const [tasks, setTasks] = React.useState<DownloadQueueTask[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [actionTaskId, setActionTaskId] = React.useState<number | null>(null)
+  const [selectedTaskIds, setSelectedTaskIds] = React.useState<number[]>([])
 
   const resolvedDirectory = downloadPathOverride || defaultDirectory
   const finishedTaskCount = tasks.filter((task) => task.status === 'done').length
+  const isAllSelected = tasks.length > 0 && selectedTaskIds.length === tasks.length
+  const hasSelection = selectedTaskIds.length > 0
 
   const loadQueue = React.useCallback(async () => {
     const [queue, fallbackDirectory] = await Promise.all([
       window.api.getDownloadQueue(),
-      defaultDirectory ? Promise.resolve(defaultDirectory) : window.api.getDefaultDownloadDirectory()
+      window.api.getDefaultDownloadDirectory()
     ])
     setTasks(queue)
-    if (!defaultDirectory) setDefaultDirectory(fallbackDirectory)
+    setDefaultDirectory(fallbackDirectory)
     setIsLoading(false)
-  }, [defaultDirectory])
+  }, [])
 
   React.useEffect(() => {
     void loadQueue()
-    const timer = window.setInterval(() => {
-      void loadQueue()
-    }, 1200)
-    return () => window.clearInterval(timer)
+    const unsubscribe = window.api.onDownloadQueueUpdated((queue) => {
+      setTasks(queue)
+      setIsLoading(false)
+    })
+    return unsubscribe
   }, [loadQueue])
+
+  React.useEffect(() => {
+    setSelectedTaskIds((current) => current.filter((taskId) => tasks.some((task) => task.id === taskId)))
+  }, [tasks])
 
   const runAction = async (taskId: number, action: () => Promise<unknown>, message: string) => {
     setActionTaskId(taskId)
@@ -91,6 +99,38 @@ export const DownloadsView: React.FC = () => {
     }
   }
 
+  const toggleTaskSelected = (taskId: number) => {
+    setSelectedTaskIds((current) =>
+      current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [...current, taskId]
+    )
+  }
+
+  const handleToggleSelectAll = () => {
+    setSelectedTaskIds(isAllSelected ? [] : tasks.map((task) => task.id))
+  }
+
+  const handleBulkDeleteFiles = async () => {
+    if (!hasSelection || !resolvedDirectory) return
+    const confirmed = window.confirm(
+      `删除所选 ${selectedTaskIds.length} 条下载任务，并删除当前下载目录中的对应磁盘文件？这不会删除 library 中的解压结果。`
+    )
+    if (!confirmed) return
+
+    setActionTaskId(-2)
+    try {
+      const result = await window.api.deleteDownloadTasksAndFiles(selectedTaskIds, resolvedDirectory)
+      setSelectedTaskIds((current) => current.filter((taskId) => !result.deletedTaskIds.includes(taskId)))
+      pushToast(`已删除 ${result.deletedTaskIds.length} 条任务，移除 ${result.deletedFiles.length} 个下载文件`)
+      await loadQueue()
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : '批量删除下载文件失败')
+    } finally {
+      setActionTaskId(null)
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-8">
       <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
@@ -108,6 +148,14 @@ export const DownloadsView: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+              disabled={tasks.length === 0 || actionTaskId === -2}
+              onClick={() => handleToggleSelectAll()}
+              type="button"
+            >
+              {isAllSelected ? '取消全选' : '全选'}
+            </button>
+            <button
               className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-white"
               onClick={() => void loadQueue()}
               type="button"
@@ -124,12 +172,26 @@ export const DownloadsView: React.FC = () => {
               <Trash2 size={16} />
               Clear All
             </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+              disabled={!hasSelection || !resolvedDirectory || actionTaskId === -2}
+              onClick={() => void handleBulkDeleteFiles()}
+              type="button"
+            >
+              <Trash2 size={16} />
+              删除所选文件
+            </button>
           </div>
         </div>
 
         <div className="mt-6 rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
           当前下载目录: <span className="font-mono text-[13px] text-slate-800">{resolvedDirectory || '读取中...'}</span>
         </div>
+        {hasSelection && (
+          <div className="mt-4 rounded-[1.4rem] border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700">
+            已选择 {selectedTaskIds.length} 条任务。批量删除只会移除位于当前下载目录内的磁盘文件，不会删除 `library/` 中的解压结果。
+          </div>
+        )}
       </section>
 
       {isLoading ? (
@@ -151,6 +213,12 @@ export const DownloadsView: React.FC = () => {
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        checked={selectedTaskIds.includes(task.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        onChange={() => toggleTaskSelected(task.id)}
+                        type="checkbox"
+                      />
                       <div className="truncate text-lg font-black text-slate-900">{task.displayName}</div>
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-black ${
@@ -186,8 +254,17 @@ export const DownloadsView: React.FC = () => {
                     </div>
 
                     <div className="mt-3 break-all text-[13px] font-medium text-slate-500">{task.outputPath}</div>
+                    {task.extractedPath && (
+                      <div className="mt-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                        已自动解压到: {task.extractedPath}
+                      </div>
+                    )}
                     {task.errorMessage && (
-                      <div className="mt-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600">
+                      <div className={`mt-2 rounded-2xl border px-3 py-2 text-xs font-bold ${
+                        task.status === 'done'
+                          ? 'border-amber-100 bg-amber-50 text-amber-700'
+                          : 'border-rose-100 bg-rose-50 text-rose-600'
+                      }`}>
                         {task.errorMessage}
                       </div>
                     )}

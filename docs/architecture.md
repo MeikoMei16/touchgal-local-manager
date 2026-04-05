@@ -18,6 +18,7 @@ TouchGal Local Manager is an Electron desktop app that proxies TouchGal upstream
 src/main/
   index.ts        IPC hub, upstream API relay, response normalization
   db.ts           SQLite schema bootstrap, CRUD helpers, history helpers
+  extractor.ts    Archive CLI detection and extraction helpers
   downloader.ts   Download queue manager, Cloudreve resolver, concurrent file worker, post-download extraction pipeline
   utils.ts        Filesystem helpers (cleanFolderName, scanLocalLibrary)
 
@@ -45,7 +46,7 @@ Owns:
 - SQLite access
 - filesystem access
 - download queue state
-- post-download extraction pipeline (Bandizip CLI)
+- post-download extraction pipeline (Bandizip-preferred / 7-Zip-fallback CLI)
 
 Rules:
 
@@ -133,7 +134,7 @@ Renderer persistence notes:
 - renderer logout must clear both layers: renderer auth state and the main-process token
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
 - renderer interaction preferences such as `detailSecondaryClickAction` are also persisted in renderer `localStorage`
-- renderer download-directory override is persisted in renderer `localStorage`, while the default path is resolved by the main process to project-root `download/`
+- renderer download-directory override is persisted in renderer `localStorage`, while the default archive path is resolved by the main process to project-root `download/`; extracted games are placed under project-root `library/`
 - hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
 - `uiStore.ts` owns the persistence configuration, but action implementations are delegated to `uiActions/*`
 
@@ -154,6 +155,8 @@ Important note:
 - homepage cards currently render at most 3 browse tags from the feed item itself; the card does not assume feed tags are equivalent to the fuller taxonomy exposed by `/patch/introduction`
 - both homepage and dedicated search now scroll the shared app content container back to top whenever pagination changes page
 - collection-card quick-download buttons reuse a shared renderer helper that resolves official TouchGal game resources on demand
+- detail links panel reuses the same official/community download classification: official resource actions enqueue downloads in-app, while community resource actions remain external-link launches
+- Library linked-game cards use a local-filesystem-first primary action: the card button reveals the real local directory in the OS file browser instead of opening TouchGal detail
 
 ## Data Flow
 
@@ -243,6 +246,22 @@ Homepage card behavior:
 9. Quick-collect currently supports direct local collection toggle, inline local-folder creation, login-gated cloud-folder toggle, and per-row loading/error feedback without leaving the homepage.
 10. The homepage `下载` hover tab now opens a floating quick-download panel instead of jumping directly to the detail links tab.
 11. That quick-download panel loads only TouchGal official `galgame` resources and queues them directly into the dedicated Downloads page.
+12. Quick-download entries now render the normalized metadata-chip set from the detail links model, including section/type/language/platform and extraction-code badges when available, instead of a single compressed text line.
+13. The shared quick-download popover used outside the homepage card rail now uses a wider fixed panel so full titles and chip rows remain readable.
+
+Detail links panel behavior:
+
+1. The links tab still shows both official and community resources from the detail payload.
+2. Resource cards reuse the shared official/community classification helper from `features/downloads/downloadHelpers.ts`.
+3. Clicking the primary download action on a TouchGal official resource enqueues the resolved links into the Downloads page using the same queue IPC path as quick download.
+4. Clicking the primary download action on a community resource still opens the upstream URL externally instead of routing it through the in-app downloader.
+
+Library behavior:
+
+1. The Library page is intentionally local-first rather than detail-first.
+2. Linked game cards surface the real local install path as visible metadata.
+3. The primary card action reveals that local path in the system file browser instead of jumping into the TouchGal detail overlay.
+4. Launch actions remain separate from reveal-in-folder actions so directory browsing and process launch are not conflated.
 
 Advanced filter interaction behavior:
 
@@ -386,28 +405,37 @@ Download queue flow:
 5. Directory shares are resolved by listing `GET /api/v3/share/list/<key>/?path=...` and then resolving each file individually with `PUT /api/v3/share/download/<key>?path=...`.
 6. Each resolved file becomes its own persisted SQLite `download_tasks` row with output path, progress bytes, status, and error state.
 7. The downloader runs a small concurrent worker pool instead of a single-file serial queue.
-8. Before resume/retry, Cloudreve source URLs are refreshed so expired presigned object URLs do not strand old tasks.
-9. File downloads use HTTP range requests when partial files already exist, so pause/resume and retry can continue from local bytes already on disk when the upstream object server still permits range requests.
-10. The dedicated Downloads page polls queue state, renders per-file progress, and exposes pause, resume, retry, delete, clear-finished, and reveal-in-folder actions.
+8. The worker-pool concurrency limit is persisted in SQLite, exposed in Settings, and applied immediately when the user changes it.
+9. Before resume/retry, Cloudreve source URLs are refreshed so expired presigned object URLs do not strand old tasks.
+10. File downloads use HTTP range requests when partial files already exist, so pause/resume and retry can continue from local bytes already on disk when the upstream object server still permits range requests.
+11. The dedicated Downloads page subscribes to pushed queue snapshots from the main process, renders per-file progress, and exposes pause, resume, retry, delete, clear-finished, reveal-in-folder, and batch-selection actions.
+12. Batch delete can remove both the selected task records and their on-disk files, but only when those files resolve inside the currently active download root; extracted `library/` outputs are intentionally out of scope.
+13. Download queue items also surface extraction follow-up state through `status`, `error_message`, and `extracted_path`.
 
 Post-download extraction pipeline:
 
 1. When a download task transitions to `status = 'done'`, the downloader calls `extractAndLink()` fire-and-forget.
 2. `extractAndLink` only runs if the file has a known archive extension (`.zip`, `.rar`, `.7z`, `.001`) and passes `isFirstPartOrSingle()` — multi-part continuations (`.part2.rar`, `.002`, etc.) are skipped.
-3. The main process probes the Bandizip CLI (`bz.exe`) at known install paths; if not found, extraction is silently skipped and the archive remains on disk.
-4. Password is resolved by probing with `bz l` in order: `""` → `"1.touchgal"` → `"宅方社"`. The probe also reads the expected file count from Bandizip's stdout (GBK-decoded).
-5. Extraction runs with `bz x -o:<targetDir> -y -aos [-p:<password>]`. File count is verified after extraction; mismatches delete the partial output and set an error message.
-6. On success, the extracted folder is renamed to the sanitised game name from the `games` table (if `gameId` is known), a `.tg_id` file is written into the folder, and a `local_paths` row is inserted with `source = 'download'`.
-7. `download_tasks.extracted_path` is updated to the final extracted folder path.
-8. Status transitions: `done` → `extracting` → `done` (with `extracted_path`) on success, or `done` (with `error_message`) on any failure.
+3. The main process probes supported archive CLIs in priority order: Bandizip CLI (`bz.exe`) first, then 7-Zip CLI (`7z` / `7z.exe`) as a fallback. If neither is available, extraction is silently skipped and the archive remains on disk.
+4. Password is resolved by probing in order: `""` → `"touchgal"`. Bandizip uses `bz l` and 7-Zip uses `7z t` / `7z l`; both paths also derive an expected extracted file count for post-extract verification.
+5. Extraction runs through the selected CLI (`bz x ...` or `7z x ...`). File count is verified after extraction; mismatches delete the partial output and set an error message.
+6. The final extraction target lives under the dedicated project-root `library/` directory; if `library/Game Name` already exists, the downloader allocates `library/Game Name (2)`, `library/Game Name (3)`, and so on rather than deleting or overwriting an existing install.
+7. On success, the extracted folder is renamed to the sanitised game name from the `games` table (if `gameId` is known), receives a `.tg_id` file, and is inserted into `local_paths` with `source = 'download'`.
+8. `download_tasks.extracted_path` is updated to the final extracted folder path.
+9. Status transitions: `done` → `extracting` → `done` (with `extracted_path`) on success, or `done` (with `error_message`) on any failure.
 
 Local game library architecture:
 
 1. The `games` table acts as the central identity hub; `local_paths`, `collections`, and `download_tasks` all reference it.
-2. `library_roots` stores user-owned watch directories for the Library page and records `last_scanned_at` after rescans.
+2. `library_roots` stores user-owned watch directories for the Library page, auto-seeds the default project-root `library/` directory, and records `last_scanned_at` after rescans.
 3. `local_paths` now carries `source` (`scan` / `download` / `manual`), `status` (`discovered` / `linked` / `verified` / `broken`), and `last_verified_at`.
 4. The `.tg_id` marker file written into extracted folders allows future library scans to directly link a folder to its `games` row without FTS matching.
-5. Matching pre-existing local game folders from unknown sources (renamed, no `.tg_id`) to TouchGal entries is **explicitly deferred** to a later sprint.
+5. Library scans are bounded-recursive up to 3 levels below each watched root; a folder becomes a candidate when it contains either a `.tg_id` marker or one or more discovered executables.
+6. Candidate folders are classified as `linked` (valid `.tg_id` that maps to a known game), `orphaned` (has `.tg_id` but no matching known game), or `unresolved` (no `.tg_id`, but looks launchable).
+7. Existing scanned `local_paths` that disappear from currently watched roots are marked `broken` instead of being deleted immediately, so the UI can surface stale paths for repair.
+8. The Library page is intentionally library-first: the main area shows linked local games, a side panel groups `orphaned` / `unresolved` / `broken` items under "Needs Attention", and watched roots remain a secondary management panel.
+9. Linked local games can open the shared TouchGal detail overlay and can also launch locally through `tg-get-executables` / `tg-launch-game`, using a saved executable when known or asking the user to choose when multiple `.exe` files are found.
+10. Matching pre-existing local game folders from unknown sources (renamed, no `.tg_id`) to TouchGal entries is **explicitly deferred** to a later sprint.
 
 ## Local Persistence
 
@@ -482,25 +510,26 @@ Status note:
 - Shared destructive confirmation dialog for local and cloud folder deletion on the Favorites page
 - Homepage quick-collect popover for local/cloud folder toggle directly from the browse card hover rail
 - **Browse history** — SQLite-backed, recorded on every detail open, shown in Profile History tab (default tab, login-not-required), clearable
-- **Post-download extraction pipeline** — Bandizip CLI detection, 3-tier password probe, multi-part handling, file-count verification, folder rename, `.tg_id` injection, `local_paths` insertion
-- **Local Library manager** — persisted watch-directory list, native directory picker, bulk rescan across saved roots, linked local-install cards, and a last-scan unresolved-folder report
+- **Post-download extraction pipeline** — Bandizip-preferred / 7-Zip-fallback CLI detection, 2-tier password probe, multi-part handling, file-count verification, folder rename, `.tg_id` injection, `local_paths` insertion
+- **Local Library manager** — auto-seeded `library/` watch root, library-first linked-game layout, native directory picker, bulk rescan across saved roots, grouped `orphaned` / `unresolved` / `broken` attention states, and direct local launch actions
+- **Download queue push updates** — renderer now subscribes to main-process queue snapshots instead of polling every 1.2 seconds
+- **Download concurrency setting** — SQLite-backed max concurrent download setting exposed in Settings and applied in the main-process worker pool
+- **Downloads bulk delete** — multi-select task deletion can also remove matching files under the active download root while leaving `library/` extraction outputs untouched
 
 ### Partial / In Progress
 
 - Local metadata cache usage is still limited
-- Library scanning still only inspects one directory level under each watched root
+- Library scanning is now bounded-recursive (up to 3 levels) but still intentionally avoids unknown-source auto-matching
 - Offline-first search is not yet the main browse path
 - Deciding which upstream resource payloads deserve durable SQLite storage is still deferred work, not a settled requirement
 - Homepage rating sort can still miss resources when the upstream rating candidate feed itself is incomplete
 - Cloud favorites still use upstream-owned folders only; create/delete are exposed now, but cloud-folder editing is not yet surfaced in this Electron UI
 - Cloud move/remove flows are sequential and correctness-oriented; they have not been optimized into a background job queue or optimistic write model yet
-- SettingsView extractor section (show detected extractor, allow path override) — not yet implemented
+- SettingsView extractor section now shows detected CLI state and effective fallback behavior, but manual extractor path override is still not implemented
 
 ### Deferred
 
 - Unknown-source local folder matching: mapping pre-existing locally downloaded game folders (renamed, no `.tg_id`, no identifiable metadata) to TouchGal entries via FTS or online search. **Explicitly deferred until the clean downstream path is fully stable.**
-- Download progress push (`webContents.send`) vs current 1.2s polling — deferred (P3)
-- Concurrent download limit exposed in UI — deferred (P3)
 
 ## Important Constraints
 

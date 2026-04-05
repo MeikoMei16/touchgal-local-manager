@@ -2,9 +2,17 @@ import axios from 'axios'
 import fs from 'node:fs'
 import path from 'node:path'
 import { URL } from 'node:url'
-import { getDb, linkLocalPath, type DownloadTaskRecord } from './db'
+import {
+  getDb,
+  getDownloadConcurrencySetting,
+  linkLocalPath,
+  upsertGame,
+  setDownloadConcurrencySetting,
+  type DownloadTaskRecord
+} from './db'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { findSupportedExtractor, type SupportedExtractor } from './extractor'
 
 const execFileAsync = promisify(execFile)
 
@@ -20,6 +28,7 @@ export interface DownloadTask {
   progressBytes: number
   totalBytes: number | null
   errorMessage: string | null
+  extractedPath: string | null
   createdAt: string
   updatedAt: string
 }
@@ -37,12 +46,20 @@ interface QueueDownloadInput {
   gameId: number | null
   sourceUrl: string
   downloadRoot: string
+  gameMetadata?: {
+    id: number
+    uniqueId: string
+    name: string
+    banner?: string | null
+    averageRating?: number
+    viewCount?: number
+    downloadCount?: number
+    alias?: string[]
+  } | null
 }
 
 const CLOUDREVE_SHARE_PATH = /^\/s\/([^/?#]+)/
 const DOWNLOADABLE_FILE_EXTENSION = /\.(zip|rar|7z|exe|part\d+\.rar)$/i
-const MAX_CONCURRENT_DOWNLOADS = 3
-
 const decodeUrlPathSegment = (value: string) => {
   try {
     return decodeURIComponent(value)
@@ -56,13 +73,35 @@ const normalizeSlashPath = (value: string) => {
   return value.startsWith('/') ? value : `/${value}`
 }
 
+const isPathInsideRoot = (targetPath: string, rootPath: string) => {
+  const relative = path.relative(rootPath, targetPath)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
 const ensureDir = (directory: string) => {
   fs.mkdirSync(directory, { recursive: true })
+}
+
+const pathExists = (targetPath: string) => {
+  try {
+    fs.accessSync(targetPath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const fileExists = (filePath: string) => {
   try {
     return fs.statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+const directoryExists = (directoryPath: string) => {
+  try {
+    return fs.statSync(directoryPath).isDirectory()
   } catch {
     return false
   }
@@ -98,12 +137,13 @@ const toTask = (record: DownloadTaskRecord): DownloadTask => ({
   progressBytes: record.progress_bytes,
   totalBytes: record.total_bytes ?? null,
   errorMessage: record.error_message ?? null,
+  extractedPath: record.extracted_path ?? null,
   createdAt: record.created_at,
   updatedAt: record.updated_at,
 })
 
 // ── Passwords used by TouchGal distributions ─────────────────────────────
-const TG_PASSWORDS = ['', '1.touchgal', '宅方社']
+const TG_PASSWORDS = ['', 'touchgal']
 
 // Archive extensions that trigger extraction (skip .exe — may be installer)
 const ARCHIVE_EXTENSIONS = new Set(['.zip', '.rar', '.7z', '.001'])
@@ -128,6 +168,17 @@ const isFirstPartOrSingle = (filename: string): boolean => {
 const sanitizeForFolder = (name: string): string =>
   name.replace(/[<>:"|?*\\/]/g, '_').trim()
 
+const getAvailableDirectoryPath = (basePath: string) => {
+  if (!pathExists(basePath)) return basePath
+
+  let suffix = 2
+  while (pathExists(`${basePath} (${suffix})`)) {
+    suffix += 1
+  }
+
+  return `${basePath} (${suffix})`
+}
+
 const countFilesRecursive = (dir: string): number => {
   let count = 0
   const recurse = (d: string) => {
@@ -142,12 +193,29 @@ const countFilesRecursive = (dir: string): number => {
   return count
 }
 
-/**
- * Probe archive metadata with `bz l` to find the correct password and
- * expected file count.  Returns { password, expectedCount } or null on failure.
- */
-const probeArchive = async (
-  bzPath: string,
+const pruneEmptyParents = (startDirectory: string, rootDirectory: string) => {
+  let current = startDirectory
+  while (isPathInsideRoot(current, rootDirectory) && current !== rootDirectory) {
+    if (!directoryExists(current)) {
+      current = path.dirname(current)
+      continue
+    }
+
+    const entries = fs.readdirSync(current)
+    if (entries.length > 0) return
+    fs.rmdirSync(current)
+    current = path.dirname(current)
+  }
+}
+
+const parseExpectedFileCount = (output: string): number | null => {
+  const match = output.match(/(\d+)\s+files?/i)
+  if (!match) return null
+  return parseInt(match[1], 10)
+}
+
+const probeBandizipArchive = async (
+  extractorPath: string,
   archivePath: string
 ): Promise<{ password: string; expectedCount: number } | null> => {
   for (const pwd of TG_PASSWORDS) {
@@ -156,7 +224,7 @@ const probeArchive = async (
       if (pwd) args.push(`-p:${pwd}`)
       args.push(archivePath)
 
-      const { stdout } = await execFileAsync(bzPath, args, {
+      const { stdout } = await execFileAsync(extractorPath, args, {
         timeout: 15_000,
         encoding: 'buffer',
       })
@@ -171,10 +239,9 @@ const probeArchive = async (
 
       if (out.includes('Invalid Password') || out.includes('Wrong password')) continue
 
-      // Parse "N files" from summary line
-      const match = out.match(/(\d+)\s+files/i)
-      if (match) {
-        return { password: pwd, expectedCount: parseInt(match[1], 10) }
+      const expectedCount = parseExpectedFileCount(out)
+      if (expectedCount != null) {
+        return { password: pwd, expectedCount }
       }
     } catch {
       continue
@@ -183,11 +250,51 @@ const probeArchive = async (
   return null
 }
 
-/**
- * Extract archive to targetDir using Bandizip CLI.
- */
-const extractArchive = async (
-  bzPath: string,
+const probeSevenZipArchive = async (
+  extractorPath: string,
+  archivePath: string
+): Promise<{ password: string; expectedCount: number } | null> => {
+  for (const pwd of TG_PASSWORDS) {
+    try {
+      const testArgs = ['t', '-y']
+      if (pwd) testArgs.push(`-p${pwd}`)
+      testArgs.push(archivePath)
+
+      await execFileAsync(extractorPath, testArgs, { timeout: 15_000, encoding: 'utf8' })
+
+      const listArgs = ['l']
+      if (pwd) listArgs.push(`-p${pwd}`)
+      listArgs.push(archivePath)
+
+      const { stdout } = await execFileAsync(extractorPath, listArgs, {
+        timeout: 15_000,
+        encoding: 'utf8',
+      })
+
+      const expectedCount = parseExpectedFileCount(stdout)
+      if (expectedCount != null) {
+        return { password: pwd, expectedCount }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+const probeArchive = async (
+  extractor: SupportedExtractor,
+  archivePath: string
+): Promise<{ password: string; expectedCount: number } | null> => {
+  if (extractor.kind === 'bandizip') {
+    return probeBandizipArchive(extractor.path, archivePath)
+  }
+  return probeSevenZipArchive(extractor.path, archivePath)
+}
+
+const extractBandizipArchive = async (
+  extractorPath: string,
   archivePath: string,
   targetDir: string,
   password: string
@@ -197,41 +304,48 @@ const extractArchive = async (
     if (password) args.push(`-p:${password}`)
     args.push(archivePath)
 
-    await execFileAsync(bzPath, args, { timeout: 300_000 })
+    await execFileAsync(extractorPath, args, { timeout: 300_000 })
     return true
   } catch {
     return false
   }
 }
 
-/**
- * Detect Bandizip CLI path.  Checks common install locations and PATH.
- */
-const findBandizipCli = (): string | null => {
-  const candidates = [
-    'C:\\Program Files\\Bandizip\\bz.exe',
-    'C:\\Program Files (x86)\\Bandizip\\bz.exe',
-    'bz',  // on PATH
-  ]
-  for (const c of candidates) {
-    try {
-      // A quick `bz` with no args exits non-zero but proves it exists
-      require('child_process').execFileSync(c, [], { timeout: 3000, stdio: 'ignore' })
-      return c
-    } catch (e: any) {
-      // execFileSync throws on non-zero exit, but if the file was found the
-      // error code will be numeric rather than ENOENT
-      if (e?.code !== 'ENOENT' && e?.code !== 'ENOTFOUND') return c
-    }
+const extractSevenZipArchive = async (
+  extractorPath: string,
+  archivePath: string,
+  targetDir: string,
+  password: string
+): Promise<boolean> => {
+  try {
+    const args = ['x', archivePath, `-o${targetDir}`, '-y', '-aos']
+    if (password) args.push(`-p${password}`)
+
+    await execFileAsync(extractorPath, args, { timeout: 300_000, encoding: 'utf8' })
+    return true
+  } catch {
+    return false
   }
-  return null
 }
 
+const extractArchive = async (
+  extractor: SupportedExtractor,
+  archivePath: string,
+  targetDir: string,
+  password: string
+): Promise<boolean> => {
+  if (extractor.kind === 'bandizip') {
+    return extractBandizipArchive(extractor.path, archivePath, targetDir, password)
+  }
+  return extractSevenZipArchive(extractor.path, archivePath, targetDir, password)
+}
 
 class DownloadManager {
   private static instance: DownloadManager
   private activeControllers = new Map<number, AbortController>()
   private progressSaveAtByTask = new Map<number, number>()
+  private queueListeners = new Set<(queue: DownloadTask[]) => void>()
+  private maxConcurrentDownloads = getDownloadConcurrencySetting()
 
   private constructor() {
     const db = getDb()
@@ -255,6 +369,12 @@ class DownloadManager {
     return defaultDir
   }
 
+  public getDefaultLibraryDirectory() {
+    const defaultDir = path.join(process.cwd(), 'library')
+    ensureDir(defaultDir)
+    return defaultDir
+  }
+
   public getQueue(): DownloadTask[] {
     const db = getDb()
     return db.prepare(`
@@ -270,11 +390,30 @@ class DownloadManager {
         progress_bytes,
         total_bytes,
         error_message,
+        extracted_path,
         created_at,
         updated_at
       FROM download_tasks
       ORDER BY created_at DESC, id DESC
     `).all().map((row) => toTask(row as DownloadTaskRecord))
+  }
+
+  public subscribeQueue(listener: (queue: DownloadTask[]) => void) {
+    this.queueListeners.add(listener)
+    return () => {
+      this.queueListeners.delete(listener)
+    }
+  }
+
+  public getMaxConcurrentDownloads() {
+    return this.maxConcurrentDownloads
+  }
+
+  public setMaxConcurrentDownloads(value: number) {
+    this.maxConcurrentDownloads = setDownloadConcurrencySetting(value)
+    this.notifyQueueChanged()
+    void this.processQueue()
+    return this.maxConcurrentDownloads
   }
 
   public parseLink(content: string): { provider: string; url: string; password?: string }[] {
@@ -306,7 +445,7 @@ class DownloadManager {
     const db = getDb()
     const insertedTasks: DownloadTask[] = []
     const existingTasks: DownloadTask[] = []
-    const persistedGameId = this.resolvePersistedGameId(input.gameId)
+    const persistedGameId = this.resolvePersistedGameId(input.gameId, input.gameMetadata ?? null)
 
     const insertTask = db.prepare(`
       INSERT INTO download_tasks (
@@ -320,9 +459,10 @@ class DownloadManager {
         progress_bytes,
         total_bytes,
         error_message,
+        extracted_path,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `)
 
     const selectExistingTask = db.prepare(`
@@ -338,6 +478,7 @@ class DownloadManager {
         progress_bytes,
         total_bytes,
         error_message,
+        extracted_path,
         created_at,
         updated_at
       FROM download_tasks
@@ -376,6 +517,7 @@ class DownloadManager {
     }
 
     void this.processQueue()
+    this.notifyQueueChanged()
 
     return {
       added: insertedTasks.length,
@@ -389,6 +531,7 @@ class DownloadManager {
     if (!task) throw new Error('Download task not found')
     this.resetTaskForQueue(taskId)
     void this.processQueue()
+    this.notifyQueueChanged()
     return this.getTask(taskId)
   }
 
@@ -397,6 +540,7 @@ class DownloadManager {
     if (!task) throw new Error('Download task not found')
     this.resetTaskForQueue(taskId)
     void this.processQueue()
+    this.notifyQueueChanged()
     return this.getTask(taskId)
   }
 
@@ -404,6 +548,7 @@ class DownloadManager {
     const activeController = this.activeControllers.get(taskId)
     if (activeController) {
       activeController.abort()
+      this.notifyQueueChanged()
       return this.getTask(taskId)
     }
 
@@ -413,6 +558,7 @@ class DownloadManager {
       SET status = 'paused', updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND status = 'queued'
     `).run(taskId)
+    this.notifyQueueChanged()
 
     return this.getTask(taskId)
   }
@@ -432,18 +578,58 @@ class DownloadManager {
     }
 
     db.prepare(`DELETE FROM download_tasks WHERE id = ?`).run(taskId)
+    this.notifyQueueChanged()
     return { success: true }
+  }
+
+  public async deleteTasksAndFiles(taskIds: number[], downloadRoot: string) {
+    const normalizedRoot = path.resolve(downloadRoot)
+    ensureDir(normalizedRoot)
+    const db = getDb()
+
+    const deletedTaskIds: number[] = []
+    const deletedFiles: string[] = []
+
+    for (const taskId of taskIds) {
+      const task = this.getTask(taskId)
+      if (!task) continue
+
+      const activeController = this.activeControllers.get(taskId)
+      if (activeController) {
+        activeController.abort()
+      }
+
+      if (task.outputPath) {
+        const resolvedOutputPath = path.resolve(task.outputPath)
+        if (isPathInsideRoot(resolvedOutputPath, normalizedRoot) && fileExists(resolvedOutputPath)) {
+          fs.rmSync(resolvedOutputPath, { force: true })
+          deletedFiles.push(resolvedOutputPath)
+          pruneEmptyParents(path.dirname(resolvedOutputPath), normalizedRoot)
+        }
+      }
+
+      db.prepare(`DELETE FROM download_tasks WHERE id = ?`).run(taskId)
+      deletedTaskIds.push(taskId)
+    }
+
+    this.notifyQueueChanged()
+    return {
+      success: true,
+      deletedTaskIds,
+      deletedFiles,
+    }
   }
 
   public clearFinishedTasks() {
     const db = getDb()
     db.prepare(`DELETE FROM download_tasks WHERE status = 'done'`).run()
+    this.notifyQueueChanged()
     return { success: true }
   }
 
   public async processQueue() {
     const db = getDb()
-    const availableSlots = Math.max(0, MAX_CONCURRENT_DOWNLOADS - this.activeControllers.size)
+    const availableSlots = Math.max(0, this.maxConcurrentDownloads - this.activeControllers.size)
     if (availableSlots === 0) return
 
     const nextTasks = db.prepare(`
@@ -459,6 +645,7 @@ class DownloadManager {
         progress_bytes,
         total_bytes,
         error_message,
+        extracted_path,
         created_at,
         updated_at
       FROM download_tasks
@@ -502,6 +689,7 @@ class DownloadManager {
         progress_bytes,
         total_bytes,
         error_message,
+        extracted_path,
         created_at,
         updated_at
       FROM download_tasks
@@ -511,7 +699,30 @@ class DownloadManager {
     return row ? toTask(row) : null
   }
 
-  private resolvePersistedGameId(gameId: number | null) {
+  private resolvePersistedGameId(
+    gameId: number | null,
+    gameMetadata?: QueueDownloadInput['gameMetadata']
+  ) {
+    if (gameMetadata?.uniqueId && gameMetadata.name) {
+      upsertGame({
+        id: gameMetadata.id,
+        uniqueId: gameMetadata.uniqueId,
+        name: gameMetadata.name,
+        banner: gameMetadata.banner ?? null,
+        averageRating: gameMetadata.averageRating ?? 0,
+        viewCount: gameMetadata.viewCount ?? 0,
+        downloadCount: gameMetadata.downloadCount ?? 0,
+        alias: gameMetadata.alias ?? [],
+      })
+
+      const db = getDb()
+      const existingByUniqueId = db.prepare('SELECT id FROM games WHERE unique_id = ? LIMIT 1')
+        .get(gameMetadata.uniqueId) as { id: number } | undefined
+      if (existingByUniqueId?.id != null) {
+        return existingByUniqueId.id
+      }
+    }
+
     if (gameId == null) return null
     const db = getDb()
     const existing = db.prepare('SELECT id FROM games WHERE id = ? LIMIT 1').get(gameId) as { id: number } | undefined
@@ -525,6 +736,14 @@ class DownloadManager {
       SET status = 'queued', error_message = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(taskId)
+  }
+
+  private notifyQueueChanged() {
+    if (this.queueListeners.size === 0) return
+    const queue = this.getQueue()
+    for (const listener of this.queueListeners) {
+      listener(queue)
+    }
   }
 
   private async resolveSource(sourceUrl: string, downloadRoot: string): Promise<ResolvedDownloadTarget[]> {
@@ -690,6 +909,7 @@ class DownloadManager {
       SET status = 'downloading', error_message = NULL, progress_bytes = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(existingBytes, task.id)
+    this.notifyQueueChanged()
 
     const headers: Record<string, string> = {}
     if (existingBytes > 0) {
@@ -726,6 +946,7 @@ class DownloadManager {
           SET progress_bytes = ?, total_bytes = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(progressBytes, totalBytes, task.id)
+        this.notifyQueueChanged()
       }
     })
 
@@ -741,6 +962,7 @@ class DownloadManager {
           SET status = 'paused', progress_bytes = ?, total_bytes = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(progressBytes, totalBytes, task.id)
+        this.notifyQueueChanged()
         return
       }
 
@@ -749,6 +971,7 @@ class DownloadManager {
         SET status = 'error', progress_bytes = ?, total_bytes = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(progressBytes, totalBytes, error instanceof Error ? error.message : String(error), task.id)
+      this.notifyQueueChanged()
       throw error
     })
 
@@ -759,6 +982,7 @@ class DownloadManager {
       SET status = 'done', progress_bytes = ?, total_bytes = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(progressBytes, totalBytes, task.id)
+    this.notifyQueueChanged()
 
     // Kick off post-download extraction pipeline (non-blocking)
     void this.extractAndLink(task).catch(() => undefined)
@@ -779,8 +1003,8 @@ class DownloadManager {
 
     if (!ARCHIVE_EXTENSIONS.has(ext) || !isFirstPartOrSingle(filename)) return
 
-    const bzPath = findBandizipCli()
-    if (!bzPath) return  // Bandizip not installed — skip silently
+    const extractor = findSupportedExtractor()
+    if (!extractor) return
 
     const db = getDb()
 
@@ -789,16 +1013,18 @@ class DownloadManager {
       SET status = 'extracting', updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(task.id)
+    this.notifyQueueChanged()
 
     try {
-      const probe = await probeArchive(bzPath, task.outputPath)
+      const probe = await probeArchive(extractor, task.outputPath)
       if (!probe) {
         // Password probe failed — revert to done, leave archive in place
         db.prepare(`
           UPDATE download_tasks
-          SET status = 'done', error_message = 'Extraction skipped: no matching password', updated_at = CURRENT_TIMESTAMP
+          SET status = 'done', error_message = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(task.id)
+        `).run(`Extraction skipped: ${extractor.name} could not verify password`, task.id)
+        this.notifyQueueChanged()
         return
       }
 
@@ -815,22 +1041,18 @@ class DownloadManager {
         }
       }
 
-      const extractDir = path.join(path.dirname(task.outputPath), folderName)
-
-      // Clean up any previous partial extraction
-      if (fs.existsSync(extractDir)) {
-        fs.rmSync(extractDir, { recursive: true, force: true })
-      }
+      const extractDir = getAvailableDirectoryPath(path.join(this.getDefaultLibraryDirectory(), folderName))
       fs.mkdirSync(extractDir, { recursive: true })
 
-      const success = await extractArchive(bzPath, task.outputPath, extractDir, probe.password)
+      const success = await extractArchive(extractor, task.outputPath, extractDir, probe.password)
       if (!success) {
         fs.rmSync(extractDir, { recursive: true, force: true })
         db.prepare(`
           UPDATE download_tasks
-          SET status = 'done', error_message = 'Extraction failed', updated_at = CURRENT_TIMESTAMP
+          SET status = 'done', error_message = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(task.id)
+        `).run(`Extraction failed via ${extractor.name}`, task.id)
+        this.notifyQueueChanged()
         return
       }
 
@@ -843,6 +1065,7 @@ class DownloadManager {
           SET status = 'done', error_message = 'Extraction verification failed (' + actualCount + '/' + probe.expectedCount + ' files)', updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(task.id)
+        this.notifyQueueChanged()
         return
       }
 
@@ -861,12 +1084,14 @@ class DownloadManager {
         SET status = 'done', extracted_path = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(extractDir, task.id)
+      this.notifyQueueChanged()
     } catch (err) {
       db.prepare(`
         UPDATE download_tasks
         SET status = 'done', error_message = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(`Extraction error: ${err instanceof Error ? err.message : String(err)}`, task.id)
+      this.notifyQueueChanged()
     }
   }
 }

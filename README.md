@@ -22,6 +22,7 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - full-screen screenshot viewer with previous/next navigation and keyboard arrow support
 - detail resource metadata chips normalized to field-aware Chinese labels with duplicate labels removed
 - detail resource type chips normalized against upstream enum drift such as `row` rendering as `生肉资源`
+- detail links panel now routes TouchGal official resources into the in-app download queue while community resources still open as external links
 - startup session restore that rebuilds renderer auth state from main-process session validation instead of trusting persisted renderer login state
 - persisted auth-cookie jar alongside the normalized token so dev restarts can restore upstream session context more faithfully
 - automatic clearing of stale persisted auth artifacts when startup revalidation reports an invalid session
@@ -30,9 +31,10 @@ Electron desktop client for browsing TouchGal resources with a local-state-heavy
 - detail-header favorite menu for adding/removing resources from local collections without login
 - cloud favorite folders can now open paginated folder contents through the upstream folder-patch API
 - official-resource quick-download popovers on homepage cards and collection cards
-- dedicated Downloads page with persisted per-file queue, progress, pause/resume/retry, and completion cleanup
+- dedicated Downloads page with persisted per-file queue, progress, pause/resume/retry, completion cleanup, bulk selection, and batch file deletion inside the active download root
 - local SQLite-backed download queue with direct Cloudreve share resolution, presigned object downloads, and concurrent workers
-- local Library page with persisted watch directories, rescans, linked-install cards, and unresolved-folder reporting
+- local Library page with auto-seeded `library/` watch roots, a library-first layout, linked-install cards, direct open-in-folder actions, local launch support, and needs-attention reporting for unresolved/orphaned/broken entries
+- pushed download queue updates plus Settings-backed download concurrency and extractor status
 
 ## Stack
 
@@ -112,15 +114,20 @@ Implemented or active:
 - checkpoint-based advanced-build resume without page-1 snapback during in-progress rendering
 - homepage cards redesigned around feed-level browse data rather than detail-only metadata
 - detail overlay with comments, ratings, screenshots, PV extraction, sectioned resource links, and session-aware discussion/evaluation gating
+- detail links panel official-download actions now enqueue directly into Downloads, while community resources remain external-link flows
 - detail overlay `Esc` key handling with layered close behavior between overlay and full-screen screenshot viewer
 - full-screen screenshot navigation with on-screen arrows and keyboard left/right support
 - detail resource chip fallback for upstream `row` type variants so resource cards render `生肉资源` instead of leaking raw API values
 - settings-backed detail right-click behavior
-- settings-backed download directory selection with default project-root `download/`
-- homepage quick-download popover limited to TouchGal official `galgame` resources
+- settings-backed download directory selection with default project-root `download/`, while extracted games land in project-root `library/`
+- homepage quick-download popover limited to TouchGal official `galgame` resources, now showing full metadata chips such as section/type/language/platform plus extraction code badges
 - local-collection and cloud-collection card quick-download buttons
-- Downloads nav/page with persisted task queue, progress, pause/resume/retry/delete, and clear-finished actions
-- Library page with persisted watch roots, native directory picking, rescan workflow, linked local-path inventory, and unresolved last-scan reporting
+- Downloads nav/page with persisted task queue, progress, pause/resume/retry/delete, clear-finished actions, bulk selection, and batch delete of files under the current download directory
+- Library page with auto-seeded `library/` as the default watched root, native directory picking, rescan workflow, linked local-path inventory, direct open-in-folder plus local launch actions, and library-first grouping into linked games / needs attention / watched directories
+- Settings-backed download concurrency and extractor detection status, plus push-driven Downloads updates from the main process
+- archive extractor fallback order is now `Bandizip -> 7-Zip`, and password probing currently tries `""` then `touchgal`
+- bounded-recursive library scanning (up to 3 levels) with `linked`, `orphaned`, `unresolved`, and `broken` classification instead of flat one-level discovery
+- extraction target collision handling that keeps existing `library/` folders intact by creating `Game Name (2)`-style folders instead of overwriting or deleting
 
 Still in progress:
 
@@ -149,7 +156,7 @@ Persistence status note:
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, official-resource quick-download surfaces across homepage and collection cards, download-directory settings, the persisted concurrent download queue, the current local-library manager workflow, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
+The docs set is current for left-nav refresh restore, homepage card interaction design, feed-vs-detail tag sourcing, homepage/search page-change scroll reset, the homepage state refactor, advanced-filter behavior, checkpoint-based advanced-build resume, Search-page scope/sort/NSFW controls, visible search-page rating-sort progress, incremental search-page rating rendering, rating-sort stabilization via the local catalog pipeline, main-process session relay rules, startup session revalidation, persisted auth-cookie restore/cleanup behavior, local-vs-cloud favorites architecture including cloud-folder content pagination, official-resource quick-download surfaces across homepage and collection cards, detail-panel official-download queueing versus community external links, quick-download metadata-chip presentation, download-directory settings, the persisted concurrent download queue, Downloads bulk select and batch file deletion, the current local-library manager workflow, `download/ -> library/` extraction defaults, library-first local game management, recursive scan classification, local launch support, extractor fallback order and password-probe rules, upstream download-type normalization such as `row -> raw`, full-screen screenshot navigation behavior, detail-overlay `Esc` handling, and the current detail-overlay data flow including session-aware social gating and post-login social refresh.
 
 Lint note:
 

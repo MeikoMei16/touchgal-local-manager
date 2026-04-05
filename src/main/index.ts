@@ -11,8 +11,11 @@ import {
   clearBrowseHistory,
   createLocalCollection,
   deleteLocalCollection,
+  deleteLocalPathsByIds,
+  getDownloadConcurrencySetting,
   getBrowseHistory,
   getDb,
+  getLinkedLocalGameById,
   initDb,
   listLibraryRoots,
   listLinkedLocalGames,
@@ -29,6 +32,7 @@ import {
 } from './httpProfile'
 import { cleanFolderName, discoverExecutables } from './utils'
 import { downloadManager } from './downloader'
+import { getExtractorStatus } from './extractor'
 
 // Configure logging
 log.initialize({ spyRendererConsole: true })
@@ -700,32 +704,111 @@ const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
   return payload as T
 }
 
+interface ScannedLibraryFolder {
+  rootPath: string
+  path: string
+  folderName: string
+  tg_id: string | null
+  matchState: 'linked' | 'orphaned' | 'unresolved'
+  executableNames: string[]
+  depth: number
+}
+
+const MAX_LIBRARY_SCAN_DEPTH = 3
+
+const isPathInsideRoot = (targetPath: string, rootPath: string) => {
+  const relative = path.relative(rootPath, targetPath)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
 const scanForGalgameFolders = async (rootPaths: string[]) => {
-  const results: Array<{ path: string; folderName: string; tg_id: string | null }> = []
-  const scanTasks = rootPaths.map(async (rootPath) => {
+  const db = getDb()
+  const results: ScannedLibraryFolder[] = []
+  const knownIds = new Set(
+    (
+      db.prepare('SELECT unique_id FROM games').all() as Array<{ unique_id: string }>
+    ).map((row) => row.unique_id)
+  )
+
+  const walkDirectory = async (rootPath: string, currentPath: string, depth: number): Promise<void> => {
+    if (depth > MAX_LIBRARY_SCAN_DEPTH) return
+
+    let entries: fs.Dirent[] = []
     try {
-      if (!fs.existsSync(rootPath)) return
-      const dirs = await fs.promises.readdir(rootPath, { withFileTypes: true })
-      const dirTasks = dirs.map(async (dir) => {
-        if (!dir.isDirectory()) return
-        const fullPath = path.join(rootPath, dir.name)
-        const tgIdPath = path.join(fullPath, '.tg_id')
-        let tg_id: string | null = null
-        try {
-          if (fs.existsSync(tgIdPath)) {
-            tg_id = (await fs.promises.readFile(tgIdPath, 'utf8')).trim()
-          }
-        } catch { /* ignore */ }
-        results.push({ path: fullPath, folderName: dir.name, tg_id })
+      entries = await fs.promises.readdir(currentPath, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    const directories = entries.filter((entry) => entry.isDirectory())
+    const tgIdPath = path.join(currentPath, '.tg_id')
+    let tg_id: string | null = null
+
+    try {
+      if (fs.existsSync(tgIdPath)) {
+        tg_id = (await fs.promises.readFile(tgIdPath, 'utf8')).trim() || null
+      }
+    } catch {
+      tg_id = null
+    }
+
+    const executableNames = await discoverExecutables(currentPath)
+    const isCandidate = depth > 0 && (Boolean(tg_id) || executableNames.length > 0)
+
+    if (isCandidate) {
+      const matchState =
+        tg_id != null
+          ? (knownIds.has(tg_id) ? 'linked' : 'orphaned')
+          : 'unresolved'
+
+      results.push({
+        rootPath,
+        path: currentPath,
+        folderName: path.basename(currentPath),
+        tg_id,
+        matchState,
+        executableNames,
+        depth,
       })
-      await Promise.all(dirTasks)
-    } catch { /* ignore */ }
-  })
-  await Promise.all(scanTasks)
+    }
+
+    await Promise.all(
+      directories.map((dir) => walkDirectory(rootPath, path.join(currentPath, dir.name), depth + 1))
+    )
+  }
+
+  await Promise.all(
+    rootPaths.map(async (rootPath) => {
+      try {
+        if (!fs.existsSync(rootPath)) return
+        await walkDirectory(rootPath, rootPath, 0)
+      } catch {
+        return
+      }
+    })
+  )
+
+  results.sort((a, b) => a.path.localeCompare(b.path))
   return results
 }
 
 let win: BrowserWindow | null = null
+const childWindows = new Set<BrowserWindow>()
+
+const loadRendererTarget = (targetWindow: BrowserWindow, query?: Record<string, string>) => {
+  const search = query ? new URLSearchParams(query).toString() : ''
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
+    if (search) {
+      url.search = search
+    }
+    targetWindow.loadURL(url.toString())
+    return
+  }
+
+  targetWindow.loadFile(join(__dirname, '../renderer/index.html'), search ? { search: `?${search}` } : undefined)
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -743,16 +826,62 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  loadRendererTarget(win)
+
   if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
     win.webContents.openDevTools()
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+const createLocalGameWindow = (localGameId: number) => {
+  const linkedGame = getLinkedLocalGameById(localGameId)
+  if (!linkedGame) {
+    throw new Error('Local game not found')
+  }
+
+  const child = new BrowserWindow({
+    width: 1280,
+    height: 900,
+    minWidth: 980,
+    minHeight: 720,
+    autoHideMenuBar: true,
+    title: linkedGame.name ?? `Local Game ${linkedGame.id}`,
+    parent: win ?? undefined,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.cjs'),
+      sandbox: false,
+    },
+  })
+
+  child.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: 'deny' }
+  })
+
+  childWindows.add(child)
+  child.on('closed', () => {
+    childWindows.delete(child)
+  })
+
+  loadRendererTarget(child, {
+    window: 'local-game',
+    localGameId: String(localGameId),
+  })
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    child.webContents.openDevTools({ mode: 'detach' })
+  }
+
+  return { success: true }
 }
 
 app.whenReady().then(() => {
   initDb()
+  addLibraryRoot(downloadManager.getDefaultLibraryDirectory())
+  downloadManager.subscribeQueue((queue) => {
+    if (!win || win.isDestroyed()) return
+    win.webContents.send('download-queue-updated', queue)
+  })
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -786,14 +915,20 @@ handleWithLog('scan-local-library', async (_event, paths: string[]) => {
   const db = getDb()
 
   const insertPath = db.prepare(`
-    INSERT INTO local_paths (path, game_id)
-    VALUES (?, (SELECT id FROM games WHERE unique_id = ?))
-    ON CONFLICT DO NOTHING
+    INSERT INTO local_paths (path, game_id, exe_path, source, status, last_verified_at)
+    VALUES (?, (SELECT id FROM games WHERE unique_id = ?), ?, 'scan', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(path) DO UPDATE SET
+      game_id = COALESCE(excluded.game_id, local_paths.game_id),
+      exe_path = COALESCE(excluded.exe_path, local_paths.exe_path),
+      source = 'scan',
+      status = excluded.status,
+      last_verified_at = CURRENT_TIMESTAMP
   `)
 
-  const transaction = db.transaction((items) => {
+  const transaction = db.transaction((items: ScannedLibraryFolder[]) => {
     for (const item of items) {
-      insertPath.run(item.path, item.tg_id)
+      const status = item.matchState === 'linked' ? 'linked' : 'discovered'
+      insertPath.run(item.path, item.tg_id, item.executableNames[0] ?? null, status)
     }
   })
 
@@ -833,20 +968,45 @@ handleWithLog('tg-library-rescan', async (_event, rootPaths?: string[]) => {
 
   const folders = await scanForGalgameFolders(paths)
   const db = getDb()
+  const seenPaths = new Set(folders.map((folder) => folder.path))
 
   const insertPath = db.prepare(`
-    INSERT INTO local_paths (path, game_id, source, status, last_verified_at)
-    VALUES (?, (SELECT id FROM games WHERE unique_id = ?), 'scan', CASE WHEN ? IS NULL THEN 'discovered' ELSE 'linked' END, CURRENT_TIMESTAMP)
+    INSERT INTO local_paths (path, game_id, exe_path, source, status, last_verified_at)
+    VALUES (?, (SELECT id FROM games WHERE unique_id = ?), ?, 'scan', ?, CURRENT_TIMESTAMP)
     ON CONFLICT(path) DO UPDATE SET
       game_id = COALESCE(excluded.game_id, local_paths.game_id),
+      exe_path = COALESCE(excluded.exe_path, local_paths.exe_path),
       source = 'scan',
-      status = CASE WHEN excluded.game_id IS NULL THEN local_paths.status ELSE 'linked' END,
+      status = excluded.status,
       last_verified_at = CURRENT_TIMESTAMP
   `)
+  const markBroken = db.prepare(`
+    UPDATE local_paths
+    SET status = 'broken', last_verified_at = CURRENT_TIMESTAMP
+    WHERE source = 'scan' AND path = ?
+  `)
+  const existingScanRows = db.prepare(`
+    SELECT path
+    FROM local_paths
+    WHERE source = 'scan'
+  `).all() as Array<{ path: string }>
 
-  const transaction = db.transaction((items: Array<{ path: string; tg_id: string | null }>) => {
+  const transaction = db.transaction((items: ScannedLibraryFolder[]) => {
     for (const item of items) {
-      insertPath.run(item.path, item.tg_id, item.tg_id)
+      const status =
+        item.matchState === 'linked'
+          ? 'linked'
+          : item.matchState === 'orphaned'
+            ? 'verified'
+            : 'discovered'
+
+      insertPath.run(item.path, item.tg_id, item.executableNames[0] ?? null, status)
+    }
+
+    for (const row of existingScanRows) {
+      if (seenPaths.has(row.path)) continue
+      if (!paths.some((rootPath) => isPathInsideRoot(row.path, rootPath))) continue
+      markBroken.run(row.path)
     }
   })
 
@@ -862,6 +1022,62 @@ handleWithLog('tg-library-rescan', async (_event, rootPaths?: string[]) => {
 
 handleWithLog('tg-library-list-linked-games', () => {
   return listLinkedLocalGames()
+})
+
+handleWithLog('tg-library-get-linked-game', (_event, localGameId: number) => {
+  return getLinkedLocalGameById(localGameId)
+})
+
+handleWithLog('tg-open-local-game-window', (_event, localGameId: number) => {
+  return createLocalGameWindow(localGameId)
+})
+
+handleWithLog('tg-library-delete-games-and-files', async (_event, localPathIds: number[]) => {
+  const selectedIds = Array.isArray(localPathIds)
+    ? localPathIds.filter((value): value is number => Number.isInteger(value) && value > 0)
+    : []
+
+  if (selectedIds.length === 0) {
+    return { success: true, deletedIds: [], deletedPaths: [], skippedPaths: [] }
+  }
+
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT id, path
+    FROM local_paths
+    WHERE id IN (${selectedIds.map(() => '?').join(',')})
+  `).all(...selectedIds) as Array<{ id: number; path: string }>
+
+  const rootPaths = listLibraryRoots().map((root) => path.resolve(root.path))
+  const deletedIds: number[] = []
+  const deletedPaths: string[] = []
+  const skippedPaths: string[] = []
+
+  for (const row of rows) {
+    const resolvedPath = path.resolve(row.path)
+    const insideKnownRoot = rootPaths.some((rootPath) => isPathInsideRoot(resolvedPath, rootPath))
+    if (!insideKnownRoot) {
+      skippedPaths.push(resolvedPath)
+      continue
+    }
+
+    try {
+      fs.rmSync(resolvedPath, { recursive: true, force: true })
+      deletedIds.push(row.id)
+      deletedPaths.push(resolvedPath)
+    } catch {
+      skippedPaths.push(resolvedPath)
+    }
+  }
+
+  deleteLocalPathsByIds(deletedIds)
+
+  return {
+    success: true,
+    deletedIds,
+    deletedPaths,
+    skippedPaths,
+  }
 })
 
 handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {
@@ -1135,16 +1351,42 @@ handleWithLog('tg-pick-download-directory', async () => {
   return result.filePaths[0]
 })
 
-handleWithLog('tg-queue-download', async (_event, gameId: number | null, sourceUrl: string, downloadRoot?: string) => {
+handleWithLog(
+  'tg-queue-download',
+  async (
+    _event,
+    gameId: number | null,
+    sourceUrl: string,
+    downloadRoot?: string,
+    gameMetadata?: {
+      id: number
+      uniqueId: string
+      name: string
+      banner?: string | null
+      averageRating?: number
+      viewCount?: number
+      downloadCount?: number
+      alias?: string[]
+    } | null
+  ) => {
   return downloadManager.queueDownload({
     gameId,
     sourceUrl,
-    downloadRoot: downloadRoot && downloadRoot.trim() ? downloadRoot : downloadManager.getDefaultDownloadDirectory()
+    downloadRoot: downloadRoot && downloadRoot.trim() ? downloadRoot : downloadManager.getDefaultDownloadDirectory(),
+    gameMetadata: gameMetadata ?? null,
   })
 })
 
 handleWithLog('tg-get-download-queue', () => {
   return downloadManager.getQueue()
+})
+
+handleWithLog('tg-get-download-concurrency', () => {
+  return getDownloadConcurrencySetting()
+})
+
+handleWithLog('tg-set-download-concurrency', async (_event, value: number) => {
+  return downloadManager.setMaxConcurrentDownloads(value)
 })
 
 handleWithLog('tg-resume-download-task', async (_event, taskId: number) => {
@@ -1163,6 +1405,10 @@ handleWithLog('tg-delete-download-task', async (_event, taskId: number) => {
   return downloadManager.deleteTask(taskId)
 })
 
+handleWithLog('tg-delete-download-tasks-and-files', async (_event, taskIds: number[], downloadRoot: string) => {
+  return downloadManager.deleteTasksAndFiles(taskIds, downloadRoot)
+})
+
 handleWithLog('tg-clear-finished-download-tasks', async () => {
   return downloadManager.clearFinishedTasks()
 })
@@ -1170,6 +1416,12 @@ handleWithLog('tg-clear-finished-download-tasks', async () => {
 handleWithLog('tg-reveal-download-task', async (_event, outputPath: string) => {
   if (!outputPath) return { success: false }
   shell.showItemInFolder(outputPath)
+  return { success: true }
+})
+
+handleWithLog('tg-reveal-path', async (_event, targetPath: string) => {
+  if (!targetPath) return { success: false }
+  shell.showItemInFolder(targetPath)
   return { success: true }
 })
 
@@ -1402,20 +1654,5 @@ handleWithLog('tg-clear-history', () => {
 })
 
 handleWithLog('tg-check-extractor', () => {
-  const { execFileSync } = require('node:child_process')
-  const candidates = [
-    'C:\\Program Files\\Bandizip\\bz.exe',
-    'C:\\Program Files (x86)\\Bandizip\\bz.exe',
-  ]
-  for (const c of candidates) {
-    try {
-      execFileSync(c, [], { timeout: 3000, stdio: 'ignore' })
-      return { found: true, path: c, name: 'Bandizip' }
-    } catch (e: any) {
-      if (e?.code !== 'ENOENT' && e?.code !== 'ENOTFOUND') {
-        return { found: true, path: c, name: 'Bandizip' }
-      }
-    }
-  }
-  return { found: false, path: null, name: null }
+  return getExtractorStatus()
 })

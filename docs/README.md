@@ -49,11 +49,19 @@ Current cross-cutting topics covered here:
 - collection-overlay to detail-overlay stacking order rules
 - invalid nested-button avoidance in Favorites folder cards
 - detail media extraction from introduction HTML and sectioned resource-link presentation via `/patch/resource`
+- detail links panel official resources now queue in-app downloads while community resources keep the external-link flow
 - homepage quick-collect panel keeps card clipping intact while allowing the panel itself to float across the grid and auto-flip left/right by viewport position
 - homepage quick-download panel limited to TouchGal official game resources
 - collection-card quick-download buttons and body-level floating download panels
-- persisted download queue, concurrent worker behavior, resume/retry/delete semantics, and the dedicated Downloads page
-- local Library manager watch-root persistence, rescan flow, linked-install inventory, and unresolved-folder reporting
+- persisted download queue, concurrent worker behavior, resume/retry/delete semantics, bulk selection, and the dedicated Downloads page
+- quick-download entries now surface the same normalized metadata chips used by the detail links view instead of a size-only compact line
+- shared quick-download popovers now use a wider panel layout so full metadata chips and long titles fit without collapsing
+- local Library manager default `library/` watch-root seeding, library-first layout, rescan flow, linked-install inventory, direct open-in-folder and local launch actions, and grouped unresolved/orphaned/broken reporting
+- pushed download-queue updates, extractor-status settings, and SQLite-backed download concurrency settings
+- post-download extraction into project-root `library/` while archives remain under `download/`, including collision-safe target naming
+- bounded-recursive library scanning (up to 3 levels) with explicit candidate classification instead of one-level folder discovery
+- extractor fallback order (`Bandizip -> 7-Zip`) and the current password probe set (`""`, `touchgal`)
+- batch deletion of download files is constrained to paths inside the current download root and deliberately excludes `library/` extraction outputs
 
 ## API Notes
 
