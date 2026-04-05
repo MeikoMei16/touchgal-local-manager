@@ -10,7 +10,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20|%20Linux-blue)]()
 
 <!-- 👇 Replace with an actual screenshot of your app -->
-<!-- ![TouchGal Local Manager](./docs/assets/screenshot.png) -->
+![TouchGal Local Manager](./docs/assets/homepage.png) 
 
 </div>
 
