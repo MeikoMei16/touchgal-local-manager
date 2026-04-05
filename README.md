@@ -77,6 +77,15 @@ pnpm build
 - [docs/library-resource-pipeline-status.md](docs/library-resource-pipeline-status.md)
 - [docs/styling.md](docs/styling.md)
 
+## 致谢与免责声明
+
+- Made with love by `Meiko Mei`
+- 原站：<https://www.touchgal.top/>
+- 项目仓库：<https://github.com/MeikoMei16/touchgal-local-manager>
+- 请支持原站与原作者。本项目是开源且免费的第三方桌面工具，不是 TouchGal 官方客户端。
+- 游戏资源、站点内容、接口数据、名称与相关归属，均应以原站及原权利人为准；本项目主要提供本地管理与桌面交互层。
+- 本项目由 Linux.do 激励实现，成为可能。学 AI，上 L 站！真诚、友善、团结、专业，共建你我引以为荣之社区。
+
 ## 备注
 
 - 仓库里的 `reference_project/` 只是参考材料，不属于主应用运行链路

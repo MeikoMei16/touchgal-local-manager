@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download as DownloadIcon, Home as HomeIcon, Search, Library as LibraryIcon, Settings, Heart as HeartIcon, User as UserIcon } from 'lucide-react';
+import { Download as DownloadIcon, Home as HomeIcon, Search, Library as LibraryIcon, Settings, Heart as HeartIcon, User as UserIcon, BadgeInfo } from 'lucide-react';
 import { Home } from './components/Home';
 import { Library } from './components/Library';
 import { DetailOverlay } from './components/DetailOverlay';
@@ -9,12 +9,13 @@ import { FavoritesView } from './components/FavoritesView';
 import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
 import DownloadsView from './components/DownloadsView';
+import AboutView from './components/AboutView';
 import AppToastViewport from './components/AppToastViewport';
 import { useAuthStore } from './store/useTouchGalStore';
 import type { DownloadQueueTask } from './types/electron';
 
 const APP_NAV_STORAGE_KEY = 'touchgal-active-nav-tab';
-const APP_NAV_IDS = ['home', 'search', 'library', 'downloads', 'favorites', 'profile', 'settings'] as const;
+const APP_NAV_IDS = ['home', 'search', 'library', 'downloads', 'favorites', 'profile', 'settings', 'about'] as const;
 type AppNavTab = typeof APP_NAV_IDS[number];
 
 const normalizeAppNavTab = (value: unknown): AppNavTab =>
@@ -86,7 +87,9 @@ const App: React.FC = () => {
 
   const activeLabel = activeTab === 'settings'
     ? '设置'
-    : navItems.find((item) => item.id === activeTab)?.label ?? '首页';
+    : activeTab === 'about'
+      ? '关于'
+      : navItems.find((item) => item.id === activeTab)?.label ?? '首页';
 
   return (
     <div className="flex h-screen bg-surface text-on-surface">
@@ -115,7 +118,7 @@ const App: React.FC = () => {
           ))}
         </div>
 
-        <div className="mt-auto pt-5 border-t border-outline-variant w-full flex justify-center">
+        <div className="mt-auto pt-5 border-t border-outline-variant w-full flex flex-col items-center gap-3 pb-3">
           <div
             className={`flex flex-col items-center justify-center gap-1 cursor-pointer w-14 h-14 rounded-2xl transition-all ${
               activeTab === 'settings'
@@ -126,6 +129,17 @@ const App: React.FC = () => {
           >
             <Settings size={22} />
             <span className="text-[10px] font-medium">设置</span>
+          </div>
+          <div
+            className={`flex flex-col items-center justify-center gap-1 cursor-pointer w-14 h-14 rounded-2xl transition-all ${
+              activeTab === 'about'
+                ? 'bg-primary-container text-on-primary-container font-bold'
+                : 'text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container'
+            }`}
+            onClick={() => setActiveTab('about')}
+          >
+            <BadgeInfo size={22} />
+            <span className="text-[10px] font-medium">关于</span>
           </div>
         </div>
       </nav>
@@ -150,6 +164,7 @@ const App: React.FC = () => {
           {activeTab === 'favorites' && <FavoritesView />}
           {activeTab === 'profile' && <ProfileView />}
           {activeTab === 'settings' && <SettingsView />}
+          {activeTab === 'about' && <AboutView />}
         </section>
       </main>
 

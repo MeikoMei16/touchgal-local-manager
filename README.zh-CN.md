@@ -163,6 +163,15 @@ pnpm build:win
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
+## 致谢与免责声明
+
+- Made with love by `Meiko Mei`
+- 原站：<https://www.touchgal.top/>
+- 项目仓库：<https://github.com/MeikoMei16/touchgal-local-manager>
+- 请支持原站与原作者。本项目是开源且免费的第三方桌面工具，不是 TouchGal 官方客户端。
+- 游戏资源、站点内容、接口数据、名称与相关归属，均应以原站及原权利人为准；本项目主要提供本地管理与桌面交互层。
+- 本项目由 Linux.do 激励实现，成为可能。学 AI，上 L 站！真诚、友善、团结、专业，共建你我引以为荣之社区。
+
 当前文档内容已覆盖：左侧导航刷新恢复、首页卡片交互设计、feed 与 detail 标签来源差异、首页 / 搜索页翻页回顶、首页状态重构、高级筛选行为、checkpoint 高级构建恢复、搜索页范围 / 排序 / NSFW 控件、搜索页评分排序可视化进度、基于本地目录管线的评分排序稳定化、主进程 session 中转规则、启动 session 重验证、认证 cookie 恢复 / 清理、本地收藏与云端收藏并行架构、云端收藏夹内容分页、首页与收藏页官方 quick-download 入口、详情页官方资源入队与社区资源外链分流、quick-download metadata chips 展示、下载目录设置、持久化并发下载队列、Downloads 批量选择与文件删除、当前 local-library 管理流程、`download/ -> library/` 解压默认行为、library-first 本地游戏管理、递归扫描分类、本地目录打开与启动支持、Library 管理入口的 popup / 独立窗口模式、设置页中“清空数据库 / 清空缓存”两种独立维护动作、解压器回退顺序与密码探测规则、上游下载类型归一（如 `row -> raw`）、全屏截图导航、详情页 `Esc` 行为，以及当前详情弹层包含 session-aware social gating 与登录后社交数据刷新在内的数据流。
 
 Lint 说明：
