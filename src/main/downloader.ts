@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { URL } from 'node:url'
 import {
+  getArchiveExtractionDepthSetting,
   getDb,
   getDownloadConcurrencySetting,
   linkLocalPath,
@@ -12,7 +13,7 @@ import {
 } from './db'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { findSupportedExtractor, type SupportedExtractor } from './extractor'
+import { findSupportedExtractorForExtension, type SupportedExtractor } from './extractor'
 
 const execFileAsync = promisify(execFile)
 
@@ -57,6 +58,8 @@ interface QueueDownloadInput {
     alias?: string[]
   } | null
 }
+
+type ResourceKind = 'base' | 'fd' | 'patch' | 'resources'
 
 const CLOUDREVE_SHARE_PATH = /^\/s\/([^/?#]+)/
 const DOWNLOADABLE_FILE_EXTENSION = /\.(zip|rar|7z|exe|part\d+\.rar)$/i
@@ -168,6 +171,11 @@ const isFirstPartOrSingle = (filename: string): boolean => {
 const sanitizeForFolder = (name: string): string =>
   name.replace(/[<>:"|?*\\/]/g, '_').trim()
 
+const ensureNonEmptyFolderName = (name: string, fallback: string) => {
+  const normalized = sanitizeForFolder(name)
+  return normalized || fallback
+}
+
 const getAvailableDirectoryPath = (basePath: string) => {
   if (!pathExists(basePath)) return basePath
 
@@ -212,6 +220,117 @@ const parseExpectedFileCount = (output: string): number | null => {
   const match = output.match(/(\d+)\s+files?/i)
   if (!match) return null
   return parseInt(match[1], 10)
+}
+
+const classifyResourceKind = (name: string): ResourceKind => {
+  const lower = name.toLowerCase()
+
+  if (
+    lower.includes('patch') ||
+    lower.includes('补丁') ||
+    lower.includes('crack') ||
+    lower.includes('汉化') ||
+    lower.includes('translation') ||
+    lower.includes('翻译')
+  ) {
+    return 'patch'
+  }
+
+  if (
+    /\bfd\b/i.test(name) ||
+    lower.includes('fandisc') ||
+    lower.includes('fan disc') ||
+    lower.includes('side.') ||
+    lower.includes('side ') ||
+    lower.includes('after')
+  ) {
+    return 'fd'
+  }
+
+  if (
+    lower.includes('game') ||
+    lower.includes('本体') ||
+    lower.includes('本篇') ||
+    lower.includes('初回') ||
+    lower.includes('完整版') ||
+    lower.includes('complete')
+  ) {
+    return 'base'
+  }
+
+  return 'resources'
+}
+
+const findExecutableRecursive = (rootDir: string, maxDepth = 4): string | null => {
+  const blacklist = new Set([
+    'unins000.exe',
+    'unins001.exe',
+    'setup.exe',
+    'install.exe',
+    'dxwebsetup.exe',
+    'vcredist_x86.exe',
+    'vcredist_x64.exe',
+    'unitycrashhandler64.exe',
+    'unitycrashhandler32.exe',
+  ])
+
+  const visit = (currentDir: string, depth: number): string | null => {
+    if (depth > maxDepth) return null
+
+    let entries: fs.Dirent[] = []
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    } catch {
+      return null
+    }
+
+    for (const entry of entries) {
+      if (!entry.isFile()) continue
+      if (!entry.name.toLowerCase().endsWith('.exe')) continue
+      if (blacklist.has(entry.name.toLowerCase())) continue
+      return path.join(currentDir, entry.name)
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const nested = visit(path.join(currentDir, entry.name), depth + 1)
+      if (nested) return nested
+    }
+
+    return null
+  }
+
+  return visit(rootDir, 0)
+}
+
+const collectArchiveFilesRecursive = (rootDir: string): string[] => {
+  const archives: string[] = []
+
+  const visit = (currentDir: string) => {
+    let entries: fs.Dirent[] = []
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      const nextPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        visit(nextPath)
+        continue
+      }
+
+      if (!entry.isFile()) continue
+      const ext = path.extname(entry.name).toLowerCase()
+      if (!ARCHIVE_EXTENSIONS.has(ext)) continue
+      if (!isFirstPartOrSingle(entry.name)) continue
+      archives.push(nextPath)
+    }
+  }
+
+  visit(rootDir)
+  return archives
 }
 
 const probeBandizipArchive = async (
@@ -441,11 +560,12 @@ class DownloadManager {
   }
 
   public async queueDownload(input: QueueDownloadInput) {
-    const resolvedTargets = await this.resolveSource(input.sourceUrl, input.downloadRoot)
+    const persistedGameId = this.resolvePersistedGameId(input.gameId, input.gameMetadata ?? null)
+    const gameFolderName = this.resolveGameFolderName(persistedGameId, input.gameMetadata ?? null)
+    const resolvedTargets = await this.resolveSource(input.sourceUrl, input.downloadRoot, gameFolderName)
     const db = getDb()
     const insertedTasks: DownloadTask[] = []
     const existingTasks: DownloadTask[] = []
-    const persistedGameId = this.resolvePersistedGameId(input.gameId, input.gameMetadata ?? null)
 
     const insertTask = db.prepare(`
       INSERT INTO download_tasks (
@@ -729,6 +849,21 @@ class DownloadManager {
     return existing?.id ?? null
   }
 
+  private resolveGameFolderName(
+    gameId: number | null,
+    gameMetadata?: QueueDownloadInput['gameMetadata']
+  ) {
+    if (gameMetadata?.name) {
+      return ensureNonEmptyFolderName(gameMetadata.name, 'unknown-game')
+    }
+
+    if (gameId == null) return null
+    const db = getDb()
+    const row = db.prepare('SELECT name FROM games WHERE id = ? LIMIT 1').get(gameId) as { name: string } | undefined
+    if (!row?.name) return null
+    return ensureNonEmptyFolderName(row.name, `game-${gameId}`)
+  }
+
   private resetTaskForQueue(taskId: number) {
     const db = getDb()
     db.prepare(`
@@ -746,11 +881,22 @@ class DownloadManager {
     }
   }
 
-  private async resolveSource(sourceUrl: string, downloadRoot: string): Promise<ResolvedDownloadTarget[]> {
+  private async resolveSource(
+    sourceUrl: string,
+    downloadRoot: string,
+    gameFolderName: string | null
+  ): Promise<ResolvedDownloadTarget[]> {
     const parsed = new URL(sourceUrl)
     const shareMatch = parsed.pathname.match(CLOUDREVE_SHARE_PATH)
     if (shareMatch) {
-      return this.resolveCloudreveShare(sourceUrl, downloadRoot, parsed.origin, shareMatch[1], normalizeSlashPath(parsed.searchParams.get('path') ?? '/'))
+      return this.resolveCloudreveShare(
+        sourceUrl,
+        downloadRoot,
+        parsed.origin,
+        shareMatch[1],
+        normalizeSlashPath(parsed.searchParams.get('path') ?? '/'),
+        gameFolderName
+      )
     }
 
     const fileName = inferFilenameFromUrl(sourceUrl)
@@ -764,7 +910,9 @@ class DownloadManager {
         storageUrl: sourceUrl,
         remotePath: null,
         displayName: fileName,
-        outputPath: path.join(downloadRoot, fileName),
+        outputPath: gameFolderName
+          ? path.join(downloadRoot, gameFolderName, fileName)
+          : path.join(downloadRoot, fileName),
         totalBytes: null,
       },
     ]
@@ -775,7 +923,8 @@ class DownloadManager {
     downloadRoot: string,
     origin: string,
     shareKey: string,
-    initialPath: string
+    initialPath: string,
+    gameFolderName: string | null
   ): Promise<ResolvedDownloadTarget[]> {
     const infoResponse = await axios.get(`${origin}/api/v3/share/info/${shareKey}`)
     const infoPayload = infoResponse.data
@@ -797,14 +946,16 @@ class DownloadManager {
           storageUrl: downloadResponse.data.data,
           remotePath: null,
           displayName: shareName,
-          outputPath: path.join(downloadRoot, shareName),
+          outputPath: gameFolderName
+            ? path.join(downloadRoot, gameFolderName, shareName)
+            : path.join(downloadRoot, shareName),
           totalBytes: typeof infoPayload.data?.source?.size === 'number' ? infoPayload.data.source.size : null,
         },
       ]
     }
 
     const targets: ResolvedDownloadTarget[] = []
-    const baseFolderName = shareName
+    const baseFolderName = gameFolderName || ensureNonEmptyFolderName(shareName, shareKey)
     await this.walkCloudreveDirectory({
       origin,
       shareKey,
@@ -988,6 +1139,73 @@ class DownloadManager {
     void this.extractAndLink(task).catch(() => undefined)
   }
 
+  private async expandNestedArchives(
+    rootDir: string,
+    maxDepth: number
+  ): Promise<string[]> {
+    if (maxDepth <= 1) return []
+
+    const visitedArchives = new Set<string>()
+    const warnings: string[] = []
+
+    for (let depth = 2; depth <= maxDepth; depth += 1) {
+      const candidateArchives = collectArchiveFilesRecursive(rootDir)
+        .map((archivePath) => path.resolve(archivePath))
+        .filter((archivePath) => !visitedArchives.has(archivePath))
+
+      if (candidateArchives.length === 0) return warnings
+
+      let extractedAny = false
+
+      for (const archivePath of candidateArchives) {
+        visitedArchives.add(archivePath)
+
+        const filename = path.basename(archivePath)
+        const ext = path.extname(filename).toLowerCase()
+        const extractor = findSupportedExtractorForExtension(ext)
+        if (!extractor) {
+          warnings.push(`Nested archive skipped: ${filename} has no installed extractor for ${ext}`)
+          continue
+        }
+
+        const probe = await probeArchive(extractor, archivePath)
+        if (!probe) {
+          warnings.push(`Nested archive skipped: ${filename} could not be opened or verified by ${extractor.name}`)
+          continue
+        }
+
+        const extractDir = getAvailableDirectoryPath(
+          path.join(
+            path.dirname(archivePath),
+            ensureNonEmptyFolderName(stripArchiveSuffix(filename), 'resource')
+          )
+        )
+        fs.mkdirSync(extractDir, { recursive: true })
+
+        const success = await extractArchive(extractor, archivePath, extractDir, probe.password)
+        if (!success) {
+          fs.rmSync(extractDir, { recursive: true, force: true })
+          warnings.push(`Nested archive extraction failed: ${filename} via ${extractor.name}`)
+          continue
+        }
+
+        const actualCount = countFilesRecursive(extractDir)
+        if (actualCount < probe.expectedCount) {
+          fs.rmSync(extractDir, { recursive: true, force: true })
+          warnings.push(`Nested archive verification failed: ${filename} (${actualCount}/${probe.expectedCount} files)`)
+          continue
+        }
+
+        fs.rmSync(archivePath, { force: true })
+        extractedAny = true
+      }
+
+      if (!extractedAny) return warnings
+    }
+
+    return warnings
+  }
+
   /**
    * Post-download pipeline:
    * 1. Detect if file is a known archive extension and first-part-or-single
@@ -1003,8 +1221,17 @@ class DownloadManager {
 
     if (!ARCHIVE_EXTENSIONS.has(ext) || !isFirstPartOrSingle(filename)) return
 
-    const extractor = findSupportedExtractor()
-    if (!extractor) return
+    const extractor = findSupportedExtractorForExtension(ext)
+    if (!extractor) {
+      const db = getDb()
+      db.prepare(`
+        UPDATE download_tasks
+        SET status = 'done', error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(`Extraction skipped: no installed extractor supports ${ext} on this machine`, task.id)
+      this.notifyQueueChanged()
+      return
+    }
 
     const db = getDb()
 
@@ -1018,17 +1245,18 @@ class DownloadManager {
     try {
       const probe = await probeArchive(extractor, task.outputPath)
       if (!probe) {
-        // Password probe failed — revert to done, leave archive in place
+        // Probe failed — revert to done, leave archive in place
         db.prepare(`
           UPDATE download_tasks
           SET status = 'done', error_message = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(`Extraction skipped: ${extractor.name} could not verify password`, task.id)
+        `).run(`Extraction skipped: ${extractor.name} could not open or verify ${ext} archive`, task.id)
         this.notifyQueueChanged()
         return
       }
 
-      // Determine output folder name
+      // Resolve the canonical game container. All extracted resources for the
+      // same game should live under one top-level library folder.
       let folderName = stripArchiveSuffix(filename)
       // Try to get canonical name from games table
       let uniqueId: string | null = null
@@ -1036,12 +1264,26 @@ class DownloadManager {
         const gameRow = db.prepare('SELECT unique_id, name FROM games WHERE id = ?')
           .get(task.gameId) as { unique_id: string; name: string } | undefined
         if (gameRow) {
-          folderName = sanitizeForFolder(gameRow.name)
+          folderName = ensureNonEmptyFolderName(gameRow.name, `game-${task.gameId}`)
           uniqueId = gameRow.unique_id
         }
       }
 
-      const extractDir = getAvailableDirectoryPath(path.join(this.getDefaultLibraryDirectory(), folderName))
+      const gameContainerDir = path.join(
+        this.getDefaultLibraryDirectory(),
+        ensureNonEmptyFolderName(folderName, 'unknown-game')
+      )
+      fs.mkdirSync(gameContainerDir, { recursive: true })
+
+      const resourceKind = classifyResourceKind(task.displayName || filename)
+      const resourceParentDir = path.join(gameContainerDir, resourceKind)
+      fs.mkdirSync(resourceParentDir, { recursive: true })
+
+      const resourceLabel = ensureNonEmptyFolderName(
+        stripArchiveSuffix(task.displayName || filename),
+        stripArchiveSuffix(filename) || 'resource'
+      )
+      const extractDir = getAvailableDirectoryPath(path.join(resourceParentDir, resourceLabel))
       fs.mkdirSync(extractDir, { recursive: true })
 
       const success = await extractArchive(extractor, task.outputPath, extractDir, probe.password)
@@ -1069,21 +1311,31 @@ class DownloadManager {
         return
       }
 
-      // Write .tg_id marker
+      const archiveExtractionDepth = getArchiveExtractionDepthSetting()
+      const nestedWarnings = await this.expandNestedArchives(extractDir, archiveExtractionDepth)
+      const warningMessage = nestedWarnings.length > 0
+        ? nestedWarnings.slice(0, 3).join(' | ')
+        : null
+
+      // Write .tg_id marker on the canonical game container, not on one
+      // specific extracted child resource directory.
       if (uniqueId) {
-        fs.writeFileSync(path.join(extractDir, '.tg_id'), uniqueId, 'utf8')
+        fs.writeFileSync(path.join(gameContainerDir, '.tg_id'), uniqueId, 'utf8')
       }
 
-      // Link in local_paths
+      const executablePath = findExecutableRecursive(gameContainerDir)
+
+      // Link the canonical game container in local_paths so Library renders
+      // one local game entry per actual game instead of one entry per archive.
       if (task.gameId) {
-        linkLocalPath(extractDir, task.gameId, 'download')
+        linkLocalPath(gameContainerDir, task.gameId, 'download', executablePath)
       }
 
       db.prepare(`
         UPDATE download_tasks
-        SET status = 'done', extracted_path = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+        SET status = 'done', extracted_path = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(extractDir, task.id)
+      `).run(extractDir, warningMessage, task.id)
       this.notifyQueueChanged()
     } catch (err) {
       db.prepare(`

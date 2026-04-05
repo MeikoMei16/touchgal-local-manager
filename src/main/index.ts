@@ -8,6 +8,7 @@ import log from 'electron-log'
 import {
   addItemToLocalCollection,
   addLibraryRoot,
+  getArchiveExtractionDepthSetting,
   clearBrowseHistory,
   createLocalCollection,
   deleteLocalCollection,
@@ -20,11 +21,13 @@ import {
   listLibraryRoots,
   listLinkedLocalGames,
   listLocalCollections,
+  markLocalGameOpened,
   markLibraryRootsScanned,
   recordBrowseHistory,
   removeLibraryRoot,
   removeItemFromLocalCollection,
-  resetDatabase
+  resetDatabase,
+  setArchiveExtractionDepthSetting
 } from './db'
 import {
   buildTouchGalBaseHeaders,
@@ -1073,6 +1076,10 @@ handleWithLog('tg-library-get-linked-game', (_event, localGameId: number) => {
   return getLinkedLocalGameById(localGameId)
 })
 
+handleWithLog('tg-library-mark-opened', (_event, localGameId: number) => {
+  return markLocalGameOpened(localGameId)
+})
+
 handleWithLog('tg-open-local-game-window', (_event, localGameId: number) => {
   return createLocalGameWindow(localGameId)
 })
@@ -1708,4 +1715,12 @@ handleWithLog('tg-clear-history', () => {
 
 handleWithLog('tg-check-extractor', () => {
   return getExtractorStatus()
+})
+
+handleWithLog('tg-get-archive-extraction-depth', () => {
+  return getArchiveExtractionDepthSetting()
+})
+
+handleWithLog('tg-set-archive-extraction-depth', (_event, value: number) => {
+  return setArchiveExtractionDepthSetting(value)
 })

@@ -12,14 +12,14 @@ const OPTIONS: Array<{
 }> = [
   {
     value: 'back',
-    title: 'Right Click Goes Back',
-    description: 'In detail pages and the full-screen image viewer, right click behaves like a back action.',
+    title: '右键返回上一层',
+    description: '在详情页和全屏截图查看器里，右键会被映射成返回动作。',
     icon: <RotateCcw size={18} />
   },
   {
     value: 'native',
-    title: 'Native Context Menu',
-    description: 'Right click keeps the browser-style context menu behavior instead of closing the current detail layer.',
+    title: '系统右键菜单',
+    description: '右键保持原生上下文菜单行为，不会关闭当前详情层。',
     icon: <SquareMousePointer size={18} />
   }
 ];
@@ -31,12 +31,12 @@ const LIBRARY_OPEN_OPTIONS: Array<{
 }> = [
   {
     value: 'popup',
-    title: 'Popup Overlay',
+    title: '应用内弹层',
     description: '在当前应用窗口内部弹出本地游戏管理面板。'
   },
   {
     value: 'window',
-    title: 'Separate Window',
+    title: '独立窗口',
     description: '点击 Library 游戏卡片时打开独立窗口，适合后续更重的本地管理流。'
   }
 ];
@@ -56,6 +56,8 @@ const SettingsView: React.FC = () => {
   const [isExtractorLoading, setIsExtractorLoading] = React.useState(true);
   const [downloadConcurrency, setDownloadConcurrency] = React.useState(3);
   const [isSavingConcurrency, setIsSavingConcurrency] = React.useState(false);
+  const [archiveExtractionDepth, setArchiveExtractionDepth] = React.useState(3);
+  const [isSavingArchiveDepth, setIsSavingArchiveDepth] = React.useState(false);
   const [isResettingDatabase, setIsResettingDatabase] = React.useState(false);
   const [isClearingCache, setIsClearingCache] = React.useState(false);
 
@@ -64,15 +66,17 @@ const SettingsView: React.FC = () => {
 
     const loadSettingsData = async () => {
       try {
-        const [value, extractor, concurrency] = await Promise.all([
+        const [value, extractor, concurrency, extractionDepth] = await Promise.all([
           window.api.getDefaultDownloadDirectory(),
           window.api.checkExtractor(),
-          window.api.getDownloadConcurrency()
+          window.api.getDownloadConcurrency(),
+          window.api.getArchiveExtractionDepth()
         ]);
         if (!cancelled) {
           setDefaultDownloadPath(value);
           setExtractorStatus(extractor);
           setDownloadConcurrency(concurrency);
+          setArchiveExtractionDepth(extractionDepth);
           setIsExtractorLoading(false);
         }
       } catch {
@@ -129,6 +133,19 @@ const SettingsView: React.FC = () => {
     }
   };
 
+  const handleUpdateArchiveExtractionDepth = async (nextValue: number) => {
+    setIsSavingArchiveDepth(true);
+    try {
+      const persisted = await window.api.setArchiveExtractionDepth(nextValue);
+      setArchiveExtractionDepth(persisted);
+      pushToast(`自动解压层数已更新为 ${persisted}`);
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : '无法更新自动解压层数');
+    } finally {
+      setIsSavingArchiveDepth(false);
+    }
+  };
+
   const handleResetDatabase = async () => {
     const confirmed = window.confirm(
       '确定要清空本地数据库吗？这会删除本地游戏索引、下载任务、收藏夹、浏览历史等 SQLite 数据。该操作不可撤销，执行后应用会重载。'
@@ -172,9 +189,9 @@ const SettingsView: React.FC = () => {
             <MousePointer2 size={26} />
           </div>
           <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">Interaction</h1>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">交互设置</h1>
             <p className="max-w-2xl text-sm font-medium leading-7 text-slate-500">
-              Control how desktop pointer gestures behave inside the detail overlay. The default mode maps right click to back.
+              控制桌面端在详情弹层里的鼠标交互行为。默认模式会把右键映射为返回。
             </p>
           </div>
         </div>
@@ -182,9 +199,9 @@ const SettingsView: React.FC = () => {
 
       <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 flex flex-col gap-2">
-          <h2 className="text-xl font-black text-slate-900">Detail Page Secondary Click</h2>
+          <h2 className="text-xl font-black text-slate-900">详情页右键行为</h2>
           <p className="text-sm font-medium leading-7 text-slate-500">
-            Applies to the detail overlay and the full-screen screenshot viewer. Links and buttons still keep their native context behavior.
+            作用于详情弹层和全屏截图查看器。链接和按钮仍然保留自己的原生右键行为。
           </p>
         </div>
 
@@ -219,7 +236,7 @@ const SettingsView: React.FC = () => {
                   <div className="flex flex-col gap-1">
                     <div className="text-base font-black text-slate-900">
                       {option.title}
-                      {option.value === 'back' ? ' (Default)' : ''}
+                      {option.value === 'back' ? '（默认）' : ''}
                     </div>
                     <div className="text-sm font-medium leading-7 text-slate-500">{option.description}</div>
                   </div>
@@ -236,9 +253,9 @@ const SettingsView: React.FC = () => {
             <MonitorUp size={22} />
           </div>
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-black text-slate-900">Library Management Opening Mode</h2>
+            <h2 className="text-xl font-black text-slate-900">本地管理打开方式</h2>
             <p className="text-sm font-medium leading-7 text-slate-500">
-              控制点击 Library 本地游戏卡片时，是在当前窗口里弹出管理面板，还是打开独立管理窗口。
+              控制点击库里的本地游戏卡片时，是在当前窗口里弹出管理面板，还是打开独立管理窗口。
             </p>
           </div>
         </div>
@@ -266,7 +283,7 @@ const SettingsView: React.FC = () => {
                 <div className="flex flex-1 flex-col gap-1">
                   <div className="text-base font-black text-slate-900">
                     {option.title}
-                    {option.value === 'popup' ? ' (Default)' : ''}
+                    {option.value === 'popup' ? '（默认）' : ''}
                   </div>
                   <div className="text-sm font-medium leading-7 text-slate-500">{option.description}</div>
                 </div>
@@ -282,7 +299,7 @@ const SettingsView: React.FC = () => {
             <Download size={22} />
           </div>
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-black text-slate-900">Download Path</h2>
+            <h2 className="text-xl font-black text-slate-900">下载路径</h2>
             <p className="text-sm font-medium leading-7 text-slate-500">
               快速下载默认保存到项目根目录下的 <span className="font-mono text-[13px]">download</span> 文件夹。自动解压后的游戏默认会进入独立的 <span className="font-mono text-[13px]">library</span> 文件夹。
             </p>
@@ -290,7 +307,7 @@ const SettingsView: React.FC = () => {
         </div>
 
         <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-4">
-          <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Current Download Directory</div>
+          <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">当前下载目录</div>
           <div className="mt-3 break-all rounded-2xl bg-white px-4 py-3 font-mono text-[13px] font-bold text-slate-700 shadow-sm">
             {resolvedDownloadPath}
           </div>
@@ -325,7 +342,7 @@ const SettingsView: React.FC = () => {
             <Download size={22} />
           </div>
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-black text-slate-900">Download Concurrency</h2>
+            <h2 className="text-xl font-black text-slate-900">下载并发数</h2>
             <p className="text-sm font-medium leading-7 text-slate-500">
               控制同时进行中的下载任务数量。并发越高，总下载吞吐可能越高，但磁盘、网络和解压阶段的压力也会更明显。
             </p>
@@ -335,7 +352,7 @@ const SettingsView: React.FC = () => {
         <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Current Concurrent Downloads</div>
+              <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">当前并发下载数</div>
               <div className="mt-2 text-3xl font-black text-slate-900">{downloadConcurrency}</div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -361,13 +378,53 @@ const SettingsView: React.FC = () => {
 
       <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+            <Download size={22} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xl font-black text-slate-900">递归解压层数</h2>
+            <p className="text-sm font-medium leading-7 text-slate-500">
+              控制自动解压会继续处理多少层嵌套压缩包。数值 1 只解第一层；默认值 3 会继续尝试处理二级和三级内层压缩包。
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">当前自动解压层数</div>
+              <div className="mt-2 text-3xl font-black text-slate-900">{archiveExtractionDepth}</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 3, 4, 5, 6].map((value) => (
+                <button
+                  key={value}
+                  className={`rounded-2xl px-4 py-2 text-sm font-black transition-colors ${
+                    archiveExtractionDepth === value
+                      ? 'bg-violet-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                  disabled={isSavingArchiveDepth}
+                  onClick={() => void handleUpdateArchiveExtractionDepth(value)}
+                  type="button"
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6 flex items-start gap-4">
           <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
             extractorStatus?.supported ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
           }`}>
             <Download size={22} />
           </div>
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-black text-slate-900">Archive Extractor</h2>
+            <h2 className="text-xl font-black text-slate-900">解压器状态</h2>
             <p className="text-sm font-medium leading-7 text-slate-500">
               下载任务完成后，自动解压链路直接依赖命令行解压器。当前版本会优先使用 Bandizip CLI；如果 Bandizip 不可用，则回退到 7-Zip CLI。
             </p>
@@ -429,12 +486,12 @@ const SettingsView: React.FC = () => {
                     <span className={`rounded-full px-3 py-1 ${
                       candidate.detected ? 'bg-sky-100 text-sky-700' : 'bg-slate-200 text-slate-600'
                     }`}>
-                      {candidate.detected ? 'detected' : 'not found'}
+                      {candidate.detected ? '已检测' : '未找到'}
                     </span>
                     <span className={`rounded-full px-3 py-1 ${
                       candidate.supported ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {candidate.supported ? 'supported' : 'unsupported'}
+                      {candidate.supported ? '可用' : '不可用'}
                     </span>
                   </div>
                 </div>
@@ -450,7 +507,7 @@ const SettingsView: React.FC = () => {
             <Database size={22} />
           </div>
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-black text-slate-900">Maintenance</h2>
+            <h2 className="text-xl font-black text-slate-900">维护工具</h2>
             <p className="text-sm font-medium leading-7 text-slate-500">
               提供两个独立的重置动作。数据库和缓存分开处理，避免一次点击把所有状态一起抹掉。
             </p>

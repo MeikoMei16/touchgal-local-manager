@@ -92,7 +92,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ state, isSubmitting, onCa
         className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-300/40"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Confirm Action</div>
+        <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">确认操作</div>
         <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">{state.title}</h3>
         <p className="mt-3 text-sm font-bold leading-6 text-slate-500">{state.description}</p>
         <div className="mt-6 flex gap-3">
@@ -352,7 +352,7 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
                   <div className="relative flex h-full flex-col justify-between">
                     <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-[11px] font-black uppercase tracking-[0.28em] text-white/90 backdrop-blur-sm">
                       <FolderOpen size={14} />
-                      Local Collection
+                      本地收藏夹
                     </div>
 
                     <div>
@@ -366,21 +366,21 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
 
                 <div className="grid grid-cols-2 gap-3 p-6">
                   <div className="rounded-[1.6rem] bg-[#faf6ef] p-4">
-                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Games</div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">游戏数</div>
                     <div className="mt-3 text-3xl font-black text-slate-900">{collection.itemCount}</div>
                   </div>
                   <div className="rounded-[1.6rem] bg-[#faf6ef] p-4">
-                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Avg</div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">平均分</div>
                     <div className="mt-3 text-3xl font-black text-amber-600">
                       {averageRating > 0 ? averageRating.toFixed(1) : '–'}
                     </div>
                   </div>
                   <div className="rounded-[1.6rem] bg-[#faf6ef] p-4">
-                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Downloads</div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">下载总量</div>
                     <div className="mt-3 text-3xl font-black text-slate-900">{totalDownloads.toLocaleString()}</div>
                   </div>
                   <div className="flex flex-col justify-between rounded-[1.6rem] bg-[#faf6ef] p-4">
-                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Manage</div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">管理</div>
                     <button
                       className="mt-3 rounded-2xl bg-rose-500 px-4 py-3 text-sm font-black text-white transition-all hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={activeActionKey === 'delete-collection'}
@@ -550,7 +550,7 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
                             />
                           ) : (
                             <div className="flex h-full items-center justify-center text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                              No Cover
+                              暂无封面
                             </div>
                           )}
                         </button>
@@ -759,7 +759,7 @@ export const FavoritesView: React.FC = () => {
       await createCollection(trimmedName);
       setNewLocalCollectionName('');
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to create collection');
+      setActionError(error instanceof Error ? error.message : '创建收藏夹失败');
     }
   };
 
@@ -778,7 +778,7 @@ export const FavoritesView: React.FC = () => {
       setIsCloudCollectionPublic(false);
       await fetchUserActivity('collections');
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to create cloud collection');
+      setActionError(error instanceof Error ? error.message : '创建云端收藏夹失败');
     } finally {
       setIsCreatingCloudCollection(false);
     }
@@ -789,7 +789,7 @@ export const FavoritesView: React.FC = () => {
     try {
       await deleteCollection(collectionId);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to delete collection');
+      setActionError(error instanceof Error ? error.message : '删除收藏夹失败');
     }
   };
 
@@ -804,7 +804,7 @@ export const FavoritesView: React.FC = () => {
         await fetchUserActivity('collections');
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to delete cloud collection');
+      setActionError(error instanceof Error ? error.message : '删除云端收藏夹失败');
     }
   };
 
@@ -813,7 +813,7 @@ export const FavoritesView: React.FC = () => {
     try {
       await addToCollection(collectionId, game);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to update collection');
+      setActionError(error instanceof Error ? error.message : '更新收藏夹失败');
     }
   };
 
@@ -822,7 +822,7 @@ export const FavoritesView: React.FC = () => {
     try {
       await removeFromCollection(collectionId, uniqueId);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to remove item');
+      setActionError(error instanceof Error ? error.message : '移除条目失败');
     }
   };
 

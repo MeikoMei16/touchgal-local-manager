@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   rescanLibrary: (rootPaths?: string[]) => ipcRenderer.invoke('tg-library-rescan', rootPaths),
   listLinkedLocalGames: () => ipcRenderer.invoke('tg-library-list-linked-games'),
   getLinkedLocalGame: (localGameId: number) => ipcRenderer.invoke('tg-library-get-linked-game', localGameId),
+  markLocalGameOpened: (localGameId: number) => ipcRenderer.invoke('tg-library-mark-opened', localGameId),
   openLocalGameWindow: (localGameId: number) => ipcRenderer.invoke('tg-open-local-game-window', localGameId),
   deleteLibraryGamesAndFiles: (localPathIds: number[]) => ipcRenderer.invoke('tg-library-delete-games-and-files', localPathIds),
   getExecutables: (folderPath: string) => ipcRenderer.invoke('tg-get-executables', folderPath),
@@ -63,6 +64,8 @@ contextBridge.exposeInMainWorld('api', {
   pickDownloadDirectory: () => ipcRenderer.invoke('tg-pick-download-directory'),
   getDownloadConcurrency: () => ipcRenderer.invoke('tg-get-download-concurrency'),
   setDownloadConcurrency: (value: number) => ipcRenderer.invoke('tg-set-download-concurrency', value),
+  getArchiveExtractionDepth: () => ipcRenderer.invoke('tg-get-archive-extraction-depth'),
+  setArchiveExtractionDepth: (value: number) => ipcRenderer.invoke('tg-set-archive-extraction-depth', value),
   queueDownload: (
     gameId: number | null,
     sourceUrl: string,

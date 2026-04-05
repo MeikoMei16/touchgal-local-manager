@@ -150,7 +150,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         }
       } catch (error) {
         if (!cancelled) {
-          setQuickError(error instanceof Error ? error.message : 'Failed to load cloud collections');
+          setQuickError(error instanceof Error ? error.message : '读取云端收藏夹失败');
           setCloudFolders([]);
         }
       } finally {
@@ -181,7 +181,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         setOfficialDownloads(getOfficialGalgameDownloads(detail.downloads ?? []));
       } catch (error) {
         if (cancelled) return;
-        setDownloadQuickError(error instanceof Error ? error.message : 'Failed to load official downloads');
+        setDownloadQuickError(error instanceof Error ? error.message : '读取官方资源失败');
         setOfficialDownloads([]);
       } finally {
         if (!cancelled) {
@@ -207,7 +207,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         await addToCollection(collectionId, resourcePayload);
       }
     } catch (error) {
-      setQuickError(error instanceof Error ? error.message : 'Failed to update local collection');
+      setQuickError(error instanceof Error ? error.message : '更新本地收藏夹失败');
     } finally {
       setActiveLocalCollectionId(null);
     }
@@ -223,7 +223,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       await createCollectionAndAdd(trimmedName, resourcePayload);
       setNewCollectionName('');
     } catch (error) {
-      setQuickError(error instanceof Error ? error.message : 'Failed to create local collection');
+      setQuickError(error instanceof Error ? error.message : '创建本地收藏夹失败');
     } finally {
       setIsCreatingLocalCollection(false);
     }
@@ -242,7 +242,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         setCloudFolders(Array.isArray(folders) ? folders : []);
       }
     } catch (error) {
-      setQuickError(error instanceof Error ? error.message : 'Failed to update cloud collection');
+      setQuickError(error instanceof Error ? error.message : '更新云端收藏夹失败');
     } finally {
       setActiveCloudFolderId(null);
     }
@@ -572,7 +572,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
           <div className="border-b border-slate-100 bg-linear-to-r from-sky-50 via-white to-blue-50/70 px-4 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Quick Download</div>
+                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">快速下载</div>
                 <div className="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-900">{resource.name}</div>
                 <div className="mt-2 flex items-center gap-2 text-[11px] font-bold text-slate-400">
                   <span className="rounded-full bg-white px-2.5 py-1 shadow-sm">仅 TouchGal 官方</span>

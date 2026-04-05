@@ -140,7 +140,7 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
     if (result?.added === true) {
       await TouchGalClient.togglePatchFavorite(patchId, folder.id);
     }
-    throw new Error('Failed to remove game from current cloud collection');
+    throw new Error('无法从当前云端收藏夹移除该游戏');
   };
 
   const refreshAfterMutation = async (removedCount: number) => {
@@ -166,7 +166,7 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
       await ensureRemovedFromCurrentFolder(resource.id);
       await refreshAfterMutation(1);
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : 'Failed to remove game from cloud collection');
+      setError(removeError instanceof Error ? removeError.message : '从云端收藏夹移除游戏失败');
     } finally {
       setActionKey(null);
     }
@@ -269,28 +269,28 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
             <section className="rounded-[2rem] border border-slate-200 bg-linear-to-r from-white via-slate-50 to-emerald-50 p-6 shadow-sm">
               <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.25em] text-slate-500 shadow-sm">
                 <Cloud size={14} className="text-emerald-500" />
-                Cloud Collection
+                云端收藏夹
               </div>
 
-              <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{folder?.name || 'Untitled Collection'}</h3>
+              <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{folder?.name || '未命名收藏夹'}</h3>
               <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
                 现在这层支持多选、批量移动到其它云收藏夹、批量移除，以及单卡片的快速转移操作。
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Visibility</div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">可见性</div>
                   <div className="mt-3 flex items-center gap-2 text-base font-black text-slate-900">
                     {isPublic ? <Unlock size={16} className="text-emerald-500" /> : <Lock size={16} className="text-slate-500" />}
-                    <span>{isPublic ? 'Public' : 'Private'}</span>
+                    <span>{isPublic ? '公开' : '私密'}</span>
                   </div>
                 </div>
                 <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Items</div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">条目数</div>
                   <div className="mt-3 text-2xl font-black text-slate-900">{patchCount}</div>
                 </div>
                 <div className="rounded-[1.5rem] border border-white bg-white/90 p-4 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Selected</div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">已选中</div>
                   <div className="mt-3 text-2xl font-black text-emerald-600">{selectedIds.length}</div>
                 </div>
               </div>
@@ -457,7 +457,7 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
                                 />
                               ) : (
                                 <div className="flex h-full items-center justify-center rounded-[1rem] border border-dashed border-slate-300 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                                  No Cover
+                                  暂无封面
                                 </div>
                               )}
                             </div>

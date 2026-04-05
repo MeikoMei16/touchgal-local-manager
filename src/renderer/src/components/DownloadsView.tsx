@@ -26,6 +26,7 @@ export const DownloadsView: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(true)
   const [actionTaskId, setActionTaskId] = React.useState<number | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<number[]>([])
+  const notifiedTaskWarningsRef = React.useRef<Record<number, string>>({})
 
   const resolvedDirectory = downloadPathOverride || defaultDirectory
   const finishedTaskCount = tasks.filter((task) => task.status === 'done').length
@@ -54,6 +55,24 @@ export const DownloadsView: React.FC = () => {
   React.useEffect(() => {
     setSelectedTaskIds((current) => current.filter((taskId) => tasks.some((task) => task.id === taskId)))
   }, [tasks])
+
+  React.useEffect(() => {
+    const activeTaskIds = new Set(tasks.map((task) => task.id))
+    for (const key of Object.keys(notifiedTaskWarningsRef.current)) {
+      const taskId = Number(key)
+      if (!activeTaskIds.has(taskId)) {
+        delete notifiedTaskWarningsRef.current[taskId]
+      }
+    }
+
+    for (const task of tasks) {
+      if (!task.errorMessage || task.status !== 'done') continue
+      if (notifiedTaskWarningsRef.current[task.id] === task.errorMessage) continue
+
+      notifiedTaskWarningsRef.current[task.id] = task.errorMessage
+      pushToast(`自动解压提示: ${task.displayName} · ${task.errorMessage}`)
+    }
+  }, [pushToast, tasks])
 
   const runAction = async (taskId: number, action: () => Promise<unknown>, message: string) => {
     setActionTaskId(taskId)
@@ -140,7 +159,7 @@ export const DownloadsView: React.FC = () => {
               <Download size={26} />
             </div>
             <div className="flex flex-col gap-2">
-              <h1 className="text-3xl font-black tracking-tight text-slate-900">Downloads</h1>
+              <h1 className="text-3xl font-black tracking-tight text-slate-900">下载管理</h1>
               <p className="max-w-3xl text-sm font-medium leading-7 text-slate-500">
                 这里显示 TouchGal 官方资源的逐文件下载进度。Cloudreve 直链支持分段续传，所以失败后的重试和已暂停任务的继续都会从已有文件继续。
               </p>
@@ -170,7 +189,7 @@ export const DownloadsView: React.FC = () => {
               type="button"
             >
               <Trash2 size={16} />
-              Clear All
+              清空已完成
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-rose-700 disabled:opacity-50"

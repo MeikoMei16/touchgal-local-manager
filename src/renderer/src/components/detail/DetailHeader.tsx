@@ -131,7 +131,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
         }
       } catch (error) {
         if (isMounted) {
-          setCollectionError(error instanceof Error ? error.message : 'Failed to load cloud collections');
+          setCollectionError(error instanceof Error ? error.message : '读取云端收藏夹失败');
           setCloudFolders([]);
         }
       } finally {
@@ -169,7 +169,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
         await addToCollection(collectionId, resourcePayload);
       }
     } catch (error) {
-      setCollectionError(error instanceof Error ? error.message : 'Failed to update collection');
+      setCollectionError(error instanceof Error ? error.message : '更新收藏夹失败');
     } finally {
       setIsSavingCollection(false);
     }
@@ -185,7 +185,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
       await createCollectionAndAdd(trimmedName, resourcePayload);
       setNewCollectionName('');
     } catch (error) {
-      setCollectionError(error instanceof Error ? error.message : 'Failed to create collection');
+      setCollectionError(error instanceof Error ? error.message : '创建收藏夹失败');
     } finally {
       setIsSavingCollection(false);
     }
@@ -206,7 +206,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
       }
       await fetchUserActivity('collections');
     } catch (error) {
-      setCollectionError(error instanceof Error ? error.message : 'Failed to update cloud collection');
+      setCollectionError(error instanceof Error ? error.message : '更新云端收藏夹失败');
     } finally {
       setActiveCloudFolderId(null);
     }

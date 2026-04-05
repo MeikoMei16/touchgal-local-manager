@@ -65,11 +65,11 @@ export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
             <h3 className="text-lg font-black tracking-tight">搜索设置</h3>
           </div>
           <p className="mt-1 text-sm font-medium text-slate-500">
-            标题始终参与关键词 fuzzy search。下面这些范围开关和排序会直接传给上游搜索接口。
+            标题始终参与关键词模糊搜索。下面这些范围开关和排序会直接传给上游搜索接口。
           </p>
         </div>
         <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-500">
-          Default: 全开
+          默认：全开
         </div>
       </div>
 

@@ -159,6 +159,8 @@ Important note:
 - collection-card quick-download buttons reuse a shared renderer helper that resolves official TouchGal game resources on demand
 - detail links panel reuses the same official/community download classification: official resource actions enqueue downloads in-app, while community resource actions remain external-link launches
 - Library linked-game cards use a local-filesystem-first primary action: the card button reveals the real local directory in the OS file browser instead of opening TouchGal detail
+- Library front-stage search is intentionally narrower than global app search: it matches only local game title plus alias, not path or unique id
+- Library front-stage sorting is intentionally narrower too: it currently exposes only `recently added` and `recently opened`, where `recently opened` is driven by the local `open folder` action
 
 ## Data Flow
 

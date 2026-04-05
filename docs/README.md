@@ -7,6 +7,7 @@ This repository keeps project documentation under `docs/` and lightweight agent 
 - `architecture.md`: Current application architecture, runtime boundaries, and implementation status.
 - `advanced-filter.md`: Homepage advanced-filter pipeline, query model, and advanced-mode behavior.
 - `decisions.md`: Stable architectural decisions and non-obvious frontend/runtime constraints.
+- `library-resource-pipeline-status.md`: Current status, confirmed problems, and next target model for the local download -> extract -> library pipeline.
 - `styling.md`: Renderer UI tokens and styling conventions.
 
 Current cross-cutting topics covered here:
@@ -58,9 +59,12 @@ Current cross-cutting topics covered here:
 - quick-download entries now surface the same normalized metadata chips used by the detail links view instead of a size-only compact line
 - shared quick-download popovers now use a wider panel layout so full metadata chips and long titles fit without collapsing
 - local Library manager default `library/` watch-root seeding, library-first layout, rescan flow, linked-install inventory, direct open-in-folder and local launch actions, and grouped unresolved/orphaned/broken reporting
+- compact Library front-stage cards that search only against local game title + alias, sort by recent-added or recent-opened, and treat open-folder as the "recently opened" signal
 - pushed download-queue updates, extractor-status settings, and SQLite-backed download concurrency settings
+- recursive nested-archive extraction with Settings-backed depth control and Downloads warning/toast surfacing when inner archive extraction fails
 - Settings maintenance now splits destructive cleanup into two confirmed actions: reset SQLite database versus clear runtime/session cache
 - post-download extraction into project-root `library/` while archives remain under `download/`, including collision-safe target naming
+- the current failure mode of the local library resource pipeline, including why one game is still being fragmented into multiple extracted sibling folders and what the target single-container model should be
 - bounded-recursive library scanning (up to 3 levels) with explicit candidate classification instead of one-level folder discovery
 - extractor fallback order (`Bandizip -> 7-Zip`) and the current password probe set (`""`, `touchgal`)
 - batch deletion of download files is constrained to paths inside the current download root and deliberately excludes `library/` extraction outputs

@@ -6,7 +6,7 @@ import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 import type { TouchGalResource } from '../types';
 import type { BrowseHistoryEntry } from '../types/electron';
 
-const LoadingCircle: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Loading...', compact = false }) => (
+const LoadingCircle: React.FC<{ label?: string; compact?: boolean }> = ({ label = '加载中...', compact = false }) => (
   <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-14' : 'h-full'} text-on-surface-variant`}>
     <div className="relative">
       <div className={`${compact ? 'h-12 w-12' : 'h-16 w-16'} rounded-full border-4 border-slate-200`} />
@@ -30,6 +30,19 @@ const formatRelativeTime = (dateStr: string): string => {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} 天前`;
   return new Date(dateStr).toLocaleDateString('zh-CN');
+};
+
+const PROFILE_TAB_LABELS: Record<'history' | 'comments' | 'ratings' | 'collections', string> = {
+  history: '历史',
+  comments: '评论',
+  ratings: '评分',
+  collections: '收藏夹'
+};
+
+const PLAY_STATUS_LABELS: Record<string, string> = {
+  finished: '已通关',
+  playing: '游玩中',
+  queued: '已入库'
 };
 
 const ProfileView: React.FC = () => {
@@ -132,16 +145,16 @@ const ProfileView: React.FC = () => {
                 </div>
                 
                 <h1 className="text-3xl font-black text-on-surface mb-2">{userProfile?.name || user.name}</h1>
-                <p className="text-on-surface-variant text-sm mb-6 max-w-xs">{userProfile?.bio || 'This user is too lazy to write a bio.'}</p>
+                <p className="text-on-surface-variant text-sm mb-6 max-w-xs">{userProfile?.bio || '这个人很懒，还没有写简介。'}</p>
                 
                 <div className="flex gap-4 w-full mb-8">
                   <div className="flex-1 bg-surface-container-low rounded-2xl p-4 border border-outline-variant">
                     <div className="text-2xl font-bold text-on-surface">{userProfile?.follower || 0}</div>
-                    <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Followers</div>
+                    <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">粉丝</div>
                   </div>
                   <div className="flex-1 bg-surface-container-low rounded-2xl p-4 border border-outline-variant">
                     <div className="text-2xl font-bold text-on-surface">{userProfile?.following || 0}</div>
-                    <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Following</div>
+                    <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">关注</div>
                   </div>
                 </div>
 
@@ -149,7 +162,7 @@ const ProfileView: React.FC = () => {
                   <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-700">
                     <div className="flex items-center gap-3">
                       <Coins size={20} />
-                      <span className="font-bold">MoeMoe Point</span>
+                      <span className="font-bold">萌萌点</span>
                     </div>
                     <span className="text-lg font-black">{userProfile?.moemoepoint || 0}</span>
                   </div>
@@ -195,21 +208,21 @@ const ProfileView: React.FC = () => {
                   <MessageSquare size={24} />
                 </div>
                 <div className="text-3xl font-black text-on-surface">{userProfile?._count?.patch_comment || 0}</div>
-                <div className="text-sm text-on-surface-variant font-bold">Comments</div>
+                <div className="text-sm text-on-surface-variant font-bold">评论</div>
               </div>
               <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
                 <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl w-fit mb-4">
                   <Star size={24} />
                 </div>
                 <div className="text-3xl font-black text-on-surface">{userProfile?._count?.patch_rating || 0}</div>
-                <div className="text-sm text-on-surface-variant font-bold">Ratings</div>
+                <div className="text-sm text-on-surface-variant font-bold">评分</div>
               </div>
               <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
                 <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl w-fit mb-4">
                   <Package size={24} />
                 </div>
                 <div className="text-3xl font-black text-on-surface">{userProfile?._count?.patch_favorite || userCollections.length || 0}</div>
-                <div className="text-sm text-on-surface-variant font-bold">Collections</div>
+                <div className="text-sm text-on-surface-variant font-bold">收藏夹</div>
               </div>
             </div>
           )}
@@ -226,7 +239,7 @@ const ProfileView: React.FC = () => {
                   }`}
                 >
                   {tab === 'history' && <Clock size={14} />}
-                  {tab}
+                  {PROFILE_TAB_LABELS[tab as keyof typeof PROFILE_TAB_LABELS] ?? tab}
                   {activeTab === tab && (
                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-full" />
                   )}
@@ -299,12 +312,12 @@ const ProfileView: React.FC = () => {
                 </div>
               )}
 
-              {isLoading && activeTab !== 'history' && <LoadingCircle label="Loading activity..." compact />}
+              {isLoading && activeTab !== 'history' && <LoadingCircle label="正在加载动态..." compact />}
               
               {!isLoading && activeTab === 'comments' && (
                 <div className="space-y-4">
                   {userComments.length === 0 ? (
-                    <div className="py-20 text-center text-outline font-bold">No comments found</div>
+                    <div className="py-20 text-center text-outline font-bold">暂无评论</div>
                   ) : (
                     userComments.map(comment => (
                       <div key={comment.id} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant group hover:border-primary/20 transition-all">
@@ -320,7 +333,7 @@ const ProfileView: React.FC = () => {
               {!isLoading && activeTab === 'ratings' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {userRatings.length === 0 ? (
-                    <div className="col-span-2 py-20 text-center text-outline font-bold">No ratings found</div>
+                    <div className="col-span-2 py-20 text-center text-outline font-bold">暂无评分记录</div>
                   ) : (
                     userRatings.map(rating => (
                       <div key={rating.id} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant hover:border-amber-200 transition-all">
@@ -336,7 +349,7 @@ const ProfileView: React.FC = () => {
                             <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
                                  rating.playStatus === 'finished' ? 'bg-emerald-100 text-emerald-700' : 'bg-primary-container text-primary'
                             }`}>
-                               {rating.playStatus}
+                               {PLAY_STATUS_LABELS[rating.playStatus] ?? rating.playStatus}
                             </span>
                          </div>
                       </div>
@@ -348,7 +361,7 @@ const ProfileView: React.FC = () => {
               {!isLoading && activeTab === 'collections' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {userCollections.length === 0 ? (
-                    <div className="col-span-2 py-20 text-center text-outline font-bold">No collections found</div>
+                    <div className="col-span-2 py-20 text-center text-outline font-bold">暂无云端收藏夹</div>
                   ) : (
                     userCollections.map(folder => (
                       <button
@@ -367,7 +380,7 @@ const ProfileView: React.FC = () => {
                            </div>
                            <div>
                               <h4 className="font-bold text-on-surface group-hover:text-emerald-600 transition-colors uppercase tracking-tight">{folder.name}</h4>
-                              <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">{folder.is_public ? 'Public' : 'Private'} Collection</p>
+                              <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">{folder.is_public ? '公开收藏夹' : '私密收藏夹'}</p>
                            </div>
                         </div>
                         <div className="flex items-center gap-3">

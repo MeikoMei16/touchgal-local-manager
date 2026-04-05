@@ -11,6 +11,7 @@ import SettingsView from './components/SettingsView';
 import DownloadsView from './components/DownloadsView';
 import AppToastViewport from './components/AppToastViewport';
 import { useAuthStore } from './store/useTouchGalStore';
+import type { DownloadQueueTask } from './types/electron';
 
 const APP_NAV_STORAGE_KEY = 'touchgal-active-nav-tab';
 const APP_NAV_IDS = ['home', 'search', 'library', 'downloads', 'favorites', 'profile', 'settings'] as const;
@@ -26,15 +27,16 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return 'home';
     return normalizeAppNavTab(window.localStorage.getItem(APP_NAV_STORAGE_KEY));
   });
+  const [downloadTasks, setDownloadTasks] = useState<DownloadQueueTask[]>([]);
   const { isLoginOpen, restoreSession } = useAuthStore();
 
   const navItems: Array<{ id: AppNavTab; icon: React.ReactNode; label: string }> = [
-    { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },
-    { id: 'search', icon: <Search size={24} />, label: 'Search' },
-    { id: 'library', icon: <LibraryIcon size={24} />, label: 'Library' },
-    { id: 'downloads', icon: <DownloadIcon size={24} />, label: 'Downloads' },
-    { id: 'favorites', icon: <HeartIcon size={24} />, label: 'Favorites' },
-    { id: 'profile', icon: <UserIcon size={24} />, label: 'Profile' },
+    { id: 'home', icon: <HomeIcon size={24} />, label: '首页' },
+    { id: 'search', icon: <Search size={24} />, label: '搜索' },
+    { id: 'library', icon: <LibraryIcon size={24} />, label: '库' },
+    { id: 'downloads', icon: <DownloadIcon size={24} />, label: '下载' },
+    { id: 'favorites', icon: <HeartIcon size={24} />, label: '收藏夹' },
+    { id: 'profile', icon: <UserIcon size={24} />, label: '我的' },
   ];
 
   React.useEffect(() => {
@@ -51,9 +53,40 @@ const App: React.FC = () => {
     void restoreSession();
   }, [restoreSession]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadQueue = async () => {
+      try {
+        const queue = await window.api.getDownloadQueue();
+        if (!cancelled) {
+          setDownloadTasks(queue);
+        }
+      } catch {
+        if (!cancelled) {
+          setDownloadTasks([]);
+        }
+      }
+    };
+
+    void loadQueue();
+    const unsubscribe = window.api.onDownloadQueueUpdated((queue) => {
+      setDownloadTasks(queue);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  const inProgressDownloadCount = downloadTasks.filter(
+    (task) => task.status !== 'done' && task.status !== 'error'
+  ).length;
+
   const activeLabel = activeTab === 'settings'
-    ? 'Settings'
-    : navItems.find((item) => item.id === activeTab)?.label ?? 'Home';
+    ? '设置'
+    : navItems.find((item) => item.id === activeTab)?.label ?? '首页';
 
   return (
     <div className="flex h-screen bg-surface text-on-surface">
@@ -69,8 +102,13 @@ const App: React.FC = () => {
               className={`flex flex-col items-center justify-center gap-1 cursor-pointer transition-all duration-200 group w-14 h-14 rounded-2xl ${activeTab === item.id ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container'}`}
               onClick={() => setActiveTab(item.id)}
             >
-              <div className="flex items-center justify-center">
+              <div className="relative flex items-center justify-center">
                 {item.icon}
+                {item.id === 'downloads' && inProgressDownloadCount > 0 && (
+                  <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-rose-500 px-1.5 py-0.5 text-center text-[10px] font-black leading-none text-white shadow-sm">
+                    {inProgressDownloadCount > 99 ? '99+' : inProgressDownloadCount}
+                  </span>
+                )}
               </div>
               <span className="text-[10px] font-medium">{item.label}</span>
             </div>
@@ -87,7 +125,7 @@ const App: React.FC = () => {
             onClick={() => setActiveTab('settings')}
           >
             <Settings size={22} />
-            <span className="text-[10px] font-medium">Settings</span>
+            <span className="text-[10px] font-medium">设置</span>
           </div>
         </div>
       </nav>

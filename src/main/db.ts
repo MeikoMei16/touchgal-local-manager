@@ -66,12 +66,14 @@ export interface LinkedLocalGameRecord {
   exe_path: string | null
   size_bytes: number | null
   linked_at: string
+  last_opened_at: string | null
   source: 'scan' | 'download' | 'manual'
   status: 'discovered' | 'linked' | 'verified' | 'broken'
   last_verified_at: string | null
   game_id: number | null
   unique_id: string | null
   name: string | null
+  alias: string[]
   banner_url: string | null
   avg_rating: number | null
   view_count: number | null
@@ -156,7 +158,8 @@ export const initDb = () => {
         path TEXT NOT NULL,
         exe_path TEXT,
         size_bytes INTEGER,
-        linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_opened_at DATETIME
     );
 
     -- Media cache
@@ -268,6 +271,9 @@ export const initDb = () => {
   } catch (e) { /* already exists */ }
   try {
     db.exec(`ALTER TABLE local_paths ADD COLUMN last_verified_at DATETIME;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE local_paths ADD COLUMN last_opened_at DATETIME;`)
   } catch (e) { /* already exists */ }
   try {
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS local_paths_path_uidx ON local_paths(path);`)
@@ -540,16 +546,22 @@ export const clearBrowseHistory = () => {
   return { success: true }
 }
 
-export const linkLocalPath = (gamePath: string, gameId: number, source: 'scan' | 'download' | 'manual' = 'scan') => {
+export const linkLocalPath = (
+  gamePath: string,
+  gameId: number,
+  source: 'scan' | 'download' | 'manual' = 'scan',
+  exePath?: string | null
+) => {
   const db = getDb()
   db.prepare(`
-    INSERT INTO local_paths (path, game_id, source, status, linked_at)
-    VALUES (?, ?, ?, 'linked', CURRENT_TIMESTAMP)
+    INSERT INTO local_paths (path, game_id, exe_path, source, status, linked_at)
+    VALUES (?, ?, ?, ?, 'linked', CURRENT_TIMESTAMP)
     ON CONFLICT(path) DO UPDATE SET
       game_id = excluded.game_id,
+      exe_path = COALESCE(excluded.exe_path, local_paths.exe_path),
       source = excluded.source,
       status = 'linked'
-  `).run(gamePath, gameId, source)
+  `).run(gamePath, gameId, exePath ?? null, source)
 }
 
 export const listLibraryRoots = (): LibraryRootRecord[] => {
@@ -602,19 +614,21 @@ export const markLibraryRootsScanned = (paths: string[]) => {
 
 export const listLinkedLocalGames = (): LinkedLocalGameRecord[] => {
   const db = getDb()
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT
       lp.id,
       lp.path,
       lp.exe_path,
       lp.size_bytes,
       lp.linked_at,
+      lp.last_opened_at,
       lp.source,
       lp.status,
       lp.last_verified_at,
       lp.game_id,
       g.unique_id,
       g.name,
+      g.detail_json,
       g.banner_url,
       g.avg_rating,
       g.view_count,
@@ -622,7 +636,26 @@ export const listLinkedLocalGames = (): LinkedLocalGameRecord[] => {
     FROM local_paths lp
     LEFT JOIN games g ON g.id = lp.game_id
     ORDER BY lp.linked_at DESC, lp.id DESC
-  `).all() as LinkedLocalGameRecord[]
+  `).all() as Array<LinkedLocalGameRecord & { detail_json?: string | null }>
+
+  return rows.map((row) => {
+    let alias: string[] = []
+    if (row.detail_json) {
+      try {
+        const detail = JSON.parse(row.detail_json) as { alias?: unknown }
+        if (Array.isArray(detail.alias)) {
+          alias = detail.alias.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        }
+      } catch {
+        alias = []
+      }
+    }
+
+    return {
+      ...row,
+      alias,
+    }
+  })
 }
 
 export const getLinkedLocalGameById = (id: number): LinkedLocalGameRecord | null => {
@@ -634,12 +667,14 @@ export const getLinkedLocalGameById = (id: number): LinkedLocalGameRecord | null
       lp.exe_path,
       lp.size_bytes,
       lp.linked_at,
+      lp.last_opened_at,
       lp.source,
       lp.status,
       lp.last_verified_at,
       lp.game_id,
       g.unique_id,
       g.name,
+      g.detail_json,
       g.banner_url,
       g.avg_rating,
       g.view_count,
@@ -648,9 +683,26 @@ export const getLinkedLocalGameById = (id: number): LinkedLocalGameRecord | null
     LEFT JOIN games g ON g.id = lp.game_id
     WHERE lp.id = ?
     LIMIT 1
-  `).get(id) as LinkedLocalGameRecord | undefined
+  `).get(id) as (LinkedLocalGameRecord & { detail_json?: string | null }) | undefined
 
-  return row ?? null
+  if (!row) return null
+
+  let alias: string[] = []
+  if (row.detail_json) {
+    try {
+      const detail = JSON.parse(row.detail_json) as { alias?: unknown }
+      if (Array.isArray(detail.alias)) {
+        alias = detail.alias.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      }
+    } catch {
+      alias = []
+    }
+  }
+
+  return {
+    ...row,
+    alias,
+  }
 }
 
 export const deleteLocalPathsByIds = (ids: number[]) => {
@@ -665,12 +717,28 @@ export const deleteLocalPathsByIds = (ids: number[]) => {
   transaction(ids)
 }
 
+export const markLocalGameOpened = (id: number) => {
+  const db = getDb()
+  db.prepare(`
+    UPDATE local_paths
+    SET last_opened_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(id)
+  return { success: true }
+}
+
 const DEFAULT_DOWNLOAD_CONCURRENCY = 3
 const MIN_DOWNLOAD_CONCURRENCY = 1
 const MAX_DOWNLOAD_CONCURRENCY = 8
+const DEFAULT_ARCHIVE_EXTRACTION_DEPTH = 3
+const MIN_ARCHIVE_EXTRACTION_DEPTH = 1
+const MAX_ARCHIVE_EXTRACTION_DEPTH = 6
 
 const clampDownloadConcurrency = (value: number) =>
   Math.min(MAX_DOWNLOAD_CONCURRENCY, Math.max(MIN_DOWNLOAD_CONCURRENCY, value))
+
+const clampArchiveExtractionDepth = (value: number) =>
+  Math.min(MAX_ARCHIVE_EXTRACTION_DEPTH, Math.max(MIN_ARCHIVE_EXTRACTION_DEPTH, value))
 
 export const getDownloadConcurrencySetting = () => {
   const db = getDb()
@@ -693,6 +761,34 @@ export const setDownloadConcurrencySetting = (value: number) => {
   db.prepare(`
     INSERT INTO app_settings (key, value, updated_at)
     VALUES ('download_concurrency', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(String(normalized))
+  return normalized
+}
+
+export const getArchiveExtractionDepthSetting = () => {
+  const db = getDb()
+  const row = db.prepare(`
+    SELECT value
+    FROM app_settings
+    WHERE key = 'archive_extraction_depth'
+    LIMIT 1
+  `).get() as { value: string } | undefined
+
+  if (!row) return DEFAULT_ARCHIVE_EXTRACTION_DEPTH
+  const parsed = Number.parseInt(row.value, 10)
+  if (!Number.isFinite(parsed)) return DEFAULT_ARCHIVE_EXTRACTION_DEPTH
+  return clampArchiveExtractionDepth(parsed)
+}
+
+export const setArchiveExtractionDepthSetting = (value: number) => {
+  const db = getDb()
+  const normalized = clampArchiveExtractionDepth(Math.round(value))
+  db.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('archive_extraction_depth', ?, CURRENT_TIMESTAMP)
     ON CONFLICT(key) DO UPDATE SET
       value = excluded.value,
       updated_at = CURRENT_TIMESTAMP

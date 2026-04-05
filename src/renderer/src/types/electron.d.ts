@@ -21,12 +21,14 @@ export interface LinkedLocalGame {
   exe_path: string | null;
   size_bytes: number | null;
   linked_at: string;
+  last_opened_at: string | null;
   source: 'scan' | 'download' | 'manual';
   status: 'discovered' | 'linked' | 'verified' | 'broken';
   last_verified_at: string | null;
   game_id: number | null;
   unique_id: string | null;
   name: string | null;
+  alias: string[];
   banner_url: string | null;
   avg_rating: number | null;
   view_count: number | null;
@@ -132,6 +134,7 @@ export interface ElectronAPI {
   rescanLibrary: (rootPaths?: string[]) => Promise<LibraryRescanResult>;
   listLinkedLocalGames: () => Promise<LinkedLocalGame[]>;
   getLinkedLocalGame: (localGameId: number) => Promise<LinkedLocalGame | null>;
+  markLocalGameOpened: (localGameId: number) => Promise<{ success: boolean }>;
   openLocalGameWindow: (localGameId: number) => Promise<{ success: boolean }>;
   deleteLibraryGamesAndFiles: (localPathIds: number[]) => Promise<{
     success: boolean;
@@ -170,6 +173,8 @@ export interface ElectronAPI {
   pickDownloadDirectory: () => Promise<string | null>;
   getDownloadConcurrency: () => Promise<number>;
   setDownloadConcurrency: (value: number) => Promise<number>;
+  getArchiveExtractionDepth: () => Promise<number>;
+  setArchiveExtractionDepth: (value: number) => Promise<number>;
   queueDownload: (gameId: number | null, sourceUrl: string, downloadRoot?: string, gameMetadata?: DownloadQueueGameMetadata) => Promise<{
     added: number;
     reused: number;

@@ -83,7 +83,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
         setOfficialDownloads(getOfficialGalgameDownloads(detail.downloads ?? []))
       } catch (loadError) {
         if (cancelled) return
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load official downloads')
+        setError(loadError instanceof Error ? loadError.message : '读取官方资源失败')
         setOfficialDownloads([])
       } finally {
         if (!cancelled) {
@@ -159,7 +159,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
           <div className="border-b border-slate-100 bg-linear-to-r from-sky-50 via-white to-blue-50/70 px-5 py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Quick Download</div>
+                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">快速下载</div>
                 <div className="mt-1 line-clamp-2 text-base font-black leading-6 text-slate-900">{resourceName}</div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">
                   <span className="rounded-full bg-white px-3 py-1 shadow-sm">仅 TouchGal 官方</span>

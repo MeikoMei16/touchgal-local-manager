@@ -8,10 +8,7 @@ import {
   FolderPlus,
   Gamepad2,
   Search,
-  Play,
   RefreshCw,
-  Shapes,
-  Sparkles,
   Trash2
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
@@ -25,17 +22,39 @@ const formatTimestamp = (value: string | null) => {
   return date.toLocaleString('zh-CN');
 };
 
-const formatCompactNumber = (value: number | null | undefined) => {
-  if (!value) return '0';
-  if (value >= 1000000) return `${(value / 1000000).toFixed(1).replace(/\.0$/, '')}m`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}k`;
-  return String(value);
-};
-
 const formatPathTail = (value: string) => {
   const normalized = value.replace(/\\/g, '/');
   const parts = normalized.split('/').filter(Boolean);
   return parts[parts.length - 1] ?? value;
+};
+
+const normalizeSearchToken = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[_\-./\\()[\]{}"'`~!@#$%^&*+=|:;，。、《》？、·]/g, '');
+
+const isSubsequenceMatch = (needle: string, haystack: string) => {
+  if (!needle) return true;
+  let index = 0;
+  for (const char of haystack) {
+    if (char === needle[index]) {
+      index += 1;
+      if (index === needle.length) return true;
+    }
+  }
+  return false;
+};
+
+const matchesLibraryNameFuzzy = (query: string, candidates: string[]) => {
+  const normalizedQuery = normalizeSearchToken(query);
+  if (!normalizedQuery) return true;
+
+  return candidates.some((candidate) => {
+    const normalizedCandidate = normalizeSearchToken(candidate);
+    if (!normalizedCandidate) return false;
+    return normalizedCandidate.includes(normalizedQuery) || isSubsequenceMatch(normalizedQuery, normalizedCandidate);
+  });
 };
 
 type LibraryCollectionKey =
@@ -47,7 +66,7 @@ type LibraryCollectionKey =
   | 'needs_attention'
   | 'broken';
 
-type LibrarySortKey = 'recent' | 'name' | 'rating' | 'views';
+type LibrarySortKey = 'recent' | 'opened';
 
 export const Library: React.FC = () => {
   const pushToast = useUIStore((state) => state.pushToast);
@@ -62,8 +81,6 @@ export const Library: React.FC = () => {
   const [isPickingRoot, setIsPickingRoot] = React.useState(false);
   const [isSavingRoot, setIsSavingRoot] = React.useState(false);
   const [removingRootId, setRemovingRootId] = React.useState<number | null>(null);
-  const [launchingGameId, setLaunchingGameId] = React.useState<number | null>(null);
-  const [launchChoicesByGameId, setLaunchChoicesByGameId] = React.useState<Record<number, string[]>>({});
   const [selectedGameIds, setSelectedGameIds] = React.useState<number[]>([]);
   const [isDeletingSelectedGames, setIsDeletingSelectedGames] = React.useState(false);
   const [activeLocalGame, setActiveLocalGame] = React.useState<LinkedLocalGame | null>(null);
@@ -127,7 +144,7 @@ export const Library: React.FC = () => {
   }, [brokenGames.length, linkedGames, orphanedFolders.length, unresolvedFolders.length]);
 
   const visibleGames = React.useMemo(() => {
-    const normalizedQuery = searchValue.trim().toLowerCase();
+    const normalizedQuery = searchValue.trim();
     const filtered = linkedGames.filter((game) => {
       const matchesCollection =
         selectedCollection === 'all'
@@ -147,26 +164,16 @@ export const Library: React.FC = () => {
       if (!matchesCollection) return false;
       if (!normalizedQuery) return true;
 
-      const haystack = [
+      return matchesLibraryNameFuzzy(normalizedQuery, [
         game.name ?? '',
-        game.unique_id ?? '',
-        game.path,
-        game.exe_path ?? '',
-      ].join(' ').toLowerCase();
-
-      return haystack.includes(normalizedQuery);
+        ...(game.alias ?? []),
+      ]);
     });
 
     const sorted = [...filtered];
     sorted.sort((a, b) => {
-      if (sortBy === 'name') {
-        return (a.name ?? formatPathTail(a.path)).localeCompare(b.name ?? formatPathTail(b.path), 'zh-CN');
-      }
-      if (sortBy === 'rating') {
-        return (b.avg_rating ?? -1) - (a.avg_rating ?? -1);
-      }
-      if (sortBy === 'views') {
-        return (b.view_count ?? 0) - (a.view_count ?? 0);
+      if (sortBy === 'opened') {
+        return new Date(b.last_opened_at ?? 0).getTime() - new Date(a.last_opened_at ?? 0).getTime();
       }
       return new Date(b.linked_at).getTime() - new Date(a.linked_at).getTime();
     });
@@ -257,27 +264,20 @@ export const Library: React.FC = () => {
     }
   };
 
-  const handleLaunchGame = async (game: LinkedLocalGame, exeName: string) => {
-    setLaunchingGameId(game.id);
-    try {
-      const result = await window.api.launchGame(game.path, exeName);
-      if (!result.success) {
-        throw new Error(result.error || '启动失败');
-      }
-      pushToast(`已启动 ${exeName}`);
-    } catch (error) {
-      pushToast(error instanceof Error ? error.message : '启动游戏失败');
-    } finally {
-      setLaunchingGameId(null);
-    }
-  };
-
   const handleRevealGameDirectory = async (game: LinkedLocalGame) => {
     try {
+      await window.api.markLocalGameOpened(game.id);
       const result = await window.api.revealPath(game.path);
       if (!result.success) {
         throw new Error('打开目录失败');
       }
+      setLinkedGames((current) =>
+        current.map((item) =>
+          item.id === game.id
+            ? { ...item, last_opened_at: new Date().toISOString() }
+            : item
+        )
+      );
     } catch (error) {
       pushToast(error instanceof Error ? error.message : '打开目录失败');
     }
@@ -297,32 +297,6 @@ export const Library: React.FC = () => {
     }
 
     setActiveLocalGame(game);
-  };
-
-  const handleDiscoverExecutables = async (game: LinkedLocalGame) => {
-    setLaunchingGameId(game.id);
-    try {
-      const executables = await window.api.getExecutables(game.path);
-      if (executables.length === 0) {
-        pushToast('未找到可用的启动程序');
-        return;
-      }
-
-      if (executables.length === 1) {
-        await handleLaunchGame(game, executables[0]);
-        return;
-      }
-
-      setLaunchChoicesByGameId((current) => ({
-        ...current,
-        [game.id]: executables,
-      }));
-      pushToast('发现多个可执行文件，请手动选择');
-    } catch (error) {
-      pushToast(error instanceof Error ? error.message : '读取启动程序失败');
-    } finally {
-      setLaunchingGameId(null);
-    }
   };
 
   const toggleGameSelected = (gameId: number) => {
@@ -365,132 +339,58 @@ export const Library: React.FC = () => {
   return (
     <>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 p-4 md:p-8">
-      <section className="overflow-hidden rounded-[2.2rem] border border-slate-200 bg-white shadow-sm">
-        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.15),_transparent_35%),linear-gradient(135deg,_#ffffff_0%,_#f8fbff_55%,_#eef6ff_100%)] p-8">
-          <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-            <div className="flex max-w-3xl flex-col gap-3">
-              <div className="flex items-center gap-3 text-slate-900">
+        <section className="overflow-hidden rounded-[2.2rem] border border-slate-200 bg-white shadow-sm">
+          <div className="bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_36%),linear-gradient(135deg,_#ffffff_0%,_#f9fbff_58%,_#eef6ff_100%)] px-6 py-6 md:px-8">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex items-center gap-4 text-slate-900">
                 <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
                   <Database size={24} />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-black tracking-tight">Local Library</h1>
-                  <p className="text-sm font-medium leading-7 text-slate-500">
-                    这里现在以“本地游戏库”而不是“扫描配置器”为主。默认情况下，压缩包进入 `download/`，解压后的游戏进入 `library/`，Library 会优先围绕这些本地游戏本身展开。
-                  </p>
-                </div>
+                  <h1 className="text-3xl font-black tracking-tight">本地库</h1>
+              <p className="mt-1 text-sm font-medium leading-7 text-slate-500">
+                先看游戏，再进管理。下载内容默认进入 <span className="font-mono text-[13px]">library/</span>，重操作下沉到 popup 或独立窗口。
+              </p>
+              <p className="mt-1 text-xs font-bold text-slate-400">
+                TODO: 恢复“启动游戏 / 多可执行文件手动选择”入口，但不要重新把卡片做回信息过载。
+              </p>
+            </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[1.4rem] border border-white/80 bg-white/80 p-4 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Local Games</div>
-                  <div className="mt-2 text-3xl font-black text-slate-900">{linkedGames.length}</div>
-                </div>
-                <div className="rounded-[1.4rem] border border-white/80 bg-white/80 p-4 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Needs Attention</div>
-                  <div className="mt-2 text-3xl font-black text-slate-900">{unresolvedFolders.length + orphanedFolders.length + brokenGames.length}</div>
-                </div>
-                <div className="rounded-[1.4rem] border border-white/80 bg-white/80 p-4 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Watched Roots</div>
-                  <div className="mt-2 text-3xl font-black text-slate-900">{roots.length}</div>
-                </div>
+              <div className="flex flex-col gap-3 lg:min-w-[34rem] lg:flex-row">
+                <label className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 shadow-sm">
+                  <Search size={16} className="text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    placeholder="搜索本地游戏名或别名"
+                    className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"
+                  />
+                </label>
+
+                <label className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-black text-slate-700 shadow-sm">
+                  <Funnel size={16} className="text-slate-400" />
+                  <span>排序</span>
+                  <select
+                    value={sortBy}
+                    onChange={(event) => setSortBy(event.target.value as LibrarySortKey)}
+                    className="bg-transparent text-sm font-black text-slate-800 outline-none"
+                  >
+                    <option value="recent">最近加入</option>
+                    <option value="opened">最近打开</option>
+                  </select>
+                </label>
               </div>
             </div>
-
-            <div className="flex flex-col gap-3 xl:min-w-[28rem]">
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  type="text"
-                  value={manualRootPath}
-                  onChange={(event) => setManualRootPath(event.target.value)}
-                  placeholder="输入额外本地根目录，例如 D:\\Galgames"
-                  className="min-w-0 flex-1 rounded-2xl border border-white/90 bg-white/90 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-sky-300 focus:bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleAddRoot(manualRootPath)}
-                  disabled={isSavingRoot || !manualRootPath.trim()}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <FolderPlus size={16} />
-                  添加目录
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handlePickRoot()}
-                  disabled={isPickingRoot}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Folder size={16} />
-                  选择目录
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleRescan()}
-                disabled={isScanning || roots.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <RefreshCw size={16} className={isScanning ? 'animate-spin' : ''} />
-                {isScanning ? '扫描中...' : '扫描全部监控目录'}
-              </button>
-            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-2">
-            <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-              <Sparkles size={13} />
-              Collection Hierarchy Draft
-            </div>
-            <div className="text-sm font-medium leading-7 text-slate-500">
-              先把本地库做成“集合视图 + 游戏墙 + 重管理 popup/window”的结构，而不是只堆路径字段。
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 md:flex-row">
-            <label className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <Search size={16} className="text-slate-400" />
-              <input
-                type="text"
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="搜索本地游戏、路径、unique id..."
-                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"
-              />
-            </label>
-
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
-              <Funnel size={16} className="text-slate-400" />
-              <span>排序</span>
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as LibrarySortKey)}
-                className="bg-transparent text-sm font-black text-slate-800 outline-none"
-              >
-                <option value="recent">最近加入</option>
-                <option value="name">名称</option>
-                <option value="rating">评分</option>
-                <option value="views">浏览量</option>
-              </select>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid gap-8 xl:grid-cols-[0.9fr_1.75fr_0.95fr]">
-        <aside className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
-              <Shapes size={20} />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-900">Collections</h2>
-              <p className="text-sm font-medium text-slate-500">先做内容组织层，再进具体管理层。</p>
-            </div>
+        <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
+        <aside className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 px-2">
+            <h2 className="text-[1.15rem] font-black text-slate-900">分组</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">组织层</p>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -501,16 +401,16 @@ export const Library: React.FC = () => {
                   key={item.key}
                   type="button"
                   onClick={() => setSelectedCollection(item.key)}
-                  className={`rounded-[1.4rem] border px-4 py-4 text-left transition-all ${
+                  className={`rounded-[1.35rem] border px-4 py-4 text-left transition-all ${
                     isActive
-                      ? 'border-cyan-300 bg-cyan-50 shadow-sm'
+                      ? 'border-cyan-300 bg-cyan-50 shadow-sm shadow-cyan-100/60'
                       : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-black text-slate-900">{item.label}</div>
-                      <div className="mt-1 text-xs font-medium leading-6 text-slate-500">{item.description}</div>
+                      <div className="mt-1 text-[12px] font-medium leading-5 text-slate-500">{item.description}</div>
                     </div>
                     <span className={`rounded-full px-3 py-1 text-[11px] font-black ${
                       isActive ? 'bg-white text-cyan-700' : 'bg-white text-slate-600'
@@ -525,10 +425,15 @@ export const Library: React.FC = () => {
         </aside>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="mb-5 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-black text-slate-900">Linked Local Games</h2>
-              <p className="text-sm font-medium text-slate-500">当前主视图像游戏墙。点击卡片进入更重的本地管理层，而不是直接把所有路径信息摊开。</p>
+              <h2 className="text-xl font-black text-slate-900">已关联本地游戏</h2>
+              <p className="text-sm font-medium text-slate-500">
+                本地库前台视图。点击卡片进入管理层，默认不要把路径和运行细节铺满首页。
+              </p>
+              <p className="mt-1 text-xs font-bold text-slate-400">
+                TODO: 恢复“启动游戏 / 多可执行文件手动选择”入口，但不要重新把卡片做回信息过载。
+              </p>
             </div>
             {visibleGames.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
@@ -560,7 +465,7 @@ export const Library: React.FC = () => {
           )}
 
           {selectedCollection === 'needs_attention' ? (
-            <div className="rounded-[1.6rem] border border-dashed border-amber-300 bg-amber-50 p-8">
+            <div className="rounded-[1.8rem] border border-dashed border-amber-300 bg-amber-50 p-10">
               <div className="flex items-center gap-3 text-amber-800">
                 <AlertCircle size={22} />
                 <div className="text-lg font-black">待处理层</div>
@@ -570,30 +475,30 @@ export const Library: React.FC = () => {
               </div>
             </div>
           ) : visibleGames.length === 0 ? (
-            <div className="rounded-[1.6rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
-                <Gamepad2 size={24} />
+            <div className="rounded-[1.8rem] border border-dashed border-slate-300 bg-slate-50 p-14 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
+                <Gamepad2 size={26} />
               </div>
-              <div className="mt-4 text-base font-black text-slate-900">当前集合下没有可显示的本地游戏</div>
+              <div className="mt-5 text-xl font-black text-slate-900">当前集合下没有可显示的本地游戏</div>
               <div className="mt-2 text-sm font-medium leading-7 text-slate-500">
                 你可以切换左侧集合层级，或调整搜索与排序条件。
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {visibleGames.map((game) => {
                 return (
                   <article
                     key={game.id}
-                    className="cursor-pointer overflow-hidden rounded-[1.6rem] border border-slate-200 bg-slate-50 transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg hover:shadow-sky-100/60"
+                    className="group cursor-pointer overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white transition-all hover:-translate-y-1 hover:border-sky-300 hover:shadow-[0_18px_36px_-24px_rgba(14,165,233,0.3)]"
                     onClick={() => void handleOpenLocalGameWindow(game)}
                   >
-                    <div className="aspect-[16/8] bg-slate-200">
+                    <div className="aspect-[0.74] bg-slate-200">
                       {game.banner_url ? (
                         <img
                           src={game.banner_url}
                           alt={game.name ?? 'Linked local game'}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-slate-400">
@@ -601,9 +506,9 @@ export const Library: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col gap-4 p-5">
-                      <div>
-                        <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-3 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="pt-0.5">
                           <input
                             type="checkbox"
                             checked={selectedGameIds.includes(game.id)}
@@ -611,91 +516,27 @@ export const Library: React.FC = () => {
                             onChange={() => toggleGameSelected(game.id)}
                             className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                           />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-lg font-black text-slate-900">{game.name ?? '未命名条目'}</div>
-                            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-                              {game.source} / {game.status}
-                            </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="line-clamp-2 text-[0.95rem] font-black leading-5 text-slate-900">
+                            {game.name ?? '未命名条目'}
                           </div>
                         </div>
-                        <div className="mt-1 break-all font-mono text-[12px] text-slate-500">{game.path}</div>
                       </div>
-                      <div className="flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">{game.source}</span>
-                        <span className={`rounded-full px-3 py-1 ${
-                          game.status === 'broken'
-                            ? 'bg-rose-100 text-rose-700'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}>{game.status}</span>
-                        {game.unique_id && <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-700">{game.unique_id}</span>}
-                        {game.exe_path && <span className="rounded-full bg-indigo-100 px-3 py-1 text-indigo-700">{game.exe_path}</span>}
-                      </div>
-                      <div className="grid grid-cols-3 gap-3 rounded-[1.2rem] border border-slate-200 bg-white p-3 text-center">
-                        <div>
-                          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Score</div>
-                          <div className="mt-1 text-base font-black text-slate-900">
-                            {game.avg_rating ? game.avg_rating.toFixed(1) : '--'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Views</div>
-                          <div className="mt-1 text-base font-black text-slate-900">{formatCompactNumber(game.view_count)}</div>
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">DL</div>
-                          <div className="mt-1 text-base font-black text-slate-900">{formatCompactNumber(game.download_count)}</div>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex gap-3">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleRevealGameDirectory(game);
-                            }}
-                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                          >
-                            <Folder size={16} />
-                            打开目录
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void (game.exe_path
-                                ? handleLaunchGame(game, game.exe_path)
-                                : handleDiscoverExecutables(game));
-                            }}
-                            disabled={game.status === 'broken' || launchingGameId === game.id}
-                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-black text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Play size={16} />
-                            {game.exe_path ? '启动游戏' : '查找启动程序'}
-                          </button>
-                        </div>
 
-                        {(launchChoicesByGameId[game.id]?.length ?? 0) > 1 && (
-                          <div className="rounded-[1.2rem] border border-slate-200 bg-white p-3">
-                            <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Executable Choices</div>
-                            <div className="flex flex-wrap gap-2">
-                              {launchChoicesByGameId[game.id].map((exe) => (
-                                <button
-                                  key={`${game.id}-${exe}`}
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void handleLaunchGame(game, exe);
-                                  }}
-                                  disabled={launchingGameId === game.id}
-                                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
-                                >
-                                  {exe}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleRevealGameDirectory(game);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-3 py-2 text-sm font-black text-white transition hover:bg-slate-800"
+                      >
+                        <Folder size={15} />
+                        打开目录
+                      </button>
+                      <div className="truncate text-[11px] font-mono text-slate-400" title={game.path}>
+                        {formatPathTail(game.path)}
                       </div>
                     </div>
                   </article>
@@ -705,7 +546,7 @@ export const Library: React.FC = () => {
           )}
         </section>
 
-        <aside className="flex flex-col gap-8">
+        <aside className="flex flex-col gap-6">
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
@@ -802,8 +643,47 @@ export const Library: React.FC = () => {
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-black text-slate-900">Watched Directories</h2>
-                <p className="text-sm font-medium text-slate-500">保留，但降级为管理面板。大多数时候你只需要默认的 `library/` 即可。</p>
+                <p className="text-sm font-medium text-slate-500">辅助管理层。大多数时候你只需要默认的 `library/`。</p>
               </div>
+            </div>
+
+            <div className="mb-4 flex flex-col gap-3">
+              <input
+                type="text"
+                value={manualRootPath}
+                onChange={(event) => setManualRootPath(event.target.value)}
+                placeholder="输入额外本地根目录"
+                className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-sky-300 focus:bg-white"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleAddRoot(manualRootPath)}
+                  disabled={isSavingRoot || !manualRootPath.trim()}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FolderPlus size={16} />
+                  添加
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handlePickRoot()}
+                  disabled={isPickingRoot}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Folder size={16} />
+                  选择
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleRescan()}
+                disabled={isScanning || roots.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={isScanning ? 'animate-spin' : ''} />
+                {isScanning ? '扫描中...' : '扫描全部监控目录'}
+              </button>
             </div>
 
             {isBootLoading ? (
