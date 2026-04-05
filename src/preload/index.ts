@@ -66,4 +66,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('tg-local-collections-add-item', collectionId, game),
   removeLocalCollectionItem: (collectionId: number, uniqueId: string) =>
     ipcRenderer.invoke('tg-local-collections-remove-item', collectionId, uniqueId),
+
+  // Browse history
+  recordHistory: (entry: { uniqueId: string; gameId?: number | null; name: string; bannerUrl?: string | null }) =>
+    ipcRenderer.invoke('tg-record-history', entry),
+  getHistory: (limit?: number) => ipcRenderer.invoke('tg-get-history', limit),
+  clearHistory: () => ipcRenderer.invoke('tg-clear-history'),
+
+  // Extractor detection
+  checkExtractor: () => ipcRenderer.invoke('tg-check-extractor'),
 })

@@ -196,7 +196,7 @@ Rule:
 Reason:
 
 - the quick-download affordance is meant to be fast, predictable, and safe from noisy community-link variance
-- limiting the shortcut to official game resources keeps the queue flow aligned with the downloader’s direct Cloudreve resolution path
+- limiting the shortcut to official game resources keeps the queue flow aligned with the downloader's direct Cloudreve resolution path
 - the full detail links panel still exists for exhaustive browsing when users want every available resource
 
 ### Collection-card floating download panels should use body-level portals
@@ -209,7 +209,7 @@ Rule:
 Reason:
 
 - Favorites and cloud collection overlays contain multiple nested clipping and stacking contexts
-- portal-based positioning is more robust than trying to tune every ancestor’s overflow/z-index just to let a quick panel escape
+- portal-based positioning is more robust than trying to tune every ancestor's overflow/z-index just to let a quick panel escape
 - homepage cards can keep their card-local quick-panel model because their hover-side rail already owns that layout
 
 ### Stage ownership is fixed
@@ -231,7 +231,7 @@ Rule:
 Reason:
 
 - TouchGal detail pages expose resource publish time and game release time as separate concepts
-- using `created` as a fallback silently turns “发行年份筛选” into “资源发布时间筛选”
+- using `created` as a fallback silently turns "发行年份筛选" into "资源发布时间筛选"
 - correct release-year filtering requires the introduction payload when list data is incomplete
 
 ## UI / Interaction
@@ -274,7 +274,7 @@ Rule:
 Reason:
 
 - browse and search both paginate inside the same app-level scrollable section
-- without a reliable scroll reset, “next page” can strand the user in the middle or bottom of a freshly loaded result set
+- without a reliable scroll reset, "next page" can strand the user in the middle or bottom of a freshly loaded result set
 
 ### Homepage query orchestration belongs in feature modules, not page components
 
@@ -370,7 +370,7 @@ Reason:
 
 - the detail shell and the resolved detail payload are not interchangeable; writing the shell back over resolved detail data visibly regresses the overlay
 - a state-driven retry loop can hammer `/patch/comment` and `/patch/rating` while keeping the detail overlay stuck in loading
-- users need a deterministic “log in, refresh once, then either unlock or stay locked” interaction model
+- users need a deterministic "log in, refresh once, then either unlock or stay locked" interaction model
 
 ### Detail normalization belongs in the store, not the overlay render path
 
@@ -433,7 +433,7 @@ Rule:
 
 Reason:
 
-- “暂无内容” is misleading when content exists but the viewer lacks a valid session
+- "暂无内容" is misleading when content exists but the viewer lacks a valid session
 - reusing the same locked presentation for logged-out and expired-session cases keeps the UX consistent and easier to reason about
 
 ### Settings-owned interaction preferences should stay renderer-side
@@ -490,6 +490,20 @@ Reason:
 
 - profile data is session-gated and commonly slower than ordinary browse-card data
 - silent blank states are hard to distinguish from broken auth/session restore behavior
+
+### Profile History tab is always available
+
+Rule:
+
+- the History tab on the Profile page must render and load regardless of login state
+- history is stored in local SQLite and must not require upstream authentication to read or display
+- the History tab should be the default active tab so both logged-in and logged-out users land on it first
+
+Reason:
+
+- browse history is a user-authored local record, not an upstream social feature
+- gating it behind login would make it inaccessible in offline or logged-out contexts even though all data is local
+- defaulting to History gives logged-out users a meaningful first view of the Profile section
 
 ### Homepage cards are scan-first browse components
 
@@ -558,7 +572,7 @@ Rule:
 
 Reason:
 
-- users expect “退出高级模式” to return to ordinary browsing immediately, not only flip an internal mode flag
+- users expect "退出高级模式" to return to ordinary browsing immediately, not only flip an internal mode flag
 
 ## Local Persistence
 
@@ -569,14 +583,16 @@ Rule:
 - do not assume every upstream resource or detail payload should be persisted just because a schema/table exists
 - upstream TouchGal browse/detail responses remain the source of truth for now
 - add durable SQLite persistence only when a concrete local consumer is defined, such as offline browse, cache invalidation, download orchestration, local library linking, or user-authored metadata
-- when in doubt, prefer not persisting a resource payload yet
+- **when in doubt, prefer not persisting a resource payload yet**
+- deferred TODO comments in the codebase (such as `// TODO: decide which resource fields deserve durable SQLite storage`) must not be activated without explicit direction
 
 For now, safe persistence targets are:
 
 - renderer UI restore state such as homepage query/page and interaction preferences
 - main-process auth/session artifacts
-- download tasks and related local execution state
-- local file/library links
+- download tasks and related local execution state (including `extracted_path`)
+- local file/library links (`local_paths`)
+- browse history (`browse_history`) — user-authored visit record, not upstream cache
 - future personal notes, play state, and other user-authored metadata
 
 Reason:
@@ -584,6 +600,35 @@ Reason:
 - the current database layer is broader than the shipped product surface
 - persisting upstream resource payloads prematurely creates schema obligations, sync questions, and invalidation work before the app has a settled local-first read path
 - narrowing persistence scope keeps the current implementation aligned with the actual product state
+
+### Post-download extraction is an extension of the download task lifecycle
+
+Rule:
+
+- extraction state (`extracting` status, `extracted_path`) belongs to `download_tasks`, not to a separate table
+- extraction must only run on archive extensions and first-part-or-single files; multi-part continuations must be silently skipped
+- extraction failures must leave the downloaded archive intact; only partial extraction output directories should be cleaned up
+- the extracted folder must receive a `.tg_id` marker file before `local_paths` insertion so future library scans can link without FTS matching
+
+Reason:
+
+- the download task already owns the output path, game id, and status lifecycle — extending it is less disruptive than introducing a new entity
+- skipping non-first parts prevents the pipeline from running multiple times on the same logical archive
+- preserving failed archives lets users attempt manual extraction without re-downloading
+
+### Unknown-source local folder matching is deferred
+
+Rule:
+
+- do not attempt to match pre-existing local game folders (renamed, no `.tg_id`, ambiguous metadata) to TouchGal entries in the current sprint
+- the clean downstream path (download → extract → `.tg_id` → `local_paths`) takes priority
+- FTS-based local matching and online-search fallback will be designed once the library UI is stable
+
+Reason:
+
+- the matching problem has high failure-mode surface area (wrong matches, missing upstream entries, encoding issues in folder names)
+- attempting it before the library UI is built produces logic with no test surface
+- the `.tg_id` convention emerging from the extraction pipeline will naturally reduce the unknown-source population over time
 
 ### Advanced filter execution is button-driven
 
@@ -649,6 +694,18 @@ Use the documented workflow in `.agents/workflows/` when:
 - `better-sqlite3` mismatches Electron ABI
 - preload/main outputs are stale
 - Electron cache corruption causes launch failures
+
+### Always read all docs before touching code
+
+Rule:
+
+- read `docs/decisions.md`, `docs/architecture.md`, and `.agents/knowledge.md` before making any code changes
+- never activate deferred TODO blocks or commented-out code without explicit user instruction
+
+Reason:
+
+- architectural decisions such as the deferred `upsertGame` SQLite caching are intentional, not forgotten work
+- activating deferred code without understanding the decision creates runtime errors and violates the stated persistence scope
 
 ## Documentation
 

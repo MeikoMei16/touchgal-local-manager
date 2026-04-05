@@ -2,7 +2,11 @@ import axios from 'axios'
 import fs from 'node:fs'
 import path from 'node:path'
 import { URL } from 'node:url'
-import { getDb, type DownloadTaskRecord } from './db'
+import { getDb, linkLocalPath, type DownloadTaskRecord } from './db'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 
 export interface DownloadTask {
   id: number
@@ -97,6 +101,132 @@ const toTask = (record: DownloadTaskRecord): DownloadTask => ({
   createdAt: record.created_at,
   updatedAt: record.updated_at,
 })
+
+// ── Passwords used by TouchGal distributions ─────────────────────────────
+const TG_PASSWORDS = ['', '1.touchgal', '宅方社']
+
+// Archive extensions that trigger extraction (skip .exe — may be installer)
+const ARCHIVE_EXTENSIONS = new Set(['.zip', '.rar', '.7z', '.001'])
+
+// Strip multi-part suffixes to get a clean game folder name
+// e.g. "GameName.part2.rar" → skipped; "GameName.part1.rar" → "GameName"
+// e.g. "GameName.7z.001"   → "GameName"
+const stripArchiveSuffix = (filename: string) =>
+  filename.replace(/(\.part0*1)?(\.zip|\.rar|\.7z|\.00\d+)+$/i, '')
+         .replace(/(\.part\d+)?(\.zip|\.rar|\.7z|\.00\d+)+$/i, '')
+
+// Only the "first" file of a multi-part set should trigger extraction
+const isFirstPartOrSingle = (filename: string): boolean => {
+  const lower = filename.toLowerCase()
+  // .part2.rar, .part3.rar, ... → skip
+  if (/\.part(?!0*1\.)[0-9]+\./i.test(lower)) return false
+  // .002, .003, ... → skip (but .001 is fine)
+  if (/\.0[0-9]{2}$/.test(lower) && !lower.endsWith('.001')) return false
+  return true
+}
+
+const sanitizeForFolder = (name: string): string =>
+  name.replace(/[<>:"|?*\\/]/g, '_').trim()
+
+const countFilesRecursive = (dir: string): number => {
+  let count = 0
+  const recurse = (d: string) => {
+    try {
+      for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+        if (entry.isFile()) count++
+        else if (entry.isDirectory()) recurse(path.join(d, entry.name))
+      }
+    } catch { /* ignore */ }
+  }
+  recurse(dir)
+  return count
+}
+
+/**
+ * Probe archive metadata with `bz l` to find the correct password and
+ * expected file count.  Returns { password, expectedCount } or null on failure.
+ */
+const probeArchive = async (
+  bzPath: string,
+  archivePath: string
+): Promise<{ password: string; expectedCount: number } | null> => {
+  for (const pwd of TG_PASSWORDS) {
+    try {
+      const args = ['l']
+      if (pwd) args.push(`-p:${pwd}`)
+      args.push(archivePath)
+
+      const { stdout } = await execFileAsync(bzPath, args, {
+        timeout: 15_000,
+        encoding: 'buffer',
+      })
+
+      // Bandizip stdout may be GBK-encoded on Windows
+      let out: string
+      try {
+        out = new TextDecoder('gbk').decode(stdout)
+      } catch {
+        out = stdout.toString('utf8')
+      }
+
+      if (out.includes('Invalid Password') || out.includes('Wrong password')) continue
+
+      // Parse "N files" from summary line
+      const match = out.match(/(\d+)\s+files/i)
+      if (match) {
+        return { password: pwd, expectedCount: parseInt(match[1], 10) }
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+/**
+ * Extract archive to targetDir using Bandizip CLI.
+ */
+const extractArchive = async (
+  bzPath: string,
+  archivePath: string,
+  targetDir: string,
+  password: string
+): Promise<boolean> => {
+  try {
+    const args = ['x', `-o:${targetDir}`, '-y', '-aos']
+    if (password) args.push(`-p:${password}`)
+    args.push(archivePath)
+
+    await execFileAsync(bzPath, args, { timeout: 300_000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Detect Bandizip CLI path.  Checks common install locations and PATH.
+ */
+const findBandizipCli = (): string | null => {
+  const candidates = [
+    'C:\\Program Files\\Bandizip\\bz.exe',
+    'C:\\Program Files (x86)\\Bandizip\\bz.exe',
+    'bz',  // on PATH
+  ]
+  for (const c of candidates) {
+    try {
+      // A quick `bz` with no args exits non-zero but proves it exists
+      require('child_process').execFileSync(c, [], { timeout: 3000, stdio: 'ignore' })
+      return c
+    } catch (e: any) {
+      // execFileSync throws on non-zero exit, but if the file was found the
+      // error code will be numeric rather than ENOENT
+      if (e?.code !== 'ENOENT' && e?.code !== 'ENOTFOUND') return c
+    }
+  }
+  return null
+}
+
 
 class DownloadManager {
   private static instance: DownloadManager
@@ -629,6 +759,115 @@ class DownloadManager {
       SET status = 'done', progress_bytes = ?, total_bytes = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(progressBytes, totalBytes, task.id)
+
+    // Kick off post-download extraction pipeline (non-blocking)
+    void this.extractAndLink(task).catch(() => undefined)
+  }
+
+  /**
+   * Post-download pipeline:
+   * 1. Detect if file is a known archive extension and first-part-or-single
+   * 2. Probe password with bz l
+   * 3. Extract to a temp folder in the same directory
+   * 4. Rename folder to sanitised game name (+ append unique_id if available)
+   * 5. Write .tg_id marker file
+   * 6. Link extracted path in local_paths
+   */
+  private async extractAndLink(task: DownloadTask): Promise<void> {
+    const filename = path.basename(task.outputPath)
+    const ext = path.extname(filename).toLowerCase()
+
+    if (!ARCHIVE_EXTENSIONS.has(ext) || !isFirstPartOrSingle(filename)) return
+
+    const bzPath = findBandizipCli()
+    if (!bzPath) return  // Bandizip not installed — skip silently
+
+    const db = getDb()
+
+    db.prepare(`
+      UPDATE download_tasks
+      SET status = 'extracting', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(task.id)
+
+    try {
+      const probe = await probeArchive(bzPath, task.outputPath)
+      if (!probe) {
+        // Password probe failed — revert to done, leave archive in place
+        db.prepare(`
+          UPDATE download_tasks
+          SET status = 'done', error_message = 'Extraction skipped: no matching password', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(task.id)
+        return
+      }
+
+      // Determine output folder name
+      let folderName = stripArchiveSuffix(filename)
+      // Try to get canonical name from games table
+      let uniqueId: string | null = null
+      if (task.gameId) {
+        const gameRow = db.prepare('SELECT unique_id, name FROM games WHERE id = ?')
+          .get(task.gameId) as { unique_id: string; name: string } | undefined
+        if (gameRow) {
+          folderName = sanitizeForFolder(gameRow.name)
+          uniqueId = gameRow.unique_id
+        }
+      }
+
+      const extractDir = path.join(path.dirname(task.outputPath), folderName)
+
+      // Clean up any previous partial extraction
+      if (fs.existsSync(extractDir)) {
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      }
+      fs.mkdirSync(extractDir, { recursive: true })
+
+      const success = await extractArchive(bzPath, task.outputPath, extractDir, probe.password)
+      if (!success) {
+        fs.rmSync(extractDir, { recursive: true, force: true })
+        db.prepare(`
+          UPDATE download_tasks
+          SET status = 'done', error_message = 'Extraction failed', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(task.id)
+        return
+      }
+
+      // Verify file count
+      const actualCount = countFilesRecursive(extractDir)
+      if (actualCount < probe.expectedCount) {
+        fs.rmSync(extractDir, { recursive: true, force: true })
+        db.prepare(`
+          UPDATE download_tasks
+          SET status = 'done', error_message = 'Extraction verification failed (' + actualCount + '/' + probe.expectedCount + ' files)', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(task.id)
+        return
+      }
+
+      // Write .tg_id marker
+      if (uniqueId) {
+        fs.writeFileSync(path.join(extractDir, '.tg_id'), uniqueId, 'utf8')
+      }
+
+      // Link in local_paths
+      if (task.gameId) {
+        linkLocalPath(extractDir, task.gameId, 'download')
+      }
+
+      db.prepare(`
+        UPDATE download_tasks
+        SET status = 'done', extracted_path = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(extractDir, task.id)
+    } catch (err) {
+      db.prepare(`
+        UPDATE download_tasks
+        SET status = 'done', error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(`Extraction error: ${err instanceof Error ? err.message : String(err)}`, task.id)
+    }
   }
 }
 

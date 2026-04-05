@@ -17,9 +17,9 @@ TouchGal Local Manager is an Electron desktop app that proxies TouchGal upstream
 ```text
 src/main/
   index.ts        IPC hub, upstream API relay, response normalization
-  db.ts           SQLite schema bootstrap and cache helpers
-  downloader.ts   Download queue manager, Cloudreve resolver, and concurrent file worker
-  utils.ts        Filesystem helpers
+  db.ts           SQLite schema bootstrap, CRUD helpers, history helpers
+  downloader.ts   Download queue manager, Cloudreve resolver, concurrent file worker, post-download extraction pipeline
+  utils.ts        Filesystem helpers (cleanFolderName, scanLocalLibrary)
 
 src/preload/
   index.ts        contextBridge surface exposed as window.api
@@ -30,7 +30,7 @@ src/renderer/src/
   store/          Zustand stores, type boundaries, compatibility bridge, action modules
   features/       query logic, advanced-filter helpers, detail normalization
   schemas/        Zod schemas
-  types/          Shared renderer-side types
+  types/          Shared renderer-side types (ElectronAPI, BrowseHistoryEntry, …)
 ```
 
 ## Process Boundaries
@@ -45,6 +45,7 @@ Owns:
 - SQLite access
 - filesystem access
 - download queue state
+- post-download extraction pipeline (Bandizip CLI)
 
 Rules:
 
@@ -120,6 +121,7 @@ Renderer code split:
 - detail overlay subcomponents: [`src/renderer/src/components/detail/`](../src/renderer/src/components/detail)
 - Favorites page: [`src/renderer/src/components/FavoritesView.tsx`](../src/renderer/src/components/FavoritesView.tsx)
 - Downloads page: [`src/renderer/src/components/DownloadsView.tsx`](../src/renderer/src/components/DownloadsView.tsx)
+- Profile page (includes browse history tab): [`src/renderer/src/components/ProfileView.tsx`](../src/renderer/src/components/ProfileView.tsx)
 
 Renderer persistence notes:
 
@@ -296,6 +298,15 @@ Favorites architecture:
 27. Detail-header cloud-folder rows also render per-row in-flight feedback so slow network IO does not look like a dead click target.
 28. Local collection cards and cloud collection cards now expose the same official quick-download action as homepage cards, but their floating panel is implemented through a shared body-level portal so it can escape nested card/overlay clipping.
 
+Browse history flow:
+
+1. Opening any game detail overlay triggers a fire-and-forget `window.api.recordHistory(...)` call inside `detailActions.ts` after the resolved detail payload is available.
+2. The main process upserts the entry into `browse_history` by `unique_id` (repeat visits update `viewed_at` rather than inserting a duplicate row).
+3. History is trimmed to the 500 most recent entries server-side on each record call.
+4. The Profile page exposes a **History** tab that is the default tab and is available even without login.
+5. History is rendered as a clickable card grid (banner + name + relative timestamp); clicking a card opens the full detail overlay.
+6. Users can clear all history via a confirmation-gated button on the History tab.
+
 Profile loading:
 
 1. Renderer resolves the self identity through `getUserStatusSelf()`.
@@ -303,6 +314,7 @@ Profile loading:
 3. If self-status resolves without a usable id, profile loading must still settle back to a non-loading state instead of hanging the screen.
 4. The profile root view now renders an explicit loading circle during the initial profile load instead of leaving the user on a silent blank surface.
 5. The comments, ratings, and collections tabs also render their own activity-level loading indicator while the corresponding user activity request is in flight.
+6. The History tab renders independently of login state and loads from local SQLite on mount.
 
 Detail loading:
 
@@ -320,6 +332,7 @@ Detail loading:
 9. Late responses from stale detail opens are ignored so an older click cannot overwrite a newer selection.
 10. `DetailOverlay` composes dedicated detail subcomponents to render the normalized merged data.
 11. Search-page result cards pass their current card resource into the detail action as a fallback shell, so opening detail from search no longer waits for homepage-owned store state.
+12. After a successful detail load, `detailActions.ts` fires `window.api.recordHistory(...)` to record the visit in local browse history.
 
 Detail discussion / evaluation session behavior:
 
@@ -377,42 +390,58 @@ Download queue flow:
 9. File downloads use HTTP range requests when partial files already exist, so pause/resume and retry can continue from local bytes already on disk when the upstream object server still permits range requests.
 10. The dedicated Downloads page polls queue state, renders per-file progress, and exposes pause, resume, retry, delete, clear-finished, and reveal-in-folder actions.
 
+Post-download extraction pipeline:
+
+1. When a download task transitions to `status = 'done'`, the downloader calls `extractAndLink()` fire-and-forget.
+2. `extractAndLink` only runs if the file has a known archive extension (`.zip`, `.rar`, `.7z`, `.001`) and passes `isFirstPartOrSingle()` — multi-part continuations (`.part2.rar`, `.002`, etc.) are skipped.
+3. The main process probes the Bandizip CLI (`bz.exe`) at known install paths; if not found, extraction is silently skipped and the archive remains on disk.
+4. Password is resolved by probing with `bz l` in order: `""` → `"1.touchgal"` → `"宅方社"`. The probe also reads the expected file count from Bandizip's stdout (GBK-decoded).
+5. Extraction runs with `bz x -o:<targetDir> -y -aos [-p:<password>]`. File count is verified after extraction; mismatches delete the partial output and set an error message.
+6. On success, the extracted folder is renamed to the sanitised game name from the `games` table (if `gameId` is known), a `.tg_id` file is written into the folder, and a `local_paths` row is inserted with `source = 'download'`.
+7. `download_tasks.extracted_path` is updated to the final extracted folder path.
+8. Status transitions: `done` → `extracting` → `done` (with `extracted_path`) on success, or `done` (with `error_message`) on any failure.
+
+Local game library architecture:
+
+1. The `games` table acts as the central identity hub; `local_paths`, `collections`, and `download_tasks` all reference it.
+2. `local_paths` now carries `source` (`scan` / `download` / `manual`), `status` (`discovered` / `linked` / `verified` / `broken`), and `last_verified_at`.
+3. The `.tg_id` marker file written into extracted folders allows future library scans to directly link a folder to its `games` row without FTS matching.
+4. Matching pre-existing local game folders from unknown sources (renamed, no `.tg_id`) to TouchGal entries is **explicitly deferred** to a later sprint.
+
 ## Local Persistence
 
 SQLite is initialized in [`src/main/db.ts`](../src/main/db.ts).
 
 Current schema areas include:
 
-- `games`
-- `games_fts`
+- `games` + `games_fts` (FTS5)
 - `companies`
-- `tags`
-- `game_tags`
+- `tags` + `game_tags`
 - `external_ids`
-- `local_paths`
+- `local_paths` (path UNIQUE, source, status, last_verified_at)
 - `media_cache`
-- `download_tasks`
+- `download_tasks` (extracted_path)
 - `play_sessions`
 - `personal_metadata`
-- `collections`
-- `collection_items`
+- `collections` + `collection_items`
+- `browse_history` (unique_id UNIQUE, game_id, name, banner_url, viewed_at)
 
 Status note:
 
-- SQLite is now intentionally used for user-owned local features with a clear persistence boundary, including local collections and download tasks.
-- browse/detail/resource metadata remains network-first and is not yet promoted to SQLite as the source of truth.
-
+- SQLite is now intentionally used for user-owned local features with a clear persistence boundary, including local collections, download tasks, and browse history.
+- Browse/detail/resource metadata remains network-first and is **not** promoted to SQLite as the source of truth.
 - The schema is broader than currently shipped UI features.
 - Some tables support planned local-first capabilities that are only partially wired today.
 - Database-backed resource persistence is intentionally deferred for now; the app still treats upstream API responses as the source of truth for homepage browsing and detail loading.
-- Do not treat the presence of a table as a requirement to persist that upstream resource yet.
+- **Do not treat the presence of a table as a requirement to persist that upstream resource yet.**
 - Near-term persistence should stay narrow and local-first:
-  renderer UI restore state
-  main-process auth/session artifacts
-  local collections
-  download queue state
-  local installation/link metadata
-  explicitly user-authored local metadata once that UI is implemented
+  - renderer UI restore state
+  - main-process auth/session artifacts
+  - local collections
+  - download queue state + extraction state
+  - browse history (user-authored visit record)
+  - local installation/link metadata
+  - explicitly user-authored local metadata once that UI is implemented
 
 ## Current Feature Status
 
@@ -450,16 +479,25 @@ Status note:
 - Explicit loading indicators for profile shell and profile activity tabs
 - Shared destructive confirmation dialog for local and cloud folder deletion on the Favorites page
 - Homepage quick-collect popover for local/cloud folder toggle directly from the browse card hover rail
+- **Browse history** — SQLite-backed, recorded on every detail open, shown in Profile History tab (default tab, login-not-required), clearable
+- **Post-download extraction pipeline** — Bandizip CLI detection, 3-tier password probe, multi-part handling, file-count verification, folder rename, `.tg_id` injection, `local_paths` insertion
 
 ### Partial / In Progress
 
 - Local metadata cache usage is still limited
-- Downloader is scaffolded, not full end-to-end
+- Library UI rewrite — persistent watch-dir management and linked/unlinked game grid are not yet implemented
 - Offline-first search is not yet the main browse path
 - Deciding which upstream resource payloads deserve durable SQLite storage is still deferred work, not a settled requirement
 - Homepage rating sort can still miss resources when the upstream rating candidate feed itself is incomplete
 - Cloud favorites still use upstream-owned folders only; create/delete are exposed now, but cloud-folder editing is not yet surfaced in this Electron UI
 - Cloud move/remove flows are sequential and correctness-oriented; they have not been optimized into a background job queue or optimistic write model yet
+- SettingsView extractor section (show detected extractor, allow path override) — not yet implemented
+
+### Deferred
+
+- Unknown-source local folder matching: mapping pre-existing locally downloaded game folders (renamed, no `.tg_id`, no identifiable metadata) to TouchGal entries via FTS or online search. **Explicitly deferred until the clean downstream path is fully stable.**
+- Download progress push (`webContents.send`) vs current 1.2s polling — deferred (P3)
+- Concurrent download limit exposed in UI — deferred (P3)
 
 ## Important Constraints
 
@@ -467,3 +505,4 @@ Status note:
 - Advanced tag filtering must not depend on `/search`.
 - Stage 1 advanced-filter fields should be handled upstream, not re-applied locally.
 - Renderer-side advanced filtering is domain-scoped: `sfw`, `nsfw`, and `all`.
+- **Always read `docs/decisions.md` before making changes** — deferred TODO blocks (e.g. `upsertGame`) must not be activated without explicit user instruction.

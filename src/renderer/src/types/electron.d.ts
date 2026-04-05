@@ -49,6 +49,16 @@ export interface DownloadQueueTask {
   updatedAt: string;
 }
 
+
+export interface BrowseHistoryEntry {
+  id: number;
+  unique_id: string;
+  game_id: number | null;
+  name: string;
+  banner_url: string | null;
+  viewed_at: string;
+}
+
 export interface ElectronAPI {
   // Local File System
   scanLocalLibrary: (paths: string[]) => Promise<LocalFolder[]>;
@@ -96,6 +106,14 @@ export interface ElectronAPI {
   deleteLocalCollection: (collectionId: number) => Promise<LocalCollection[]>;
   addLocalCollectionItem: (collectionId: number, game: LocalCollectionGameInput) => Promise<LocalCollection[]>;
   removeLocalCollectionItem: (collectionId: number, uniqueId: string) => Promise<LocalCollection[]>;
+
+  // Browse history
+  recordHistory: (entry: { uniqueId: string; gameId?: number | null; name: string; bannerUrl?: string | null }) => Promise<{ success: boolean }>;
+  getHistory: (limit?: number) => Promise<BrowseHistoryEntry[]>;
+  clearHistory: () => Promise<{ success: boolean }>;
+
+  // Extractor
+  checkExtractor: () => Promise<{ found: boolean; path: string | null; name: string | null }>;
 }
 
 declare global {

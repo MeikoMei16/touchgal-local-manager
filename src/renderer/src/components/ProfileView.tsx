@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/useTouchGalStore';
 import { useUIStore } from '../store/uiStore';
-import { MessageSquare, Star, Package, Heart, Coins, Users, User, Loader2 } from 'lucide-react';
+import { Clock, MessageSquare, Star, Package, Heart, Coins, Users, User, Loader2, Trash2 } from 'lucide-react';
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 import type { TouchGalResource } from '../types';
+import type { BrowseHistoryEntry } from '../types/electron';
 
 const LoadingCircle: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Loading...', compact = false }) => (
   <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-14' : 'h-full'} text-on-surface-variant`}>
@@ -19,6 +20,18 @@ const LoadingCircle: React.FC<{ label?: string; compact?: boolean }> = ({ label 
   </div>
 );
 
+const formatRelativeTime = (dateStr: string): string => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return new Date(dateStr).toLocaleDateString('zh-CN');
+};
+
 const ProfileView: React.FC = () => {
   const { 
     user, 
@@ -32,9 +45,12 @@ const ProfileView: React.FC = () => {
   } = useAuthStore();
   const { selectResource } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections'>('comments');
+  const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections' | 'history'>('history');
   const [selectedCloudCollection, setSelectedCloudCollection] = useState<any | null>(null);
   const [openingCloudCollectionId, setOpeningCloudCollectionId] = useState<number | null>(null);
+  const [history, setHistory] = useState<BrowseHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
 
   useEffect(() => {
     if (user && !userProfile) {
@@ -43,33 +59,45 @@ const ProfileView: React.FC = () => {
   }, [user, userProfile, fetchUserProfile]);
 
   useEffect(() => {
-    if (user) {
-      fetchUserActivity(activeTab);
+    if (user && activeTab !== 'history') {
+      fetchUserActivity(activeTab as 'comments' | 'ratings' | 'collections');
     }
   }, [user, activeTab, fetchUserActivity]);
 
-  if (!user) {
-    const { setIsLoginOpen } = useAuthStore.getState();
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-on-surface-variant">
-        <Users size={64} className="mb-4 opacity-20" />
-        <p className="text-xl font-bold mb-6">Please log in to view your profile</p>
-        <button 
-          onClick={() => setIsLoginOpen(true)}
-          className="bg-primary hover:bg-primary/90 text-on-primary font-bold py-3 px-8 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
-        >
-          <User size={20} />
-          <span>Login Now</span>
-        </button>
-      </div>
-    );
-  }
+  // Always load history (available without login)
+  useEffect(() => {
+    if (activeTab === 'history') {
+      loadHistory();
+    }
+  }, [activeTab]);
 
-  if (isLoading && !userProfile) {
-    return <LoadingCircle label="Loading profile..." />;
-  }
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const entries = await window.api.getHistory(100);
+      setHistory(entries);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
-  const counts = userProfile?._count || {};
+  const handleClearHistory = async () => {
+    if (!confirm('确定要清除所有浏览历史吗？')) return;
+    setClearingHistory(true);
+    try {
+      await window.api.clearHistory();
+      setHistory([]);
+    } finally {
+      setClearingHistory(false);
+    }
+  };
+
+  const handleOpenHistoryEntry = async (entry: BrowseHistoryEntry) => {
+    await selectResource(entry.unique_id);
+  };
+
   const handleOpenCloudResource = async (resource: TouchGalResource) => {
     await selectResource(resource.uniqueId, resource);
   };
@@ -79,6 +107,10 @@ const ProfileView: React.FC = () => {
     setSelectedCloudCollection(folder);
   };
 
+  const tabs = user
+    ? (['history', 'comments', 'ratings', 'collections'] as const)
+    : (['history'] as const);
+
   return (
     <div className="p-8 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -86,82 +118,114 @@ const ProfileView: React.FC = () => {
         {/* Left: Profile Summary */}
         <div className="lg:col-span-1">
           <div className="bg-surface rounded-3xl p-8 shadow-sm border border-outline-variant flex flex-col items-center text-center sticky top-8">
-            <div className="relative group">
-              <img 
-                src={userProfile?.avatar || 'https://via.placeholder.com/150'} 
-                alt={userProfile?.name} 
-                className="w-40 h-40 rounded-full object-cover border-4 border-white shadow-xl mb-6 transition-transform duration-500 group-hover:scale-105"
-              />
-              <div className="absolute bottom-6 right-2 bg-primary text-on-primary p-2 rounded-full shadow-lg border-2 border-white">
-                <Heart size={20} fill="currentColor" />
-              </div>
-            </div>
-            
-            <h1 className="text-3xl font-black text-on-surface mb-2">{userProfile?.name || user.name}</h1>
-            <p className="text-on-surface-variant text-sm mb-6 max-w-xs">{userProfile?.bio || 'This user is too lazy to write a bio.'}</p>
-            
-            <div className="flex gap-4 w-full mb-8">
-              <div className="flex-1 bg-surface-container-low rounded-2xl p-4 border border-outline-variant">
-                <div className="text-2xl font-bold text-on-surface">{userProfile?.follower || 0}</div>
-                <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Followers</div>
-              </div>
-              <div className="flex-1 bg-surface-container-low rounded-2xl p-4 border border-outline-variant">
-                <div className="text-2xl font-bold text-on-surface">{userProfile?.following || 0}</div>
-                <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Following</div>
-              </div>
-            </div>
-
-            <div className="w-full space-y-3">
-              <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-700">
-                <div className="flex items-center gap-3">
-                  <Coins size={20} />
-                  <span className="font-bold">MoeMoe Point</span>
+            {user ? (
+              <>
+                <div className="relative group">
+                  <img 
+                    src={userProfile?.avatar || 'https://via.placeholder.com/150'} 
+                    alt={userProfile?.name} 
+                    className="w-40 h-40 rounded-full object-cover border-4 border-white shadow-xl mb-6 transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute bottom-6 right-2 bg-primary text-on-primary p-2 rounded-full shadow-lg border-2 border-white">
+                    <Heart size={20} fill="currentColor" />
+                  </div>
                 </div>
-                <span className="text-lg font-black">{userProfile?.moemoepoint || 0}</span>
-              </div>
-            </div>
+                
+                <h1 className="text-3xl font-black text-on-surface mb-2">{userProfile?.name || user.name}</h1>
+                <p className="text-on-surface-variant text-sm mb-6 max-w-xs">{userProfile?.bio || 'This user is too lazy to write a bio.'}</p>
+                
+                <div className="flex gap-4 w-full mb-8">
+                  <div className="flex-1 bg-surface-container-low rounded-2xl p-4 border border-outline-variant">
+                    <div className="text-2xl font-bold text-on-surface">{userProfile?.follower || 0}</div>
+                    <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Followers</div>
+                  </div>
+                  <div className="flex-1 bg-surface-container-low rounded-2xl p-4 border border-outline-variant">
+                    <div className="text-2xl font-bold text-on-surface">{userProfile?.following || 0}</div>
+                    <div className="text-xs text-on-surface-variant uppercase tracking-wider font-bold">Following</div>
+                  </div>
+                </div>
+
+                <div className="w-full space-y-3">
+                  <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-700">
+                    <div className="flex items-center gap-3">
+                      <Coins size={20} />
+                      <span className="font-bold">MoeMoe Point</span>
+                    </div>
+                    <span className="text-lg font-black">{userProfile?.moemoepoint || 0}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-40 h-40 rounded-full bg-surface-container-low border-4 border-white shadow-xl mb-6 flex items-center justify-center">
+                  <Users size={56} className="text-outline opacity-40" />
+                </div>
+                <h1 className="text-2xl font-black text-on-surface mb-2">未登录</h1>
+                <p className="text-on-surface-variant text-sm mb-6">登录后可查看评论、评分和云端收藏</p>
+                <button
+                  onClick={() => useAuthStore.getState().setIsLoginOpen(true)}
+                  className="bg-primary hover:bg-primary/90 text-on-primary font-bold py-3 px-8 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+                >
+                  <User size={20} />
+                  <span>立即登录</span>
+                </button>
+
+                {/* History summary for logged-out users */}
+                <div className="mt-8 w-full p-4 bg-surface-container-low rounded-2xl border border-outline-variant text-left">
+                  <div className="flex items-center gap-2 text-on-surface-variant mb-1">
+                    <Clock size={14} />
+                    <span className="text-xs font-bold uppercase tracking-wider">浏览历史</span>
+                  </div>
+                  <div className="text-2xl font-black text-on-surface">{history.length}</div>
+                  <div className="text-xs text-on-surface-variant">条记录（本地）</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* Right: Stats & Activity */}
         <div className="lg:col-span-2 space-y-8">
           
-          {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
-              <div className="p-3 bg-primary-container text-primary rounded-2xl w-fit mb-4">
-                <MessageSquare size={24} />
+          {/* Stats Grid — only when logged in */}
+          {user && (
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
+                <div className="p-3 bg-primary-container text-primary rounded-2xl w-fit mb-4">
+                  <MessageSquare size={24} />
+                </div>
+                <div className="text-3xl font-black text-on-surface">{userProfile?._count?.patch_comment || 0}</div>
+                <div className="text-sm text-on-surface-variant font-bold">Comments</div>
               </div>
-              <div className="text-3xl font-black text-on-surface">{counts.patch_comment || 0}</div>
-              <div className="text-sm text-on-surface-variant font-bold">Comments</div>
-            </div>
-            <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
-              <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl w-fit mb-4">
-                <Star size={24} />
+              <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
+                <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl w-fit mb-4">
+                  <Star size={24} />
+                </div>
+                <div className="text-3xl font-black text-on-surface">{userProfile?._count?.patch_rating || 0}</div>
+                <div className="text-sm text-on-surface-variant font-bold">Ratings</div>
               </div>
-              <div className="text-3xl font-black text-on-surface">{counts.patch_rating || 0}</div>
-              <div className="text-sm text-on-surface-variant font-bold">Ratings</div>
-            </div>
-            <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
-              <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl w-fit mb-4">
-                <Package size={24} />
+              <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
+                <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl w-fit mb-4">
+                  <Package size={24} />
+                </div>
+                <div className="text-3xl font-black text-on-surface">{userProfile?._count?.patch_favorite || userCollections.length || 0}</div>
+                <div className="text-sm text-on-surface-variant font-bold">Collections</div>
               </div>
-              <div className="text-3xl font-black text-on-surface">{counts.patch_favorite || counts.favorite_folder || userCollections.length || 0}</div>
-              <div className="text-sm text-on-surface-variant font-bold">Collections</div>
             </div>
-          </div>
+          )}
 
           {/* Activity Tabs */}
           <div className="bg-surface rounded-3xl shadow-sm border border-outline-variant overflow-hidden">
             <div className="flex border-b border-surface-container">
-              {(['comments', 'ratings', 'collections'] as const).map(tab => (
+              {tabs.map(tab => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-5 text-sm font-bold uppercase tracking-wider transition-all duration-300 relative ${
+                  onClick={() => setActiveTab(tab as any)}
+                  className={`flex-1 py-5 text-sm font-bold uppercase tracking-wider transition-all duration-300 relative flex items-center justify-center gap-1.5 ${
                     activeTab === tab ? 'text-primary' : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
+                  {tab === 'history' && <Clock size={14} />}
                   {tab}
                   {activeTab === tab && (
                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-full" />
@@ -171,7 +235,71 @@ const ProfileView: React.FC = () => {
             </div>
 
             <div className="p-6">
-              {isLoading && <LoadingCircle label="Loading activity..." compact />}
+              {/* History Tab */}
+              {activeTab === 'history' && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">
+                      {history.length} 条浏览记录（本地存储）
+                    </p>
+                    {history.length > 0 && (
+                      <button
+                        onClick={handleClearHistory}
+                        disabled={clearingHistory}
+                        className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-bold transition-colors disabled:opacity-50"
+                      >
+                        {clearingHistory ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        清除全部
+                      </button>
+                    )}
+                  </div>
+
+                  {historyLoading ? (
+                    <LoadingCircle label="加载历史..." compact />
+                  ) : history.length === 0 ? (
+                    <div className="py-20 text-center">
+                      <Clock size={40} className="mx-auto mb-3 text-outline opacity-30" />
+                      <div className="text-outline font-bold">暂无浏览记录</div>
+                      <div className="text-xs text-outline mt-1">点进游戏详情后会自动记录</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {history.map(entry => (
+                        <button
+                          key={entry.unique_id}
+                          onClick={() => handleOpenHistoryEntry(entry)}
+                          className="group text-left rounded-2xl overflow-hidden border border-outline-variant hover:border-primary/30 hover:shadow-md transition-all duration-200 bg-surface-container-low"
+                        >
+                          {entry.banner_url ? (
+                            <div className="aspect-video w-full overflow-hidden bg-surface-container">
+                              <img
+                                src={entry.banner_url}
+                                alt={entry.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-video w-full bg-surface-container flex items-center justify-center">
+                              <Package size={24} className="text-outline opacity-30" />
+                            </div>
+                          )}
+                          <div className="p-2.5">
+                            <div className="text-xs font-bold text-on-surface line-clamp-2 leading-tight mb-1 group-hover:text-primary transition-colors">
+                              {entry.name}
+                            </div>
+                            <div className="text-[10px] text-on-surface-variant">
+                              {formatRelativeTime(entry.viewed_at)}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isLoading && activeTab !== 'history' && <LoadingCircle label="Loading activity..." compact />}
               
               {!isLoading && activeTab === 'comments' && (
                 <div className="space-y-4">

@@ -7,11 +7,14 @@ import axios from 'axios'
 import log from 'electron-log'
 import {
   addItemToLocalCollection,
+  clearBrowseHistory,
   createLocalCollection,
   deleteLocalCollection,
+  getBrowseHistory,
   getDb,
   initDb,
   listLocalCollections,
+  recordBrowseHistory,
   removeItemFromLocalCollection
 } from './db'
 import {
@@ -862,8 +865,8 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     log.info('[API] GET /galgame success, items:', response.data?.galgames?.length);
     const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-    // TODO: Background Delta Sync (Isolated from primary Network IO flow)
-    // normalized.list.forEach(upsertGame)
+      // TODO: decide which resource fields deserve durable SQLite storage before enabling
+      // normalized.list.forEach(upsertGame)
 
     return normalized
   } catch (err: any) {
@@ -881,7 +884,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-  // TODO: Background Delta Sync (Isolated from primary Network IO flow)
+  // TODO: decide which resource fields deserve durable SQLite storage before enabling
   // normalized.list.forEach(upsertGame)
 
   return normalized
@@ -1303,4 +1306,48 @@ handleWithLog('tg-local-collections-add-item', async (_event, collectionId: numb
 handleWithLog('tg-local-collections-remove-item', async (_event, collectionId: number, uniqueId: string) => {
   removeItemFromLocalCollection(collectionId, uniqueId)
   return listLocalCollections()
+})
+
+handleWithLog('tg-record-history', (_event, entry: {
+  uniqueId: string
+  gameId?: number | null
+  name: string
+  bannerUrl?: string | null
+}) => {
+  recordBrowseHistory(entry)
+  // Trim to 500 most recent entries
+  const db = getDb()
+  db.prepare(`
+    DELETE FROM browse_history WHERE id NOT IN (
+      SELECT id FROM browse_history ORDER BY viewed_at DESC LIMIT 500
+    )
+  `).run()
+  return { success: true }
+})
+
+handleWithLog('tg-get-history', (_event, limit = 50) => {
+  return getBrowseHistory(limit)
+})
+
+handleWithLog('tg-clear-history', () => {
+  return clearBrowseHistory()
+})
+
+handleWithLog('tg-check-extractor', () => {
+  const { execFileSync } = require('node:child_process')
+  const candidates = [
+    'C:\\Program Files\\Bandizip\\bz.exe',
+    'C:\\Program Files (x86)\\Bandizip\\bz.exe',
+  ]
+  for (const c of candidates) {
+    try {
+      execFileSync(c, [], { timeout: 3000, stdio: 'ignore' })
+      return { found: true, path: c, name: 'Bandizip' }
+    } catch (e: any) {
+      if (e?.code !== 'ENOENT' && e?.code !== 'ENOTFOUND') {
+        return { found: true, path: c, name: 'Bandizip' }
+      }
+    }
+  }
+  return { found: false, path: null, name: null }
 })

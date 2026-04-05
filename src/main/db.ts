@@ -224,6 +224,37 @@ export const initDb = () => {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;`)
   } catch (e) { /* already exists */ }
 
+  // local_paths schema migrations
+  try {
+    db.exec(`ALTER TABLE local_paths ADD COLUMN source TEXT CHECK(source IN ('scan','download','manual')) DEFAULT 'scan';`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE local_paths ADD COLUMN status TEXT CHECK(status IN ('discovered','linked','verified','broken')) DEFAULT 'discovered';`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE local_paths ADD COLUMN last_verified_at DATETIME;`)
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS local_paths_path_uidx ON local_paths(path);`)
+  } catch (e) { /* already exists */ }
+
+  // download_tasks: track extracted path after decompression
+  try {
+    db.exec(`ALTER TABLE download_tasks ADD COLUMN extracted_path TEXT;`)
+  } catch (e) { /* already exists */ }
+
+  // Browse history
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS browse_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      unique_id TEXT NOT NULL UNIQUE,
+      game_id INTEGER,
+      name TEXT NOT NULL,
+      banner_url TEXT,
+      viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+
   console.log('[DB] Database initialized at', dbPath)
 }
 
@@ -394,4 +425,59 @@ export const removeItemFromLocalCollection = (collectionId: number, uniqueId: st
   `).run(collectionId, uniqueId)
 
   return { success: true }
+}
+
+export interface BrowseHistoryRecord {
+  id: number
+  unique_id: string
+  game_id: number | null
+  name: string
+  banner_url: string | null
+  viewed_at: string
+}
+
+export const recordBrowseHistory = (entry: {
+  uniqueId: string
+  gameId?: number | null
+  name: string
+  bannerUrl?: string | null
+}) => {
+  const db = getDb()
+  db.prepare(`
+    INSERT INTO browse_history (unique_id, game_id, name, banner_url, viewed_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(unique_id) DO UPDATE SET
+      game_id = excluded.game_id,
+      name = excluded.name,
+      banner_url = excluded.banner_url,
+      viewed_at = CURRENT_TIMESTAMP
+  `).run(entry.uniqueId, entry.gameId ?? null, entry.name, entry.bannerUrl ?? null)
+}
+
+export const getBrowseHistory = (limit = 50): BrowseHistoryRecord[] => {
+  const db = getDb()
+  return db.prepare(`
+    SELECT id, unique_id, game_id, name, banner_url, viewed_at
+    FROM browse_history
+    ORDER BY viewed_at DESC
+    LIMIT ?
+  `).all(limit) as BrowseHistoryRecord[]
+}
+
+export const clearBrowseHistory = () => {
+  const db = getDb()
+  db.prepare('DELETE FROM browse_history').run()
+  return { success: true }
+}
+
+export const linkLocalPath = (gamePath: string, gameId: number, source: 'scan' | 'download' | 'manual' = 'scan') => {
+  const db = getDb()
+  db.prepare(`
+    INSERT INTO local_paths (path, game_id, source, status, linked_at)
+    VALUES (?, ?, ?, 'linked', CURRENT_TIMESTAMP)
+    ON CONFLICT(path) DO UPDATE SET
+      game_id = excluded.game_id,
+      source = excluded.source,
+      status = 'linked'
+  `).run(gamePath, gameId, source)
 }
