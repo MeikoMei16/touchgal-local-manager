@@ -460,6 +460,7 @@ Reason:
 Rule:
 
 - interaction preferences such as `detailSecondaryClickAction` belong in persisted renderer UI state
+- local shell preferences such as Library management open mode (`popup` vs `window`) also belong in persisted renderer UI state
 - settings UI may expose `back` versus `native` behavior for detail-page secondary click without involving the main process
 - detail right-click back handling must exempt interactive targets such as links and buttons so users do not lose native context behavior where it is expected
 - keyboard close behavior should remain layer-aware: `Escape` closes the full-screen screenshot viewer first, then closes the detail overlay when no deeper layer is open
@@ -470,6 +471,22 @@ Reason:
 - renderer-side persistence keeps the setting reactive and cheap to change
 - exempting interactive targets preserves expected desktop affordances while still supporting fast back navigation
 - layer-aware `Escape` handling matches desktop image-viewer and modal expectations better than collapsing multiple layers at once
+
+### Destructive maintenance actions must be split by scope
+
+Rule:
+
+- `reset database` and `clear cache` must remain two separate Settings actions
+- each destructive maintenance action must present an explicit warning/confirmation before execution
+- `reset database` may clear SQLite-owned local business state, but must not be conflated with runtime/session cache cleanup
+- `clear cache` may clear renderer/Electron runtime state and sessions, but must not delete SQLite data
+- after either action completes, the app should reload so the user immediately lands in the new clean state
+
+Reason:
+
+- database reset and cache clearing have materially different blast radii and recovery expectations
+- bundling them into one button makes it too easy to destroy more state than the user intended
+- explicit confirmation plus app reload keeps destructive maintenance understandable, visible, and auditable
 
 ### Collection overlays are management surfaces, not plain viewers
 

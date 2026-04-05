@@ -1,9 +1,11 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'node:path'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 
-let db: Database.Database
+let db: Database.Database | null = null
+
+const getDbPath = () => join(app.getPath('userData'), 'touchgal.db')
 
 export interface LocalCollectionGamePayload {
   id: number
@@ -78,7 +80,7 @@ export interface LinkedLocalGameRecord {
 
 export const initDb = () => {
   const userDataPath = app.getPath('userData')
-  const dbPath = join(userDataPath, 'touchgal.db')
+  const dbPath = getDbPath()
 
   if (!existsSync(userDataPath)) {
     mkdirSync(userDataPath, { recursive: true })
@@ -299,7 +301,36 @@ export const initDb = () => {
 
 export const getDb = () => {
   if (!db) initDb()
-  return db
+  return db as Database.Database
+}
+
+export const resetDatabase = () => {
+  const dbPath = getDbPath()
+  const candidates = [dbPath, `${dbPath}-wal`, `${dbPath}-journal`, `${dbPath}-shm`]
+
+  try {
+    db?.close()
+  } catch {
+    // ignore close failures and continue reset
+  } finally {
+    db = null
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate)) {
+        rmSync(candidate, { force: true })
+      }
+    } catch {
+      // ignore individual file cleanup failures
+    }
+  }
+
+  initDb()
+  return {
+    success: true,
+    deletedPaths: candidates.filter((candidate) => !existsSync(candidate) || candidate === dbPath)
+  }
 }
 
 // Phase 1: Delta Sync Helpers

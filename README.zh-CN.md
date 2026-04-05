@@ -27,6 +27,7 @@
 - 主进程会同时持久化标准化 token 与上游认证 cookies，以提升重启后的登录恢复成功率
 - 若启动恢复发现会话失效，会自动清理已过期的认证持久化数据
 - 设置页支持交互偏好与下载目录配置
+- 设置页现已支持 Library 管理入口模式切换，以及“清空数据库 / 清空缓存”两个独立维护动作
 - 独立 Favorites 页面，并行展示“本地收藏夹”和“云端收藏夹”
 - 详情页收藏菜单支持免登录加入 / 移出本地收藏夹
 - 云端收藏夹已支持点开并分页查看收藏内容
@@ -125,6 +126,7 @@ pnpm build:win
 - Downloads 页面支持持久化队列、进度、暂停 / 恢复 / 重试 / 删除 / 清空已完成、批量选择，以及删除当前下载目录下的真实文件
 - Library 页面自动把 `library/` 设为默认监控根目录，支持原生目录选择、重扫、linked local-path 清单、打开本地目录、启动游戏，以及按 linked / needs attention / watched directories 分组
 - 设置页可查看下载并发数与解压器检测状态；Downloads 页面改为主进程 push 驱动更新
+- 设置页维护区已拆分出两个独立操作：`清空数据库` 与 `清空缓存`，两者分别确认、分别执行
 - 解压器回退顺序为 `Bandizip -> 7-Zip`，密码探测当前仅尝试 `""` 与 `touchgal`
 - Library 扫描现在是最多 3 层的有界递归，并把候选目录标记为 `linked`、`orphaned`、`unresolved`、`broken`
 - 解压目标目录具备碰撞保护：若 `library/Game Name` 已存在，会自动分配 `Game Name (2)` 之类的新目录，而不会覆盖旧目录
@@ -156,7 +158,7 @@ pnpm build:win
 - [docs/decisions.md](docs/decisions.md)
 - [docs/styling.md](docs/styling.md)
 
-当前文档内容已覆盖：左侧导航刷新恢复、首页卡片交互设计、feed 与 detail 标签来源差异、首页 / 搜索页翻页回顶、首页状态重构、高级筛选行为、checkpoint 高级构建恢复、搜索页范围 / 排序 / NSFW 控件、搜索页评分排序可视化进度、基于本地目录管线的评分排序稳定化、主进程 session 中转规则、启动 session 重验证、认证 cookie 恢复 / 清理、本地收藏与云端收藏并行架构、云端收藏夹内容分页、首页与收藏页官方 quick-download 入口、详情页官方资源入队与社区资源外链分流、quick-download metadata chips 展示、下载目录设置、持久化并发下载队列、Downloads 批量选择与文件删除、当前 local-library 管理流程、`download/ -> library/` 解压默认行为、library-first 本地游戏管理、递归扫描分类、本地目录打开与启动支持、解压器回退顺序与密码探测规则、上游下载类型归一（如 `row -> raw`）、全屏截图导航、详情页 `Esc` 行为，以及当前详情弹层包含 session-aware social gating 与登录后社交数据刷新在内的数据流。
+当前文档内容已覆盖：左侧导航刷新恢复、首页卡片交互设计、feed 与 detail 标签来源差异、首页 / 搜索页翻页回顶、首页状态重构、高级筛选行为、checkpoint 高级构建恢复、搜索页范围 / 排序 / NSFW 控件、搜索页评分排序可视化进度、基于本地目录管线的评分排序稳定化、主进程 session 中转规则、启动 session 重验证、认证 cookie 恢复 / 清理、本地收藏与云端收藏并行架构、云端收藏夹内容分页、首页与收藏页官方 quick-download 入口、详情页官方资源入队与社区资源外链分流、quick-download metadata chips 展示、下载目录设置、持久化并发下载队列、Downloads 批量选择与文件删除、当前 local-library 管理流程、`download/ -> library/` 解压默认行为、library-first 本地游戏管理、递归扫描分类、本地目录打开与启动支持、Library 管理入口的 popup / 独立窗口模式、设置页中“清空数据库 / 清空缓存”两种独立维护动作、解压器回退顺序与密码探测规则、上游下载类型归一（如 `row -> raw`）、全屏截图导航、详情页 `Esc` 行为，以及当前详情弹层包含 session-aware social gating 与登录后社交数据刷新在内的数据流。
 
 Lint 说明：
 

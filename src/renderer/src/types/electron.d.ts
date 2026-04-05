@@ -201,6 +201,10 @@ export interface ElectronAPI {
 
   // Extractor
   checkExtractor: () => Promise<ExtractorStatus>;
+
+  // Maintenance
+  resetDatabase: () => Promise<{ success: boolean; deletedPaths: string[] }>;
+  clearAppCache: () => Promise<{ success: boolean; deletedPaths: string[] }>;
 }
 
 declare global {

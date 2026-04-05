@@ -3,15 +3,20 @@ import {
   AlertCircle,
   CheckCircle2,
   Database,
+  Funnel,
   Folder,
   FolderPlus,
-  Link2,
+  Gamepad2,
+  Search,
   Play,
   RefreshCw,
+  Shapes,
+  Sparkles,
   Trash2
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 import type { LibraryRoot, LinkedLocalGame, LocalFolder } from '../types/electron';
+import LocalGameWindow from './LocalGameWindow';
 
 const formatTimestamp = (value: string | null) => {
   if (!value) return '尚未扫描';
@@ -33,8 +38,20 @@ const formatPathTail = (value: string) => {
   return parts[parts.length - 1] ?? value;
 };
 
+type LibraryCollectionKey =
+  | 'all'
+  | 'installed'
+  | 'downloaded'
+  | 'manual'
+  | 'scan'
+  | 'needs_attention'
+  | 'broken';
+
+type LibrarySortKey = 'recent' | 'name' | 'rating' | 'views';
+
 export const Library: React.FC = () => {
   const pushToast = useUIStore((state) => state.pushToast);
+  const libraryManageOpenMode = useUIStore((state) => state.libraryManageOpenMode);
 
   const [roots, setRoots] = React.useState<LibraryRoot[]>([]);
   const [linkedGames, setLinkedGames] = React.useState<LinkedLocalGame[]>([]);
@@ -49,12 +66,113 @@ export const Library: React.FC = () => {
   const [launchChoicesByGameId, setLaunchChoicesByGameId] = React.useState<Record<number, string[]>>({});
   const [selectedGameIds, setSelectedGameIds] = React.useState<number[]>([]);
   const [isDeletingSelectedGames, setIsDeletingSelectedGames] = React.useState(false);
+  const [activeLocalGame, setActiveLocalGame] = React.useState<LinkedLocalGame | null>(null);
+  const [searchValue, setSearchValue] = React.useState('');
+  const [selectedCollection, setSelectedCollection] = React.useState<LibraryCollectionKey>('all');
+  const [sortBy, setSortBy] = React.useState<LibrarySortKey>('recent');
 
   const unresolvedFolders = lastScanFolders.filter((folder) => folder.matchState === 'unresolved');
   const orphanedFolders = lastScanFolders.filter((folder) => folder.matchState === 'orphaned');
   const brokenGames = linkedGames.filter((game) => game.status === 'broken');
   const isAllGamesSelected = linkedGames.length > 0 && selectedGameIds.length === linkedGames.length;
   const hasSelectedGames = selectedGameIds.length > 0;
+
+  const collectionItems = React.useMemo(() => {
+    const items: Array<{ key: LibraryCollectionKey; label: string; description: string; count: number }> = [
+      {
+        key: 'all',
+        label: '全部游戏',
+        description: '当前本地库里所有已关联条目',
+        count: linkedGames.length,
+      },
+      {
+        key: 'installed',
+        label: '已安装',
+        description: '状态稳定，可直接进入管理',
+        count: linkedGames.filter((game) => game.status !== 'broken').length,
+      },
+      {
+        key: 'downloaded',
+        label: '下载导入',
+        description: '由下载器自动解压并接入',
+        count: linkedGames.filter((game) => game.source === 'download').length,
+      },
+      {
+        key: 'manual',
+        label: '手动导入',
+        description: '人工加入或整理的本地目录',
+        count: linkedGames.filter((game) => game.source === 'manual').length,
+      },
+      {
+        key: 'scan',
+        label: '扫描发现',
+        description: '由目录扫描链路识别出的条目',
+        count: linkedGames.filter((game) => game.source === 'scan').length,
+      },
+      {
+        key: 'needs_attention',
+        label: '待处理',
+        description: '需要人工确认或修复的条目',
+        count: unresolvedFolders.length + orphanedFolders.length + brokenGames.length,
+      },
+      {
+        key: 'broken',
+        label: 'Broken',
+        description: '路径失效或目标已丢失',
+        count: brokenGames.length,
+      },
+    ];
+
+    return items.filter((item) => item.count > 0 || item.key === 'all' || item.key === 'needs_attention');
+  }, [brokenGames.length, linkedGames, orphanedFolders.length, unresolvedFolders.length]);
+
+  const visibleGames = React.useMemo(() => {
+    const normalizedQuery = searchValue.trim().toLowerCase();
+    const filtered = linkedGames.filter((game) => {
+      const matchesCollection =
+        selectedCollection === 'all'
+          ? true
+          : selectedCollection === 'installed'
+            ? game.status !== 'broken'
+            : selectedCollection === 'downloaded'
+              ? game.source === 'download'
+              : selectedCollection === 'manual'
+                ? game.source === 'manual'
+                : selectedCollection === 'scan'
+                  ? game.source === 'scan'
+                  : selectedCollection === 'broken'
+                    ? game.status === 'broken'
+                    : false;
+
+      if (!matchesCollection) return false;
+      if (!normalizedQuery) return true;
+
+      const haystack = [
+        game.name ?? '',
+        game.unique_id ?? '',
+        game.path,
+        game.exe_path ?? '',
+      ].join(' ').toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      if (sortBy === 'name') {
+        return (a.name ?? formatPathTail(a.path)).localeCompare(b.name ?? formatPathTail(b.path), 'zh-CN');
+      }
+      if (sortBy === 'rating') {
+        return (b.avg_rating ?? -1) - (a.avg_rating ?? -1);
+      }
+      if (sortBy === 'views') {
+        return (b.view_count ?? 0) - (a.view_count ?? 0);
+      }
+      return new Date(b.linked_at).getTime() - new Date(a.linked_at).getTime();
+    });
+
+    return sorted;
+  }, [linkedGames, searchValue, selectedCollection, sortBy]);
 
   const hydrateLibrary = async () => {
     setIsBootLoading(true);
@@ -166,14 +284,19 @@ export const Library: React.FC = () => {
   };
 
   const handleOpenLocalGameWindow = async (game: LinkedLocalGame) => {
-    try {
-      const result = await window.api.openLocalGameWindow(game.id);
-      if (!result.success) {
-        throw new Error('打开本地游戏窗口失败');
+    if (libraryManageOpenMode === 'window') {
+      try {
+        const result = await window.api.openLocalGameWindow(game.id);
+        if (!result.success) {
+          throw new Error('打开本地游戏窗口失败');
+        }
+        return;
+      } catch (error) {
+        pushToast(error instanceof Error ? error.message : '打开本地游戏窗口失败');
       }
-    } catch (error) {
-      pushToast(error instanceof Error ? error.message : '打开本地游戏窗口失败');
     }
+
+    setActiveLocalGame(game);
   };
 
   const handleDiscoverExecutables = async (game: LinkedLocalGame) => {
@@ -240,7 +363,8 @@ export const Library: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 p-4 md:p-8">
+    <>
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 p-4 md:p-8">
       <section className="overflow-hidden rounded-[2.2rem] border border-slate-200 bg-white shadow-sm">
         <div className="bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.15),_transparent_35%),linear-gradient(135deg,_#ffffff_0%,_#f8fbff_55%,_#eef6ff_100%)] p-8">
           <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
@@ -315,14 +439,98 @@ export const Library: React.FC = () => {
         </div>
       </section>
 
-      <div className="grid gap-8 xl:grid-cols-[1.7fr_0.95fr]">
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+              <Sparkles size={13} />
+              Collection Hierarchy Draft
+            </div>
+            <div className="text-sm font-medium leading-7 text-slate-500">
+              先把本地库做成“集合视图 + 游戏墙 + 重管理 popup/window”的结构，而不是只堆路径字段。
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 md:flex-row">
+            <label className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <Search size={16} className="text-slate-400" />
+              <input
+                type="text"
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="搜索本地游戏、路径、unique id..."
+                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-800 outline-none"
+              />
+            </label>
+
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <Funnel size={16} className="text-slate-400" />
+              <span>排序</span>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as LibrarySortKey)}
+                className="bg-transparent text-sm font-black text-slate-800 outline-none"
+              >
+                <option value="recent">最近加入</option>
+                <option value="name">名称</option>
+                <option value="rating">评分</option>
+                <option value="views">浏览量</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-8 xl:grid-cols-[0.9fr_1.75fr_0.95fr]">
+        <aside className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
+              <Shapes size={20} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Collections</h2>
+              <p className="text-sm font-medium text-slate-500">先做内容组织层，再进具体管理层。</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {collectionItems.map((item) => {
+              const isActive = selectedCollection === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setSelectedCollection(item.key)}
+                  className={`rounded-[1.4rem] border px-4 py-4 text-left transition-all ${
+                    isActive
+                      ? 'border-cyan-300 bg-cyan-50 shadow-sm'
+                      : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-slate-900">{item.label}</div>
+                      <div className="mt-1 text-xs font-medium leading-6 text-slate-500">{item.description}</div>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-black ${
+                      isActive ? 'bg-white text-cyan-700' : 'bg-white text-slate-600'
+                    }`}>
+                      {item.count}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-black text-slate-900">Linked Local Games</h2>
-              <p className="text-sm font-medium text-slate-500">本地游戏库的主区。优先展示已经建立稳定映射、可以直接打开目录或启动的条目。</p>
+              <p className="text-sm font-medium text-slate-500">当前主视图像游戏墙。点击卡片进入更重的本地管理层，而不是直接把所有路径信息摊开。</p>
             </div>
-            {linkedGames.length > 0 && (
+            {visibleGames.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -351,19 +559,29 @@ export const Library: React.FC = () => {
             </div>
           )}
 
-          {linkedGames.length === 0 ? (
+          {selectedCollection === 'needs_attention' ? (
+            <div className="rounded-[1.6rem] border border-dashed border-amber-300 bg-amber-50 p-8">
+              <div className="flex items-center gap-3 text-amber-800">
+                <AlertCircle size={22} />
+                <div className="text-lg font-black">待处理层</div>
+              </div>
+              <div className="mt-3 text-sm font-medium leading-7 text-amber-800/80">
+                这里不直接展示游戏墙，而是把 unresolved / orphaned / broken 留给右侧的人工处理面板。这个层更像 collection hierarchy 里的“异常集合”。
+              </div>
+            </div>
+          ) : visibleGames.length === 0 ? (
             <div className="rounded-[1.6rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
-                <Link2 size={24} />
+                <Gamepad2 size={24} />
               </div>
-              <div className="mt-4 text-base font-black text-slate-900">还没有已关联的本地游戏</div>
+              <div className="mt-4 text-base font-black text-slate-900">当前集合下没有可显示的本地游戏</div>
               <div className="mt-2 text-sm font-medium leading-7 text-slate-500">
-                默认情况下，下载的压缩包会进入 `download/`，解压后的游戏会进入 `library/`，并自动生成 `.tg_id` 和 `local_paths`。
+                你可以切换左侧集合层级，或调整搜索与排序条件。
               </div>
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-              {linkedGames.map((game) => {
+              {visibleGames.map((game) => {
                 return (
                   <article
                     key={game.id}
@@ -395,6 +613,9 @@ export const Library: React.FC = () => {
                           />
                           <div className="min-w-0 flex-1">
                             <div className="text-lg font-black text-slate-900">{game.name ?? '未命名条目'}</div>
+                            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                              {game.source} / {game.status}
+                            </div>
                           </div>
                         </div>
                         <div className="mt-1 break-all font-mono text-[12px] text-slate-500">{game.path}</div>
@@ -621,6 +842,21 @@ export const Library: React.FC = () => {
           </section>
         </aside>
       </div>
-    </div>
+      </div>
+
+      {activeLocalGame ? (
+        <div
+          className="fixed inset-0 z-[1450] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm md:p-8"
+          onClick={() => setActiveLocalGame(null)}
+        >
+          <div
+            className="max-h-[min(92vh,980px)] w-full max-w-6xl overflow-y-auto rounded-[2.25rem] border border-white/60 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_48%,_#eef4fa_100%)] p-4 shadow-[0_32px_90px_-34px_rgba(15,23,42,0.45)] md:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <LocalGameWindow embedded game={activeLocalGame} onClose={() => setActiveLocalGame(null)} />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 };

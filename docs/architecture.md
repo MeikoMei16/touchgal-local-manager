@@ -111,6 +111,7 @@ Key frontend state split:
 - detail view state: `selectedResource`, `patchComments`, `patchRatings`, `isDetailLoading`
 - persisted interaction preference: `detailSecondaryClickAction`
 - persisted download-directory override: `downloadPathOverride`
+- persisted Library-management open mode: `libraryManageOpenMode`
 - transient global toast viewport state: `toasts`
 
 Renderer code split:
@@ -135,6 +136,7 @@ Renderer persistence notes:
 - persisted homepage state is intentionally narrow: `lastHomeQuery` and `currentPage`
 - renderer interaction preferences such as `detailSecondaryClickAction` are also persisted in renderer `localStorage`
 - renderer download-directory override is persisted in renderer `localStorage`, while the default archive path is resolved by the main process to project-root `download/`; extracted games are placed under project-root `library/`
+- renderer also persists whether Library game cards should open management as an in-app popup or a separate window
 - hydration is explicitly gated before homepage mount effects issue a normal-mode fetch
 - `uiStore.ts` owns the persistence configuration, but action implementations are delegated to `uiActions/*`
 
@@ -260,8 +262,16 @@ Library behavior:
 
 1. The Library page is intentionally local-first rather than detail-first.
 2. Linked game cards surface the real local install path as visible metadata.
-3. The primary card action reveals that local path in the system file browser instead of jumping into the TouchGal detail overlay.
-4. Launch actions remain separate from reveal-in-folder actions so directory browsing and process launch are not conflated.
+3. Clicking a linked game card now routes into a dedicated local-management surface instead of the TouchGal detail overlay.
+4. That local-management surface can be configured in Settings to open either as an in-app popup overlay or as a separate BrowserWindow.
+5. Launch actions remain separate from reveal-in-folder actions so directory browsing and process launch are not conflated.
+
+Settings maintenance behavior:
+
+1. Settings exposes two separate destructive maintenance actions: `reset database` and `clear cache`.
+2. `reset database` targets the SQLite layer only and rebuilds a fresh DB file afterward.
+3. `clear cache` targets renderer/Electron runtime state such as session cookies, local/session storage, and Chromium caches without deleting SQLite.
+4. Both actions require explicit user confirmation and then trigger an application reload so the cleared state becomes immediately visible.
 
 Advanced filter interaction behavior:
 

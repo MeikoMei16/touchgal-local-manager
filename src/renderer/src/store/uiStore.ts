@@ -11,7 +11,7 @@ import {
 import { createBrowseActions } from './uiActions/browseActions';
 import { createDetailActions } from './uiActions/detailActions';
 import { createAdvancedActions } from './uiActions/advancedActions';
-import type { DetailOpenIntent, DetailSecondaryClickAction, UIState } from './uiStoreTypes';
+import type { DetailOpenIntent, DetailSecondaryClickAction, LibraryManageOpenMode, UIState } from './uiStoreTypes';
 
 export type { UIState } from './uiStoreTypes';
 
@@ -20,6 +20,9 @@ const normalizeDetailSecondaryClickAction = (value: unknown): DetailSecondaryCli
 
 const normalizeDetailOpenIntent = (value: unknown): DetailOpenIntent =>
   value === 'links' || value === 'favorite' ? value : 'default';
+
+const normalizeLibraryManageOpenMode = (value: unknown): LibraryManageOpenMode =>
+  value === 'window' ? 'window' : 'popup';
 
 const coerceLegacyHomepageDefaults = (query: Partial<UIState['lastHomeQuery']> | undefined) => {
   const normalized = normalizeHomeQuery(query);
@@ -67,10 +70,12 @@ export const useUIStore = create<UIState>()(
       },
       lastHomeQuery: defaultHomeQuery(),
       downloadPathOverride: null,
+      libraryManageOpenMode: 'popup',
       toasts: [],
       setDetailSecondaryClickAction: (action) => set({ detailSecondaryClickAction: normalizeDetailSecondaryClickAction(action) }),
       setDetailOpenIntent: (intent) => set({ detailOpenIntent: normalizeDetailOpenIntent(intent) }),
       setDownloadPathOverride: (downloadPathOverride) => set({ downloadPathOverride }),
+      setLibraryManageOpenMode: (libraryManageOpenMode) => set({ libraryManageOpenMode: normalizeLibraryManageOpenMode(libraryManageOpenMode) }),
       pushToast: (message) => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         set((state) => ({
@@ -92,7 +97,8 @@ export const useUIStore = create<UIState>()(
         currentPage: state.currentPage,
         lastHomeQuery: state.lastHomeQuery,
         detailSecondaryClickAction: state.detailSecondaryClickAction,
-        downloadPathOverride: state.downloadPathOverride
+        downloadPathOverride: state.downloadPathOverride,
+        libraryManageOpenMode: state.libraryManageOpenMode
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydratedUi(true);
@@ -110,7 +116,8 @@ export const useUIStore = create<UIState>()(
           currentPage: normalizePage(persistedSlice?.currentPage),
           lastHomeQuery: coerceLegacyHomepageDefaults(persistedQuery),
           detailSecondaryClickAction: normalizeDetailSecondaryClickAction(persistedSlice?.detailSecondaryClickAction),
-          downloadPathOverride: typeof persistedSlice?.downloadPathOverride === 'string' ? persistedSlice.downloadPathOverride : null
+          downloadPathOverride: typeof persistedSlice?.downloadPathOverride === 'string' ? persistedSlice.downloadPathOverride : null,
+          libraryManageOpenMode: normalizeLibraryManageOpenMode(persistedSlice?.libraryManageOpenMode)
         };
       }
     }

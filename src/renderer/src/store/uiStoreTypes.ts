@@ -11,6 +11,7 @@ import type {
 
 export type DetailSecondaryClickAction = 'back' | 'native';
 export type DetailOpenIntent = 'default' | 'links' | 'favorite';
+export type LibraryManageOpenMode = 'popup' | 'window';
 
 export interface AppToast {
   id: string;
@@ -38,6 +39,7 @@ export interface UIState {
   advancedDatasetsByDomain: Record<NsfwDomain, AdvancedDatasetCache>;
   lastHomeQuery: HomeQueryState;
   downloadPathOverride: string | null;
+  libraryManageOpenMode: LibraryManageOpenMode;
   toasts: AppToast[];
   fetchResources: (page?: number, query?: Partial<HomeQueryState>) => Promise<void>;
   searchResources: (keyword: string, page?: number, options?: any) => Promise<void>;
@@ -62,6 +64,7 @@ export interface UIState {
   setCurrentPage: (page: number) => void;
   setHasHydratedUi: (hydrated: boolean) => void;
   setDownloadPathOverride: (path: string | null) => void;
+  setLibraryManageOpenMode: (mode: LibraryManageOpenMode) => void;
   pushToast: (message: string) => string;
   dismissToast: (id: string) => void;
 }

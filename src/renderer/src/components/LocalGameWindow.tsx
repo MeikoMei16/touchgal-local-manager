@@ -1,6 +1,13 @@
 import React from 'react';
-import { Folder, Gamepad2, HardDrive, Play, Sparkles } from 'lucide-react';
+import { Folder, Gamepad2, HardDrive, Play, Sparkles, X } from 'lucide-react';
 import type { LinkedLocalGame } from '../types/electron';
+
+interface LocalGameWindowProps {
+  game?: LinkedLocalGame | null;
+  localGameId?: number | null;
+  embedded?: boolean;
+  onClose?: () => void;
+}
 
 const formatCompactNumber = (value: number | null | undefined) => {
   if (!value) return '0';
@@ -16,18 +23,31 @@ const formatDate = (value: string | null) => {
   return parsed.toLocaleString('zh-CN');
 };
 
-export const LocalGameWindow: React.FC = () => {
-  const [game, setGame] = React.useState<LinkedLocalGame | null>(null);
+export const LocalGameWindow: React.FC<LocalGameWindowProps> = ({
+  game: initialGame = null,
+  localGameId: localGameIdProp = null,
+  embedded = false,
+  onClose,
+}) => {
+  const [game, setGame] = React.useState<LinkedLocalGame | null>(initialGame);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const localGameId = React.useMemo(() => {
+  const queryLocalGameId = React.useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const parsed = Number.parseInt(params.get('localGameId') ?? '', 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }, []);
+  const localGameId = localGameIdProp ?? queryLocalGameId;
 
   React.useEffect(() => {
+    if (initialGame) {
+      setGame(initialGame);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
     if (!localGameId) {
       setError('缺少本地游戏 ID');
       setIsLoading(false);
@@ -63,7 +83,7 @@ export const LocalGameWindow: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [localGameId]);
+  }, [initialGame, localGameId]);
 
   const handleRevealDirectory = async () => {
     if (!game) return;
@@ -75,11 +95,16 @@ export const LocalGameWindow: React.FC = () => {
     await window.api.launchGame(game.path, game.exe_path);
   };
 
+  const shellClassName = embedded
+    ? 'w-full'
+    : 'min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_48%,_#eef4fa_100%)] p-6 md:p-8';
+  const contentClassName = embedded ? 'mx-auto flex w-full max-w-6xl flex-col gap-6' : 'mx-auto flex w-full max-w-7xl flex-col gap-8';
+
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_100%)] text-slate-500">
+      <div className={`${embedded ? 'flex min-h-[24rem] items-center justify-center' : 'flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_100%)]'} text-slate-500`}>
         <div className="rounded-[2rem] border border-slate-200 bg-white px-8 py-6 text-sm font-bold shadow-sm">
-          正在载入本地游戏管理窗口...
+          正在载入本地游戏管理面板...
         </div>
       </div>
     );
@@ -87,9 +112,9 @@ export const LocalGameWindow: React.FC = () => {
 
   if (error || !game) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_100%)] p-8">
+      <div className={`${embedded ? 'flex min-h-[24rem] items-center justify-center' : 'flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_100%)] p-8'}`}>
         <div className="max-w-xl rounded-[2rem] border border-rose-200 bg-white px-8 py-7 shadow-sm">
-          <div className="text-lg font-black text-rose-700">本地游戏窗口加载失败</div>
+          <div className="text-lg font-black text-rose-700">本地游戏管理面板加载失败</div>
           <div className="mt-3 text-sm font-medium leading-7 text-slate-500">{error ?? '未知错误'}</div>
         </div>
       </div>
@@ -97,8 +122,8 @@ export const LocalGameWindow: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f3f7fb_48%,_#eef4fa_100%)] p-6 md:p-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+    <div className={shellClassName}>
+      <div className={contentClassName}>
         <section className="overflow-hidden rounded-[2.25rem] border border-slate-200 bg-white shadow-[0_24px_70px_-40px_rgba(15,23,42,0.35)]">
           <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="relative min-h-[320px] overflow-hidden bg-slate-100">
@@ -114,14 +139,23 @@ export const LocalGameWindow: React.FC = () => {
                 <Sparkles size={14} />
                 Local Game Workspace
               </div>
+              {embedded && onClose ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="absolute right-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-500 shadow-sm transition hover:scale-105 hover:text-slate-900"
+                >
+                  <X size={18} />
+                </button>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-5 p-6 md:p-8">
               <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Template Window</div>
+                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Template Popup</div>
                 <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{game.name ?? `Local Game ${game.id}`}</h1>
                 <p className="mt-3 text-sm font-medium leading-7 text-slate-500">
-                  这是本地游戏重管理窗口模板。后续可以继续塞安装检查、补丁状态、启动配置、资源校验、目录清理等重逻辑。
+                  这是本地游戏重管理 popup 模板。后续可以继续塞安装检查、补丁状态、启动配置、资源校验、目录清理等重逻辑。
                 </p>
               </div>
 

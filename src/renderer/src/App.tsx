@@ -10,7 +10,6 @@ import ProfileView from './components/ProfileView';
 import SettingsView from './components/SettingsView';
 import DownloadsView from './components/DownloadsView';
 import AppToastViewport from './components/AppToastViewport';
-import LocalGameWindow from './components/LocalGameWindow';
 import { useAuthStore } from './store/useTouchGalStore';
 
 const APP_NAV_STORAGE_KEY = 'touchgal-active-nav-tab';
@@ -23,19 +22,11 @@ const normalizeAppNavTab = (value: unknown): AppNavTab =>
     : 'home';
 
 const App: React.FC = () => {
-  const windowMode = React.useMemo(() => {
-    if (typeof window === 'undefined') return 'main';
-    return new URLSearchParams(window.location.search).get('window') ?? 'main';
-  }, []);
   const [activeTab, setActiveTab] = useState<AppNavTab>(() => {
     if (typeof window === 'undefined') return 'home';
     return normalizeAppNavTab(window.localStorage.getItem(APP_NAV_STORAGE_KEY));
   });
   const { isLoginOpen, restoreSession } = useAuthStore();
-
-  if (windowMode === 'local-game') {
-    return <LocalGameWindow />;
-  }
 
   const navItems: Array<{ id: AppNavTab; icon: React.ReactNode; label: string }> = [
     { id: 'home', icon: <HomeIcon size={24} />, label: 'Home' },

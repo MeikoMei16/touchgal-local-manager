@@ -43,6 +43,7 @@ Current cross-cutting topics covered here:
 - detail discussion/evaluation session gating and post-login social refresh behavior
 - renderer settings page and persisted interaction preferences
 - renderer settings page and persisted download-directory selection
+- renderer settings page now also covers Library popup-vs-window management mode plus separate maintenance actions for database reset and cache clearing
 - guarded detail loading and current detail-overlay composition rules
 - detail secondary-click behavior with default right-click-to-back handling
 - layer-aware `Escape` handling for detail overlay and full-screen screenshot viewer
@@ -58,6 +59,7 @@ Current cross-cutting topics covered here:
 - shared quick-download popovers now use a wider panel layout so full metadata chips and long titles fit without collapsing
 - local Library manager default `library/` watch-root seeding, library-first layout, rescan flow, linked-install inventory, direct open-in-folder and local launch actions, and grouped unresolved/orphaned/broken reporting
 - pushed download-queue updates, extractor-status settings, and SQLite-backed download concurrency settings
+- Settings maintenance now splits destructive cleanup into two confirmed actions: reset SQLite database versus clear runtime/session cache
 - post-download extraction into project-root `library/` while archives remain under `download/`, including collision-safe target naming
 - bounded-recursive library scanning (up to 3 levels) with explicit candidate classification instead of one-level folder discovery
 - extractor fallback order (`Bandizip -> 7-Zip`) and the current password probe set (`""`, `touchgal`)

@@ -23,7 +23,8 @@ import {
   markLibraryRootsScanned,
   recordBrowseHistory,
   removeLibraryRoot,
-  removeItemFromLocalCollection
+  removeItemFromLocalCollection,
+  resetDatabase
 } from './db'
 import {
   buildTouchGalBaseHeaders,
@@ -186,6 +187,50 @@ const clearToken = () => {
   } catch (e) {
     log.warn('Failed to remove persisted cookie file:', e)
   }
+}
+
+const clearAppCacheData = () => {
+  const userDataPath = app.getPath('userData')
+  const targets = [
+    'Cache',
+    'Code Cache',
+    'GPUCache',
+    'blob_storage',
+    'Local Storage',
+    'Session Storage',
+    'shared_proto_db',
+    'DawnGraphiteCache',
+    'DawnWebGPUCache',
+    'Shared Dictionary',
+    'SharedStorage',
+    'Cookies',
+    'Cookies-journal',
+    'DIPS',
+    'Network Persistent State',
+    'Preferences',
+    'TransportSecurity',
+    'Trust Tokens',
+    'Trust Tokens-journal',
+    'VideoDecodeStats',
+    'session_token.dat',
+    'session_cookies.txt',
+  ]
+
+  const deletedPaths: string[] = []
+  clearToken()
+
+  for (const relativeTarget of targets) {
+    const targetPath = join(userDataPath, relativeTarget)
+    try {
+      if (!fs.existsSync(targetPath)) continue
+      fs.rmSync(targetPath, { recursive: true, force: true })
+      deletedPaths.push(targetPath)
+    } catch (error) {
+      log.warn('[Maintenance] Failed to remove cache target:', targetPath, error)
+    }
+  }
+
+  return { success: true, deletedPaths }
 }
 
 const loadToken = () => {
@@ -1078,6 +1123,14 @@ handleWithLog('tg-library-delete-games-and-files', async (_event, localPathIds: 
     deletedPaths,
     skippedPaths,
   }
+})
+
+handleWithLog('tg-maintenance-reset-database', () => {
+  return resetDatabase()
+})
+
+handleWithLog('tg-maintenance-clear-cache', () => {
+  return clearAppCacheData()
 })
 
 handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {

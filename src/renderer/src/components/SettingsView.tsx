@@ -1,7 +1,7 @@
 import React from 'react';
-import { CheckCircle2, Download, FolderSearch, MousePointer2, RefreshCw, RotateCcw, SquareMousePointer, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Database, Download, FolderSearch, MonitorUp, MousePointer2, RefreshCw, RotateCcw, SquareMousePointer, TriangleAlert } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
-import type { DetailSecondaryClickAction } from '../store/uiStoreTypes';
+import type { DetailSecondaryClickAction, LibraryManageOpenMode } from '../store/uiStoreTypes';
 import type { ExtractorStatus } from '../types/electron';
 
 const OPTIONS: Array<{
@@ -24,13 +24,40 @@ const OPTIONS: Array<{
   }
 ];
 
+const LIBRARY_OPEN_OPTIONS: Array<{
+  value: LibraryManageOpenMode;
+  title: string;
+  description: string;
+}> = [
+  {
+    value: 'popup',
+    title: 'Popup Overlay',
+    description: '在当前应用窗口内部弹出本地游戏管理面板。'
+  },
+  {
+    value: 'window',
+    title: 'Separate Window',
+    description: '点击 Library 游戏卡片时打开独立窗口，适合后续更重的本地管理流。'
+  }
+];
+
 const SettingsView: React.FC = () => {
-  const { detailSecondaryClickAction, setDetailSecondaryClickAction, downloadPathOverride, setDownloadPathOverride, pushToast } = useUIStore();
+  const {
+    detailSecondaryClickAction,
+    setDetailSecondaryClickAction,
+    downloadPathOverride,
+    setDownloadPathOverride,
+    libraryManageOpenMode,
+    setLibraryManageOpenMode,
+    pushToast
+  } = useUIStore();
   const [defaultDownloadPath, setDefaultDownloadPath] = React.useState('');
   const [extractorStatus, setExtractorStatus] = React.useState<ExtractorStatus | null>(null);
   const [isExtractorLoading, setIsExtractorLoading] = React.useState(true);
   const [downloadConcurrency, setDownloadConcurrency] = React.useState(3);
   const [isSavingConcurrency, setIsSavingConcurrency] = React.useState(false);
+  const [isResettingDatabase, setIsResettingDatabase] = React.useState(false);
+  const [isClearingCache, setIsClearingCache] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -102,6 +129,41 @@ const SettingsView: React.FC = () => {
     }
   };
 
+  const handleResetDatabase = async () => {
+    const confirmed = window.confirm(
+      '确定要清空本地数据库吗？这会删除本地游戏索引、下载任务、收藏夹、浏览历史等 SQLite 数据。该操作不可撤销，执行后应用会重载。'
+    );
+    if (!confirmed) return;
+
+    setIsResettingDatabase(true);
+    try {
+      await window.api.resetDatabase();
+      pushToast('本地数据库已清空，正在重载应用...');
+      window.setTimeout(() => window.location.reload(), 250);
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : '清空数据库失败');
+      setIsResettingDatabase(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    const confirmed = window.confirm(
+      '确定要清空缓存吗？这会移除本地缓存、登录会话、renderer 本地存储与 Electron 运行态缓存，但不会删除 SQLite 数据库。执行后应用会重载。'
+    );
+    if (!confirmed) return;
+
+    setIsClearingCache(true);
+    try {
+      await window.api.clearAppCache();
+      window.localStorage.clear();
+      pushToast('应用缓存已清空，正在重载应用...');
+      window.setTimeout(() => window.location.reload(), 250);
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : '清空缓存失败');
+      setIsClearingCache(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 md:p-8">
       <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
@@ -161,6 +223,52 @@ const SettingsView: React.FC = () => {
                     </div>
                     <div className="text-sm font-medium leading-7 text-slate-500">{option.description}</div>
                   </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
+            <MonitorUp size={22} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xl font-black text-slate-900">Library Management Opening Mode</h2>
+            <p className="text-sm font-medium leading-7 text-slate-500">
+              控制点击 Library 本地游戏卡片时，是在当前窗口里弹出管理面板，还是打开独立管理窗口。
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          {LIBRARY_OPEN_OPTIONS.map((option) => {
+            const checked = libraryManageOpenMode === option.value;
+            return (
+              <label
+                key={option.value}
+                className={`flex cursor-pointer items-start gap-4 rounded-[1.6rem] border p-5 transition-colors ${
+                  checked
+                    ? 'border-cyan-300 bg-cyan-50'
+                    : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="library-manage-open-mode"
+                  value={option.value}
+                  checked={checked}
+                  onChange={() => setLibraryManageOpenMode(option.value)}
+                  className="mt-1 h-4 w-4 accent-cyan-600"
+                />
+                <div className="flex flex-1 flex-col gap-1">
+                  <div className="text-base font-black text-slate-900">
+                    {option.title}
+                    {option.value === 'popup' ? ' (Default)' : ''}
+                  </div>
+                  <div className="text-sm font-medium leading-7 text-slate-500">{option.description}</div>
                 </div>
               </label>
             );
@@ -332,6 +440,54 @@ const SettingsView: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
+            <Database size={22} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xl font-black text-slate-900">Maintenance</h2>
+            <p className="text-sm font-medium leading-7 text-slate-500">
+              提供两个独立的重置动作。数据库和缓存分开处理，避免一次点击把所有状态一起抹掉。
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-[1.6rem] border border-rose-200 bg-rose-50 p-5">
+            <div className="text-base font-black text-slate-900">清空数据库</div>
+            <div className="mt-2 text-sm font-medium leading-7 text-slate-600">
+              删除 SQLite 中的本地业务数据，包括下载任务、本地收藏、Library 链接、浏览历史等。
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleResetDatabase()}
+              disabled={isResettingDatabase || isClearingCache}
+              className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white transition hover:bg-rose-700 disabled:opacity-50"
+            >
+              <Database size={16} />
+              {isResettingDatabase ? '清空中...' : '清空数据库'}
+            </button>
+          </div>
+
+          <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50 p-5">
+            <div className="text-base font-black text-slate-900">清空缓存</div>
+            <div className="mt-2 text-sm font-medium leading-7 text-slate-600">
+              删除本地缓存、登录会话、renderer 本地存储和 Electron 运行态缓存，但保留 SQLite 数据库。
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleClearCache()}
+              disabled={isClearingCache || isResettingDatabase}
+              className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:opacity-50"
+            >
+              <RefreshCw size={16} />
+              {isClearingCache ? '清空中...' : '清空缓存'}
+            </button>
           </div>
         </div>
       </section>

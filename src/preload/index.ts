@@ -111,4 +111,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Extractor detection
   checkExtractor: () => ipcRenderer.invoke('tg-check-extractor'),
+
+  // Maintenance
+  resetDatabase: () => ipcRenderer.invoke('tg-maintenance-reset-database'),
+  clearAppCache: () => ipcRenderer.invoke('tg-maintenance-clear-cache'),
 })
