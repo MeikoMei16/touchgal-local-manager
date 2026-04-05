@@ -95,7 +95,7 @@ pnpm lint
 # 通用构建
 pnpm build
 
-# Windows 64 位安装包（NSIS .exe，输出到 release/0.0.0/）
+# Windows 64 位安装包（NSIS .exe，输出到 release/0.1.0/）
 pnpm build:win
 
 # Linux
