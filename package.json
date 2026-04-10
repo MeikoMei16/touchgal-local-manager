@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && electron-builder",
-    "build:win": "electron-vite build && electron-builder --win",
+    "build:win": "npm run build:win:prep && electron-vite build && electron-builder --win --x64 -c.npmRebuild=false",
+    "build:win:prep": "cd node_modules/better-sqlite3 && npx prebuild-install --platform win32 --arch x64 --target 41.1.0 --runtime electron",
     "build:linux": "electron-vite build && electron-builder --linux",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
