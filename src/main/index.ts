@@ -398,6 +398,17 @@ interface RawDownload {
   content?: string | null
   url?: string | null
   storage?: string | null
+  links?: Array<{
+    id?: number
+    storage?: string | null
+    size?: string | null
+    code?: string | null
+    password?: string | null
+    hash?: string | null
+    content?: string | null
+    sortOrder?: number | null
+    download?: number | null
+  }> | null
   type?: string | string[] | null
   language?: string | string[] | null
   code?: string | null
@@ -607,37 +618,43 @@ const normalizeDownloadType = (value: unknown) => {
 }
 
 const normalizeDownloads = (downloads: RawDownload[]) =>
-  downloads.map((download) => ({
-    id: download.id ?? 0,
-    name: download.name ?? '',
-    section: download.section ?? null,
-    size: download.size ?? null,
-    url: download.url ?? download.content ?? null,
-    content: download.content ?? download.url ?? null,
-    storage: download.storage ?? null,
-    type: asArray(download.type)
-      .map(normalizeDownloadType)
-      .filter((value): value is string => Boolean(value)),
-    language: asArray(download.language),
-    code: download.code ?? null,
-    password: download.password ?? null,
-    note: download.note ?? null,
-    hash: download.hash ?? null,
-    platform: asArray(download.platform),
-    likeCount: download.likeCount ?? 0,
-    downloadCount: download.download ?? 0,
-    created: download.created ?? null,
-    userId: download.userId ?? download.user?.id ?? null,
-    user: download.user
-      ? {
-          id: download.user.id ?? 0,
-          name: download.user.name ?? 'Unknown',
-          avatar: download.user.avatar ?? null,
-          role: download.user.role ?? 0,
-          patchCount: download.user.patchCount ?? 0,
-        }
-      : null,
-  }))
+  downloads.map((download) => {
+    // Detect nested links structure (new API)
+    const firstLink =
+      Array.isArray(download.links) && download.links.length > 0 ? download.links[0] : null
+
+    return {
+      id: download.id ?? 0,
+      name: download.name ?? '',
+      section: download.section ?? null,
+      size: firstLink?.size ?? download.size ?? null,
+      url: firstLink?.url ?? firstLink?.content ?? download.url ?? download.content ?? null,
+      content: firstLink?.content ?? firstLink?.url ?? download.content ?? download.url ?? null,
+      storage: firstLink?.storage ?? download.storage ?? null,
+      type: asArray(download.type)
+        .map(normalizeDownloadType)
+        .filter((value): value is string => Boolean(value)),
+      language: asArray(download.language),
+      code: firstLink?.code ?? download.code ?? null,
+      password: firstLink?.password ?? download.password ?? null,
+      note: download.note ?? null,
+      hash: firstLink?.hash ?? download.hash ?? null,
+      platform: asArray(download.platform),
+      likeCount: download.likeCount ?? 0,
+      downloadCount: firstLink?.download ?? download.download ?? 0,
+      created: download.created ?? null,
+      userId: download.userId ?? download.user?.id ?? null,
+      user: download.user
+        ? {
+            id: download.user.id ?? 0,
+            name: download.user.name ?? 'Unknown',
+            avatar: download.user.avatar ?? null,
+            role: download.user.role ?? 0,
+            patchCount: download.user.patchCount ?? 0
+          }
+        : null
+    }
+  })
 
 const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: number }) => {
   const list = (payload.galgames ?? []).map(normalizeResource)
