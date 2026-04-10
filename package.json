@@ -1,7 +1,7 @@
 {
   "name": "touchgal-local-manager",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Desktop TouchGal local manager for browsing, favoriting, downloading, extracting, and launching games.",
   "author": "Meiko Mei",
   "type": "module",
