@@ -1596,12 +1596,20 @@ handleWithLog('tg-get-user-status-self', async () => {
 
 handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, limit: number) => {
   const response = await API_CLIENT.get('/user/profile/comment', { params: { uid, page, limit } })
-  return ensureValidResponse(response.data)
+  const data = ensureValidResponse(response.data) as any;
+  return {
+    comments: data.comments || data.list || [],
+    total: data.total ?? 0
+  }
 })
 
 handleWithLog('tg-get-user-ratings', async (_event, uid: number, page: number, limit: number) => {
   const response = await API_CLIENT.get('/user/profile/rating', { params: { uid, page, limit } })
-  return ensureValidResponse(response.data)
+  const data = ensureValidResponse(response.data) as any;
+  return {
+    ratings: data.ratings || data.list || [],
+    total: data.total ?? 0
+  }
 })
 
 handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number, limit: number) => {
@@ -1613,7 +1621,10 @@ handleWithLog('tg-get-favorite-folders', async (_event, uid: number, patchId?: n
   const response = await API_CLIENT.get('/user/profile/favorite/folder', {
     params: patchId ? { uid, patchId } : { uid }
   })
-  return ensureValidResponse(response.data)
+  const data = ensureValidResponse(response.data) as any;
+  // Support both old array format and new object format { folders, total }
+  if (Array.isArray(data)) return data;
+  return data.folders || [];
 })
 
 handleWithLog(

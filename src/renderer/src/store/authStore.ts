@@ -199,7 +199,7 @@ export const useAuthStore = create<AuthState>()(
             set({ userRatings: data.ratings || [], isLoading: false });
           } else if (type === 'collections') {
             const data = await TouchGalClient.getFavoriteFolders(Number(uid));
-            set({ userCollections: data || [], isLoading: false });
+            set({ userCollections: data.folders || data || [], isLoading: false });
           }
         } catch (err: any) {
           set({ error: err.message, isLoading: false });
