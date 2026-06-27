@@ -277,7 +277,7 @@ const findExecutableRecursive = (rootDir: string, maxDepth = 4): string | null =
   const visit = (currentDir: string, depth: number): string | null => {
     if (depth > maxDepth) return null
 
-    let entries: fs.Dirent[] = []
+    let entries: fs.Dirent[]
     try {
       entries = fs.readdirSync(currentDir, { withFileTypes: true })
     } catch {
@@ -307,7 +307,7 @@ const collectArchiveFilesRecursive = (rootDir: string): string[] => {
   const archives: string[] = []
 
   const visit = (currentDir: string) => {
-    let entries: fs.Dirent[] = []
+    let entries: fs.Dirent[]
     try {
       entries = fs.readdirSync(currentDir, { withFileTypes: true })
     } catch {
@@ -538,13 +538,13 @@ class DownloadManager {
   public parseLink(content: string): { provider: string; url: string; password?: string }[] {
     const results: { provider: string; url: string; password?: string }[] = []
 
-    const baiduRegex = /(https?:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9_\-]+)\s*(?:提取码[:：]\s*([a-zA-Z0-9]{4}))?/g
+    const baiduRegex = /(https?:\/\/pan\.baidu\.com\/s\/[a-zA-Z0-9_-]+)\s*(?:提取码[:：]\s*([a-zA-Z0-9]{4}))?/g
     let match
     while ((match = baiduRegex.exec(content)) !== null) {
       results.push({ provider: 'baidu', url: match[1], password: match[2] })
     }
 
-    const megaRegex = /(https?:\/\/mega\.nz\/file\/[a-zA-Z0-9_\-#]+)/g
+    const megaRegex = /(https?:\/\/mega\.nz\/file\/[a-zA-Z0-9_#-]+)/g
     while ((match = megaRegex.exec(content)) !== null) {
       results.push({ provider: 'mega', url: match[1] })
     }
@@ -659,7 +659,9 @@ class DownloadManager {
     const task = this.getTask(taskId)
     if (!task) throw new Error('Download task not found')
     this.resetTaskForQueue(taskId)
-    void this.processQueue()
+    if (!this.activeControllers.has(taskId)) {
+      void this.processQueue()
+    }
     this.notifyQueueChanged()
     return this.getTask(taskId)
   }
@@ -668,6 +670,7 @@ class DownloadManager {
     const activeController = this.activeControllers.get(taskId)
     if (activeController) {
       activeController.abort()
+      this.markTaskPaused(taskId)
       this.notifyQueueChanged()
       return this.getTask(taskId)
     }
@@ -784,12 +787,14 @@ class DownloadManager {
       this.activeControllers.set(task.id, controller)
       this.progressSaveAtByTask.set(task.id, 0)
 
-      void this.downloadTask(task, controller.signal)
+      void this.downloadTask(task, controller)
         .catch(() => undefined)
         .finally(() => {
-          this.activeControllers.delete(task.id)
-          this.progressSaveAtByTask.delete(task.id)
-          void this.processQueue()
+          if (this.activeControllers.get(task.id) === controller) {
+            this.activeControllers.delete(task.id)
+            this.progressSaveAtByTask.delete(task.id)
+            void this.processQueue()
+          }
         })
     }
   }
@@ -871,6 +876,37 @@ class DownloadManager {
       SET status = 'queued', error_message = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(taskId)
+  }
+
+  private markTaskPaused(
+    taskId: number,
+    progressBytes?: number,
+    totalBytes?: number | null,
+    options: { preserveQueued?: boolean } = {}
+  ) {
+    const db = getDb()
+    const statusExpression = options.preserveQueued
+      ? "CASE WHEN status = 'queued' THEN 'queued' ELSE 'paused' END"
+      : "'paused'"
+
+    if (progressBytes == null) {
+      db.prepare(`
+        UPDATE download_tasks
+        SET status = ${statusExpression},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status IN ('queued', 'downloading', 'paused')
+      `).run(taskId)
+      return
+    }
+
+    db.prepare(`
+      UPDATE download_tasks
+      SET status = ${statusExpression},
+          progress_bytes = ?,
+          total_bytes = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status IN ('queued', 'downloading', 'paused')
+    `).run(progressBytes, totalBytes, taskId)
   }
 
   private notifyQueueChanged() {
@@ -1048,18 +1084,45 @@ class DownloadManager {
     return refreshedUrl
   }
 
-  private async downloadTask(task: DownloadTask, signal: AbortSignal) {
+  private async downloadTask(task: DownloadTask, controller: AbortController) {
+    const signal = controller.signal
     const db = getDb()
     ensureDir(path.dirname(task.outputPath))
 
-    const refreshedUrl = await this.refreshTaskStorageUrl(task)
     let existingBytes = fileExists(task.outputPath) ? getFileSize(task.outputPath) : 0
+    let refreshedUrl: string
 
-    db.prepare(`
+    try {
+      refreshedUrl = await this.refreshTaskStorageUrl(task)
+    } catch (error) {
+      if ((error as Error).name === 'CanceledError' || signal.aborted) {
+        this.markTaskPaused(task.id, existingBytes, task.totalBytes, { preserveQueued: true })
+        this.notifyQueueChanged()
+        return
+      }
+
+      db.prepare(`
+        UPDATE download_tasks
+        SET status = 'error', progress_bytes = ?, total_bytes = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(existingBytes, task.totalBytes, error instanceof Error ? error.message : String(error), task.id)
+      this.notifyQueueChanged()
+      throw error
+    }
+
+    if (signal.aborted) {
+      this.markTaskPaused(task.id, existingBytes, task.totalBytes, { preserveQueued: true })
+      this.notifyQueueChanged()
+      return
+    }
+
+    const started = db.prepare(`
       UPDATE download_tasks
       SET status = 'downloading', error_message = NULL, progress_bytes = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = ? AND status = 'queued'
     `).run(existingBytes, task.id)
+
+    if (started.changes === 0) return
     this.notifyQueueChanged()
 
     const headers: Record<string, string> = {}
@@ -1067,12 +1130,29 @@ class DownloadManager {
       headers.Range = `bytes=${existingBytes}-`
     }
 
-    const response = await axios.get(refreshedUrl, {
-      responseType: 'stream',
-      signal,
-      headers,
-      validateStatus: (status) => (status >= 200 && status < 300) || status === 206,
-    })
+    let response
+    try {
+      response = await axios.get(refreshedUrl, {
+        responseType: 'stream',
+        signal,
+        headers,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 206,
+      })
+    } catch (error) {
+      if ((error as Error).name === 'CanceledError' || signal.aborted) {
+        this.markTaskPaused(task.id, existingBytes, task.totalBytes, { preserveQueued: true })
+        this.notifyQueueChanged()
+        return
+      }
+
+      db.prepare(`
+        UPDATE download_tasks
+        SET status = 'error', progress_bytes = ?, total_bytes = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(existingBytes, task.totalBytes, error instanceof Error ? error.message : String(error), task.id)
+      this.notifyQueueChanged()
+      throw error
+    }
 
     const isPartial = response.status === 206 && existingBytes > 0
     const totalBytesHeader = Number(response.headers['content-length'] ?? 0)
@@ -1108,11 +1188,7 @@ class DownloadManager {
       response.data.pipe(writer)
     }).catch((error) => {
       if ((error as Error).name === 'CanceledError' || signal.aborted) {
-        db.prepare(`
-          UPDATE download_tasks
-          SET status = 'paused', progress_bytes = ?, total_bytes = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(progressBytes, totalBytes, task.id)
+        this.markTaskPaused(task.id, progressBytes, totalBytes, { preserveQueued: true })
         this.notifyQueueChanged()
         return
       }
