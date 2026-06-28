@@ -1885,12 +1885,6 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     return normalized
   } catch (err: any) {
     log.error('[API] GET /galgame error:', err.response?.data || err.message);
-    const cached = fetchCachedGameFeed(page, limit)
-    if (cached.list.length > 0) {
-      log.warn(`[API] GET /galgame failed; returning ${cached.list.length} cached games`)
-      return cached
-    }
-
     if (isTouchGalDeveloperApiConfigured()) {
       try {
         const fallback = await fetchDeveloperBrowseFallback(page, limit, query)
@@ -1901,6 +1895,12 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
       } catch (fallbackError) {
         log.warn('[Developer API] Browse fallback failed after /galgame error:', getSafeErrorMessage(fallbackError))
       }
+    }
+
+    const cached = fetchCachedGameFeed(page, limit)
+    if (cached.list.length > 0) {
+      log.warn(`[API] GET /galgame and Developer API fallback failed; returning ${cached.list.length} cached games`)
+      return cached
     }
 
     throw err;
