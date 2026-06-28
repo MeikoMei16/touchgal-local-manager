@@ -403,6 +403,36 @@ const isCloudflareChallengeResponse = (response: AxiosResponse | undefined) => {
   )
 }
 
+const SESSION_EXPIRED_PATTERNS = [
+  'SESSION_EXPIRED',
+  '登录失效',
+  '登陆失效',
+  '请先登录',
+  '请先登陆',
+  '未登录',
+  '未登陆',
+  'Login required',
+]
+
+const stringifyErrorPayload = (payload: unknown): string => {
+  if (typeof payload === 'string') return payload
+  if (!payload || typeof payload !== 'object') return ''
+
+  const record = payload as Record<string, unknown>
+  return [
+    record.message,
+    record.error,
+    Array.isArray(record.errors) ? record.errors.map((item) => stringifyErrorPayload(item)).join(' ') : '',
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' ')
+}
+
+const isSessionExpiredPayload = (payload: unknown) => {
+  const message = stringifyErrorPayload(payload)
+  return SESSION_EXPIRED_PATTERNS.some((pattern) => message.includes(pattern))
+}
+
 let cloudflareVerificationPromise: Promise<void> | null = null
 
 const probeTouchGalAccess = async (verificationWindow: BrowserWindow) => {
@@ -573,6 +603,10 @@ API_CLIENT.interceptors.response.use((response) => {
   }
   return response;
 }, async (error: AxiosError) => {
+  if (error.response?.status === 401 && isSessionExpiredPayload(error.response.data)) {
+    throw new Error('SESSION_EXPIRED')
+  }
+
   if (isCloudflareChallengeResponse(error.response)) {
     const originalConfig = error.config as TouchGalAxiosRequestConfig | undefined
 
@@ -1296,7 +1330,7 @@ const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
 
   if (typeof payload === 'string') {
     log.error('[API] Error payload (string):', payload)
-    if (payload.includes('登录失效')) {
+    if (isSessionExpiredPayload(payload)) {
       throw new Error('SESSION_EXPIRED')
     }
     throw new Error(payload)
@@ -1307,7 +1341,7 @@ const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
     const obj = payload as any;
     if (obj.error || obj.message || obj.errors) {
        const msg = obj.message || obj.error || (Array.isArray(obj.errors) ? obj.errors[0]?.message : 'Unknown API Error');
-       if (String(msg).includes('登录失效') || String(msg).includes('Login required') || String(msg).includes('未登录')) {
+       if (isSessionExpiredPayload(obj)) {
          throw new Error('SESSION_EXPIRED');
        }
        // If it's a controlled error object but not a login error, we might still want to return it 
