@@ -38,7 +38,7 @@ export const mergeDetailResource = (
   ...detail,
   id: detail.id || fallback?.id || 0,
   created: detail.created ?? fallback?.created ?? null,
-  introduction: detail.introduction ?? null,
+  introduction: detail.introduction ?? readDetailFallbackString(fallback, 'introduction'),
   company: detail.company ?? fallback?.company ?? null,
   vndbId: detail.vndbId ?? readDetailFallbackString(fallback, 'vndbId'),
   bangumiId: detail.bangumiId ?? (fallback as Partial<TouchGalDetail> | null | undefined)?.bangumiId ?? null,

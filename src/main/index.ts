@@ -1303,8 +1303,8 @@ const getCachedGameList = () => {
         created: getCachedString(detail, 'created'),
         company: getCachedString(detail, 'company'),
         companyAliases: asStringArray(detail.companyAliases),
-        pvUrl: null,
-        screenshots: [],
+        pvUrl: getCachedString(detail, 'pvUrl'),
+        screenshots: asStringArray(detail.screenshots),
         detail: null,
         introduction: getCachedString(detail, 'introduction'),
         alias: asStringArray(detail.alias),
@@ -1820,6 +1820,7 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
     favoriteCount: legacyDetail.favoriteCount || developerDetail.favoriteCount || 0,
     resourceCount: legacyDetail.resourceCount || developerDetail.resourceCount || 0,
     commentCount: legacyDetail.commentCount || developerDetail.commentCount || 0,
+    introduction: developerDetail.introduction || legacyDetail.introduction || null,
     screenshots:
       Array.isArray(legacyDetail.screenshots) && legacyDetail.screenshots.length > 0
         ? legacyDetail.screenshots
