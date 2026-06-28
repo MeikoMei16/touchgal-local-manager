@@ -3,7 +3,12 @@ import { createPortal } from 'react-dom'
 import { Download, ExternalLink, HardDrive, Languages, Loader2, X } from 'lucide-react'
 import type { TouchGalDownload } from '../types'
 import { TouchGalClient } from '../data/TouchGalClient'
-import { getDownloadDisplayName, getDownloadMetadataChips, getOfficialGalgameDownloads } from '../features/downloads/downloadHelpers'
+import {
+  getDownloadDisplayName,
+  getDownloadLinkItems,
+  getDownloadMetadataChips,
+  getOfficialGalgameDownloads
+} from '../features/downloads/downloadHelpers'
 import { useUIStore } from '../store/useTouchGalStore'
 
 interface QuickDownloadPopoverButtonProps {
@@ -110,15 +115,12 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
     try {
       const fallbackDirectory = await window.api.getDefaultDownloadDirectory()
       const targetDirectory = downloadPathOverride || fallbackDirectory
-      const links = (download.content ?? download.url ?? '')
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean)
+      const links = getDownloadLinkItems(download)
 
       let added = 0
       let reused = 0
       for (const link of links) {
-        const result = await window.api.queueDownload(resourceId ?? null, link, targetDirectory, {
+        const result = await window.api.queueDownload(resourceId ?? null, link.url, targetDirectory, {
           id: resourceId ?? 0,
           uniqueId,
           name: resourceName,
@@ -219,6 +221,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
                 officialDownloads.map((download, index) => {
                   const isBusy = activeDownloadIndex === index
                   const metadataChips = getDownloadMetadataChips(download)
+                  const firstLink = getDownloadLinkItems(download)[0] ?? null
                   return (
                     <button
                       key={`${download.id}-${download.content ?? download.url ?? index}`}
@@ -257,9 +260,9 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-bold text-slate-500">
                           <span className="inline-flex items-center gap-1.5">
                             <HardDrive size={13} />
-                            TouchGal 官方
+                            {firstLink?.storage ? firstLink.storage : 'TouchGal 官方'}
                           </span>
-                          <span>{download.size || '未知大小'}</span>
+                          <span>{download.size || firstLink?.size || '未知大小'}</span>
                           <span>直接加入下载页</span>
                         </div>
                       </div>

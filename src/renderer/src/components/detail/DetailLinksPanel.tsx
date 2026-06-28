@@ -12,6 +12,7 @@ import {
 import { useUIStore } from '../../store/useTouchGalStore';
 import {
   getDownloadDisplayName,
+  getDownloadLinkItems,
   getDownloadLinks,
   getDownloadMetadataChips,
   isOfficialDownload,
@@ -70,7 +71,7 @@ const toBucket = (download: TouchGalDownload): ResourceBucket =>
 const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDetail }> = ({ download, resource }) => {
   const downloadPathOverride = useUIStore((state) => state.downloadPathOverride);
   const pushToast = useUIStore((state) => state.pushToast);
-  const links = getDownloadLinks(download);
+  const linkItems = getDownloadLinkItems(download);
   const displayName = getDownloadDisplayName(download);
   const created = formatRelative(download.created);
   const metadataChips = getDownloadMetadataChips(download);
@@ -79,7 +80,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
   const [actionError, setActionError] = React.useState<string | null>(null);
 
   const handleQueueDownload = async () => {
-    if (!isOfficial || links.length === 0 || isQueueing) return;
+    if (!isOfficial || linkItems.length === 0 || isQueueing) return;
 
     setActionError(null);
     setIsQueueing(true);
@@ -89,8 +90,8 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
       let added = 0;
       let reused = 0;
 
-      for (const link of links) {
-        const result = await window.api.queueDownload(resource.id ?? null, link, targetDirectory, {
+      for (const link of linkItems) {
+        const result = await window.api.queueDownload(resource.id ?? null, link.url, targetDirectory, {
           id: resource.id ?? 0,
           uniqueId: resource.uniqueId,
           name: resource.name,
@@ -172,16 +173,25 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
           ) : null}
 
           <div className="flex flex-col gap-2">
-            {links.map((link) => (
-              <a
-                key={link}
-                href={link}
-                target="_blank"
-                rel="noreferrer"
-                className="break-all text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                {link}
-              </a>
+            {linkItems.map((link, index) => (
+              <div key={`${link.id ?? index}-${link.url}`} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  {link.url}
+                </a>
+                {(link.code || link.password || link.size || link.storage) && (
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-slate-500">
+                    {link.storage && <span>{STORAGE_LABELS[link.storage] ?? link.storage}</span>}
+                    {link.size && <span>{link.size}</span>}
+                    {link.code && <span>提取码 {link.code}</span>}
+                    {link.password && <span>解压码 {link.password}</span>}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
@@ -192,16 +202,16 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
           ) : null}
 
           <div className="flex flex-wrap items-center gap-3 text-sm font-bold text-slate-500">
-            {download.storage && (
+            {(download.storage || linkItems[0]?.storage) && (
               <span className="inline-flex items-center gap-1.5">
                 <HardDrive size={14} />
-                {STORAGE_LABELS[download.storage] ?? download.storage}
+                {STORAGE_LABELS[download.storage ?? linkItems[0]?.storage ?? ''] ?? download.storage ?? linkItems[0]?.storage}
               </span>
             )}
-            {download.size && (
+            {(download.size || linkItems[0]?.size) && (
               <span className="inline-flex items-center gap-1.5">
                 <Package size={14} />
-                {download.size}
+                {download.size ?? linkItems[0]?.size}
               </span>
             )}
           </div>
@@ -216,7 +226,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
               <Heart size={16} />
               {download.likeCount ?? 0}
             </span>
-            {links[0] && (
+            {linkItems[0] && (
               <button
                 className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:bg-blue-400"
                 disabled={isOfficial && isQueueing}
@@ -225,7 +235,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
                     void handleQueueDownload();
                     return;
                   }
-                  window.open(links[0], '_blank', 'noopener,noreferrer');
+                  window.open(linkItems[0].url, '_blank', 'noopener,noreferrer');
                 }}
                 type="button"
               >

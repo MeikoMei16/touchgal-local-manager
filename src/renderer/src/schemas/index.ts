@@ -8,6 +8,19 @@ const TouchGalDownloadUserSchema = z.object({
   patchCount: z.number().default(0),
 }).passthrough();
 
+const TouchGalDownloadLinkSchema = z.object({
+  id: z.number().nullable().default(null),
+  storage: z.string().nullable().default(null),
+  size: z.string().nullable().default(null),
+  url: z.string().nullable().default(null),
+  content: z.string().nullable().default(null),
+  code: z.string().nullable().default(null),
+  password: z.string().nullable().default(null),
+  hash: z.string().nullable().default(null),
+  sortOrder: z.number().nullable().default(null),
+  download: z.number().nullable().default(null),
+}).passthrough();
+
 export const TouchGalDownloadSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -26,6 +39,7 @@ export const TouchGalDownloadSchema = z.object({
   likeCount: z.number().default(0),
   downloadCount: z.number().default(0),
   created: z.string().nullable().default(null),
+  links: z.array(TouchGalDownloadLinkSchema).default([]),
   userId: z.number().nullable().default(null),
   user: TouchGalDownloadUserSchema.nullable().default(null),
 }).passthrough();

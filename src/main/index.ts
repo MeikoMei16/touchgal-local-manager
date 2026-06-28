@@ -907,11 +907,46 @@ const normalizeDownloadType = (value: unknown) => {
   return value
 }
 
+const normalizeDownloadLinks = (download: RawDownload) => {
+  const rawLinks = Array.isArray(download.links) && download.links.length > 0
+    ? download.links
+    : [{
+        id: undefined,
+        storage: download.storage,
+        size: download.size,
+        code: download.code,
+        password: download.password,
+        hash: download.hash,
+        content: download.content ?? download.url ?? null,
+        url: download.url ?? download.content ?? null,
+        sortOrder: null,
+        download: download.download ?? null
+      }]
+
+  return rawLinks
+    .map((link) => {
+      const content = link.content ?? link.url ?? null
+      const url = link.url ?? link.content ?? null
+      return {
+        id: link.id ?? null,
+        storage: link.storage ?? download.storage ?? null,
+        size: link.size ?? download.size ?? null,
+        code: link.code ?? download.code ?? null,
+        password: link.password ?? download.password ?? null,
+        hash: link.hash ?? download.hash ?? null,
+        content,
+        url,
+        sortOrder: link.sortOrder ?? null,
+        download: link.download ?? null
+      }
+    })
+    .filter((link) => Boolean(link.content || link.url))
+}
+
 const normalizeDownloads = (downloads: RawDownload[]) =>
   downloads.map((download) => {
-    // Detect nested links structure (new API)
-    const firstLink =
-      Array.isArray(download.links) && download.links.length > 0 ? download.links[0] : null
+    const links = normalizeDownloadLinks(download)
+    const firstLink = links[0] ?? null
 
     return {
       id: download.id ?? 0,
@@ -931,8 +966,11 @@ const normalizeDownloads = (downloads: RawDownload[]) =>
       hash: firstLink?.hash ?? download.hash ?? null,
       platform: asArray(download.platform),
       likeCount: download.likeCount ?? 0,
-      downloadCount: firstLink?.download ?? download.download ?? 0,
+      downloadCount:
+        links.reduce((sum, link) => sum + (typeof link.download === 'number' ? link.download : 0), 0) ||
+        (download.download ?? 0),
       created: download.created ?? null,
+      links,
       userId: download.userId ?? download.user?.id ?? null,
       user: download.user
         ? {

@@ -41,14 +41,64 @@ export interface DownloadMetadataChip {
   tone: 'section' | 'type' | 'language' | 'platform' | 'code' | 'password'
 }
 
-export const getDownloadLinks = (download: TouchGalDownload) =>
-  (download.content ?? download.url ?? '')
+export interface DownloadLinkItem {
+  id: number | null
+  url: string
+  storage: string | null
+  size: string | null
+  code: string | null
+  password: string | null
+  hash: string | null
+  sortOrder: number | null
+  download: number | null
+}
+
+const splitDownloadContent = (value: string | null | undefined) =>
+  (value ?? '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
 
+export const getDownloadLinkItems = (download: TouchGalDownload): DownloadLinkItem[] => {
+  const rawLinks = Array.isArray(download.links) && download.links.length > 0
+    ? download.links
+    : [{
+        id: null,
+        url: download.url,
+        content: download.content,
+        storage: download.storage,
+        size: download.size,
+        code: download.code,
+        password: download.password,
+        hash: download.hash,
+        sortOrder: null,
+        download: download.downloadCount,
+      }]
+
+  return rawLinks.flatMap((link) => {
+    const urls = splitDownloadContent(link.content ?? link.url)
+    return urls.map((url) => ({
+      id: link.id ?? null,
+      url,
+      storage: link.storage ?? download.storage ?? null,
+      size: link.size ?? download.size ?? null,
+      code: link.code ?? download.code ?? null,
+      password: link.password ?? download.password ?? null,
+      hash: link.hash ?? download.hash ?? null,
+      sortOrder: link.sortOrder ?? null,
+      download: link.download ?? null,
+    }))
+  })
+}
+
+export const getDownloadLinks = (download: TouchGalDownload) =>
+  getDownloadLinkItems(download).map((link) => link.url)
+
 export const isOfficialDownload = (download: TouchGalDownload) =>
-  (download.user?.role ?? 0) > 2 || download.storage === 'touchgal' || download.storage === 's3'
+  (download.user?.role ?? 0) > 2 ||
+  download.storage === 'touchgal' ||
+  download.storage === 's3' ||
+  getDownloadLinkItems(download).some((link) => link.storage === 'touchgal' || link.storage === 's3')
 
 export const isGalgameDownload = (download: TouchGalDownload) =>
   download.section !== 'patch'
@@ -68,6 +118,7 @@ export const getDownloadDisplayName = (download: TouchGalDownload) => {
 export const getDownloadMetadataChips = (download: TouchGalDownload): DownloadMetadataChip[] => {
   const seen = new Set<string>()
   const chips: DownloadMetadataChip[] = []
+  const firstLink = getDownloadLinkItems(download)[0] ?? null
 
   const pushChip = (key: string, label: string | null, tone: DownloadMetadataChip['tone']) => {
     if (!label || seen.has(label)) return
@@ -91,12 +142,14 @@ export const getDownloadMetadataChips = (download: TouchGalDownload): DownloadMe
     pushChip(`platform:${platform}`, PLATFORM_LABELS[platform] ?? platform, 'platform')
   }
 
-  if (download.code) {
-    pushChip(`code:${download.code}`, `提取码 ${download.code}`, 'code')
+  const code = download.code ?? firstLink?.code ?? null
+  if (code) {
+    pushChip(`code:${code}`, `提取码 ${code}`, 'code')
   }
 
-  if (download.password) {
-    pushChip(`password:${download.password}`, `解压码 ${download.password}`, 'password')
+  const password = download.password ?? firstLink?.password ?? null
+  if (password) {
+    pushChip(`password:${password}`, `解压码 ${password}`, 'password')
   }
 
   return chips
