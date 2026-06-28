@@ -1911,6 +1911,14 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
     if (Number.isFinite(fallbackNumber) && fallbackNumber > 0) return fallbackNumber
     return Number.isFinite(primaryNumber) ? primaryNumber : 0
   }
+  const maxPositiveNumber = (left: unknown, right: unknown) => {
+    const leftNumber = typeof left === 'number' ? left : Number(left)
+    const rightNumber = typeof right === 'number' ? right : Number(right)
+    return Math.max(
+      Number.isFinite(leftNumber) ? leftNumber : 0,
+      Number.isFinite(rightNumber) ? rightNumber : 0
+    )
+  }
   const preferNonEmptyString = (primary: unknown, fallback: unknown) =>
     typeof primary === 'string' && primary.trim().length > 0
       ? primary
@@ -2003,11 +2011,11 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
     language: preferNonEmptyArray(developerDetail.language, legacyDetail.language),
     type: preferNonEmptyArray(developerDetail.type, legacyDetail.type),
     ratingSummary,
-    viewCount: legacyDetail.viewCount || developerDetail.viewCount || 0,
-    downloadCount: legacyDetail.downloadCount || developerDetail.downloadCount || 0,
-    favoriteCount: legacyDetail.favoriteCount || developerDetail.favoriteCount || 0,
-    resourceCount: legacyDetail.resourceCount || developerDetail.resourceCount || 0,
-    commentCount: legacyDetail.commentCount || developerDetail.commentCount || 0,
+    viewCount: maxPositiveNumber(legacyDetail.viewCount, developerDetail.viewCount),
+    downloadCount: maxPositiveNumber(legacyDetail.downloadCount, developerDetail.downloadCount),
+    favoriteCount: maxPositiveNumber(legacyDetail.favoriteCount, developerDetail.favoriteCount),
+    resourceCount: maxPositiveNumber(legacyDetail.resourceCount, developerDetail.resourceCount),
+    commentCount: maxPositiveNumber(legacyDetail.commentCount, developerDetail.commentCount),
     introduction: developerDetail.introduction || legacyDetail.introduction || null,
     screenshots:
       Array.isArray(legacyDetail.screenshots) && legacyDetail.screenshots.length > 0
