@@ -223,6 +223,9 @@ const getDeveloperErrorMessage = (payload: unknown): string | null => {
 
 const toDeveloperApiError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
+    if (error.response?.status === 429) {
+      applyDeveloperRateLimitBackoff(error.response.headers)
+    }
     const status = error.response?.status ? `HTTP ${error.response.status}: ` : ''
     const payloadMessage = getDeveloperErrorMessage(error.response?.data)
     return new Error(
@@ -265,6 +268,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const developerRequestTimestamps: number[] = []
 let developerRequestQueue = Promise.resolve()
 let developerRequestSafeLimit = DEVELOPER_REQUEST_SAFE_LIMIT
+let developerRateLimitBackoffUntil = 0
 
 const normalizeDeveloperNumber = (value: unknown) => {
   const numberValue = typeof value === 'number' ? value : Number(value)
@@ -291,9 +295,44 @@ const updateDeveloperRequestLimit = (minuteLimit: unknown) => {
   )
 }
 
+function getDeveloperRetryAfterMs(headers: unknown) {
+  if (!headers || typeof headers !== 'object') return null
+
+  const headerBag = headers as Record<string, unknown> & { get?: (name: string) => unknown }
+  const rawValue = typeof headerBag.get === 'function'
+    ? headerBag.get('retry-after')
+    : headerBag['retry-after'] ?? headerBag['Retry-After']
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, value * 1000)
+  }
+
+  if (typeof value !== 'string' || !value.trim()) return null
+  const seconds = Number(value)
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000)
+
+  const retryAt = new Date(value).getTime()
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : null
+}
+
+function applyDeveloperRateLimitBackoff(headers: unknown) {
+  const retryAfterMs = getDeveloperRetryAfterMs(headers) ?? DEVELOPER_REQUEST_WINDOW_MS
+  developerRateLimitBackoffUntil = Math.max(
+    developerRateLimitBackoffUntil,
+    Date.now() + retryAfterMs
+  )
+  developerRequestSafeLimit = Math.max(1, Math.floor(developerRequestSafeLimit / 2))
+}
+
 const acquireDeveloperRequestSlot = async () => {
   while (true) {
     const now = Date.now()
+    if (developerRateLimitBackoffUntil > now) {
+      await delay(developerRateLimitBackoffUntil - now)
+      continue
+    }
+
     while (
       developerRequestTimestamps.length > 0 &&
       now - developerRequestTimestamps[0] >= DEVELOPER_REQUEST_WINDOW_MS
