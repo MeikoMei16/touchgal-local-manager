@@ -1332,7 +1332,7 @@ const getCachedGameList = () => {
         language: asStringArray(detail.language),
         type: asStringArray(detail.type),
         touchgalUrl: getCachedString(detail, 'touchgalUrl'),
-        downloads: [],
+        downloads: Array.isArray(detail.downloads) ? detail.downloads : [],
         source: 'local-cache'
       }
     })
