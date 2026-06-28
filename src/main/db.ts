@@ -533,17 +533,85 @@ export const saveGameDetail = (uniqueId: string, detail: any) => {
   const db = getDb()
   const existing = getCachedDetail(uniqueId) as Record<string, unknown> | null
   const detailRecord = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {}
+  const isPositiveNumber = (value: unknown) => {
+    const numeric = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(numeric) && numeric > 0
+  }
+  const isNonEmptyString = (value: unknown) =>
+    typeof value === 'string' && value.trim().length > 0
+  const isNonEmptyArray = (value: unknown) =>
+    Array.isArray(value) && value.length > 0
+  const hasRatingSummaryData = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+    const summary = value as Record<string, unknown>
+    if (isPositiveNumber(summary.average) || isPositiveNumber(summary.count)) return true
+    if (Array.isArray(summary.histogram) && summary.histogram.some((entry) =>
+      entry && typeof entry === 'object' && isPositiveNumber((entry as Record<string, unknown>).count)
+    )) {
+      return true
+    }
+    const recommend = summary.recommend
+    return Boolean(
+      recommend &&
+      typeof recommend === 'object' &&
+      !Array.isArray(recommend) &&
+      Object.values(recommend).some(isPositiveNumber)
+    )
+  }
+  const preserveString = (key: string) =>
+    isNonEmptyString(detailRecord[key]) ? detailRecord[key] : existing?.[key] ?? detailRecord[key] ?? null
+  const preserveArray = (key: string) =>
+    isNonEmptyArray(detailRecord[key]) ? detailRecord[key] : existing?.[key] ?? detailRecord[key] ?? []
+
   const detailId = typeof detailRecord.id === 'number' ? detailRecord.id : Number(detailRecord.id)
+  const existingId = typeof existing?.id === 'number' ? existing.id : Number(existing?.id)
   const remotePatchId = Number.isInteger(detailId) && detailId > 0
     ? detailId
     : existing?.remotePatchId ?? null
+  const mergedDetail = {
+    ...existing,
+    ...detailRecord,
+    id: Number.isInteger(detailId) && detailId > 0
+      ? detailId
+      : Number.isInteger(existingId) && existingId > 0
+        ? existingId
+        : detailRecord.id ?? 0,
+    alias: preserveArray('alias'),
+    tags: preserveArray('tags'),
+    companyAliases: preserveArray('companyAliases'),
+    platform: preserveArray('platform'),
+    language: preserveArray('language'),
+    type: preserveArray('type'),
+    screenshots: preserveArray('screenshots'),
+    downloads: preserveArray('downloads'),
+    company: preserveString('company'),
+    vndbId: preserveString('vndbId'),
+    bangumiId: detailRecord.bangumiId ?? existing?.bangumiId ?? null,
+    steamId: preserveString('steamId'),
+    contentLimit: preserveString('contentLimit'),
+    pvUrl: preserveString('pvUrl'),
+    touchgalUrl: preserveString('touchgalUrl'),
+    created: preserveString('created'),
+    releasedDate: preserveString('releasedDate'),
+    resourceUpdateTime: preserveString('resourceUpdateTime'),
+    introduction: isNonEmptyString(detailRecord.introduction)
+      ? detailRecord.introduction
+      : existing?.introduction ?? detailRecord.introduction ?? null,
+    ratingSummary: hasRatingSummaryData(detailRecord.ratingSummary)
+      ? detailRecord.ratingSummary
+      : existing?.ratingSummary ?? detailRecord.ratingSummary ?? null,
+    ratingCount: isPositiveNumber(detailRecord.ratingCount)
+      ? detailRecord.ratingCount
+      : existing?.ratingCount ?? detailRecord.ratingCount ?? null,
+    remotePatchId
+  }
   const stmt = db.prepare(`
     UPDATE games SET 
       detail_json = ?, 
       last_detailed_at = CURRENT_TIMESTAMP 
     WHERE unique_id = ?
   `)
-  stmt.run(JSON.stringify({ ...detailRecord, remotePatchId }), uniqueId)
+  stmt.run(JSON.stringify(mergedDetail), uniqueId)
 }
 
 export const getCachedDetail = (uniqueId: string) => {
