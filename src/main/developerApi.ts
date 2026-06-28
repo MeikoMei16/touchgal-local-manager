@@ -16,7 +16,7 @@ const API_KEY_ENV_NAMES = [
 interface DeveloperApiResponse<T> {
   success?: boolean
   data?: T
-  error?: string
+  error?: unknown
   message?: string
 }
 
@@ -177,13 +177,57 @@ const createDeveloperApiClient = () => {
   })
 }
 
+const getDeveloperErrorMessage = (payload: unknown): string | null => {
+  if (typeof payload === 'string' && payload.trim()) return payload.trim()
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+
+  const record = payload as Record<string, unknown>
+  for (const key of ['message', 'error', 'code']) {
+    const value = record[key]
+    const message = getDeveloperErrorMessage(value)
+    if (message) return message
+  }
+
+  if (Array.isArray(record.errors)) {
+    for (const value of record.errors) {
+      const message = getDeveloperErrorMessage(value)
+      if (message) return message
+    }
+  }
+
+  return null
+}
+
+const toDeveloperApiError = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status ? `HTTP ${error.response.status}: ` : ''
+    const payloadMessage = getDeveloperErrorMessage(error.response?.data)
+    return new Error(
+      `${status}${payloadMessage || error.message || 'TouchGal developer API request failed'}`,
+      { cause: error }
+    )
+  }
+
+  return error instanceof Error
+    ? error
+    : new Error(String(error || 'TouchGal developer API request failed'))
+}
+
+const requestDeveloperApi = async <T>(request: () => Promise<T>) => {
+  try {
+    return await scheduleDeveloperRequest(request)
+  } catch (error) {
+    throw toDeveloperApiError(error)
+  }
+}
+
 const unwrapDeveloperResponse = <T>(payload: DeveloperApiResponse<T>): T => {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Empty response from TouchGal developer API')
   }
 
   if (payload.success === false) {
-    throw new Error(payload.message || payload.error || 'TouchGal developer API request failed')
+    throw new Error(getDeveloperErrorMessage(payload) || 'TouchGal developer API request failed')
   }
 
   if (payload.data == null) {
@@ -506,7 +550,7 @@ export const fetchDeveloperGameSearch = async (
   if (cached && cached.expiresAt > Date.now()) return cached.value
 
   const client = createDeveloperApiClient()
-  const response = await scheduleDeveloperRequest(() =>
+  const response = await requestDeveloperApi(() =>
     client.get<DeveloperApiResponse<DeveloperSearchPayload>>('/games/search', {
       params: {
         keyword: normalizedKeyword,
@@ -560,7 +604,7 @@ export const fetchDeveloperGameDetail = async (uniqueId: string) => {
 
   const request = (async () => {
     const client = createDeveloperApiClient()
-    const response = await scheduleDeveloperRequest(() =>
+    const response = await requestDeveloperApi(() =>
       client.get<DeveloperApiResponse<DeveloperGameDetail>>(
         `/games/${encodeURIComponent(uniqueId)}`
       )
@@ -579,7 +623,7 @@ export const fetchDeveloperApiStatus = async () => {
   if (statusCache && statusCache.expiresAt > Date.now()) return statusCache.value
 
   const client = createDeveloperApiClient()
-  const response = await scheduleDeveloperRequest(() =>
+  const response = await requestDeveloperApi(() =>
     client.get<DeveloperApiResponse<Record<string, unknown>>>('/me')
   )
   const data = unwrapDeveloperResponse(response.data)
