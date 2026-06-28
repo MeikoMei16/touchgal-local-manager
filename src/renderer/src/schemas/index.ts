@@ -412,6 +412,10 @@ export const FavoriteFolderSchema = z.preprocess(
 
 export const FavoriteFolderListSchema = arrayOf(FavoriteFolderSchema);
 
+export const FavoriteToggleResponseSchema = z.object({
+  added: booleanDefault(),
+}).passthrough();
+
 export const FavoriteFolderPatchResponseSchema = z.object({
   patches: arrayOf(TouchGalResourceSchema),
   total: numberDefault(),

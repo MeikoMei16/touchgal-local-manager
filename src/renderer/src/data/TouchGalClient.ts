@@ -7,7 +7,9 @@ import {
   FavoriteFolderListSchema,
   FavoriteFolderPatchResponseSchema,
   PatchCommentResponseSchema,
-  PatchRatingResponseSchema
+  PatchRatingResponseSchema,
+  FavoriteFolderSchema,
+  FavoriteToggleResponseSchema
 } from '../schemas';
 
 const asRecord = (value: unknown): Record<string, any> =>
@@ -159,7 +161,8 @@ export const TouchGalClient = {
   },
 
   createFavoriteFolder: async (input: { name: string; description?: string; isPublic?: boolean }) => {
-    return await window.api.createFavoriteFolder(input);
+    const raw = await window.api.createFavoriteFolder(input);
+    return FavoriteFolderSchema.parse(unwrapResponseData(raw));
   },
 
   deleteFavoriteFolder: async (folderId: number) => {
@@ -172,6 +175,7 @@ export const TouchGalClient = {
   },
 
   togglePatchFavorite: async (patchId: number, folderId: number) => {
-    return await window.api.togglePatchFavorite(patchId, folderId);
+    const raw = await window.api.togglePatchFavorite(patchId, folderId);
+    return FavoriteToggleResponseSchema.parse(unwrapResponseData(raw));
   }
 };
