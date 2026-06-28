@@ -1466,6 +1466,7 @@ const developerGameMatchesSearchOptions = (
     game.name,
     ...(searchOption.searchInAlias !== false && Array.isArray(game.alias) ? game.alias : []),
     ...(searchOption.searchInTag !== false && Array.isArray(game.tags) ? game.tags : []),
+    ...(searchOption.searchInTag !== false ? Array.from(getDeveloperCompanyValues(game)) : []),
     searchOption.searchInIntroduction !== false ? game.introduction : '',
   ].map(normalizeSearchText).filter(Boolean)
 
