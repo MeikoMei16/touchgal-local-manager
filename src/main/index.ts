@@ -2669,9 +2669,14 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
 
   if (developerDetail) {
     try {
+      const developerResources = await fetchDeveloperGameResources(uniqueId)
       developerDetail = {
         ...developerDetail,
-        downloads: await fetchDeveloperGameResources(uniqueId)
+        resourceCount: Math.max(
+          Number(developerDetail.resourceCount ?? 0) || 0,
+          developerResources.length
+        ),
+        downloads: developerResources
       }
     } catch (error) {
       log.warn(`[Developer API] GET /games/${uniqueId}/resources failed, using detail without developer resources:`, getSafeErrorMessage(error))
