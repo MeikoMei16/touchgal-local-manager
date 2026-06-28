@@ -79,8 +79,17 @@ const companyDisplay = z.union([z.string(), z.array(z.any())]).nullable().option
   return val ?? null;
 });
 
+const normalizeRatingRecommendInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    strong_no: raw.strong_no ?? raw.strongNo ?? 0,
+    strong_yes: raw.strong_yes ?? raw.strongYes ?? 0,
+  };
+};
+
 const RatingRecommendSchema = z.preprocess(
-  objectInput,
+  normalizeRatingRecommendInput,
   z.object({
     strong_no: numberDefault(),
     no: numberDefault(),
@@ -184,9 +193,25 @@ const normalizeTouchGalResourceInput = (value: unknown) => {
   const raw = objectRecord(value);
   const counts = objectRecord(raw._count);
   const ratingStat = objectRecord(raw.rating_stat);
-  const ratingSummary = raw.ratingSummary ?? (
-    Object.keys(ratingStat).length > 0 ? buildRatingSummaryFromStat(ratingStat) : null
+  const developerRating = objectRecord(raw.rating);
+  const ratingSummary = raw.ratingSummary ?? raw.rating_summary ?? (
+    Object.keys(ratingStat).length > 0
+      ? buildRatingSummaryFromStat(ratingStat)
+      : Object.keys(developerRating).length > 0
+        ? {
+            average: developerRating.average ?? 0,
+            count: developerRating.count ?? 0,
+            histogram: [],
+            recommend: developerRating.recommend ?? {}
+          }
+        : null
   );
+  const companies = Array.isArray(raw.companies) ? raw.companies : [];
+  const companyAliases = raw.companyAliases ?? raw.company_aliases ?? companies.flatMap((company) => {
+    const record = objectRecord(company);
+    const aliases = record.aliases ?? record.alias;
+    return Array.isArray(aliases) ? aliases : [];
+  });
 
   return {
     ...raw,
@@ -197,18 +222,19 @@ const normalizeTouchGalResourceInput = (value: unknown) => {
     platform: raw.platform ?? [],
     language: raw.language ?? [],
     type: raw.type ?? [],
-    created: raw.created ?? null,
-    releasedDate: raw.releasedDate ?? raw.released ?? null,
+    created: raw.created ?? raw.publishTime ?? raw.publish_time ?? null,
+    releasedDate: raw.releasedDate ?? raw.releaseDate ?? raw.release_date ?? raw.released ?? null,
     averageRating: raw.averageRating ?? (ratingSummary as any)?.average ?? ratingStat.avg_overall ?? 0,
     tags: raw.tags ?? normalizeNameList(raw.tag),
-    alias: normalizeNameList(raw.alias),
+    alias: normalizeNameList(raw.alias ?? raw.aliases),
     favoriteCount: raw.favoriteCount ?? raw.favorite_count ?? counts.favorite_folder ?? 0,
     resourceCount: raw.resourceCount ?? raw.resource_count ?? counts.patch_resource ?? counts.resource ?? 0,
     commentCount: raw.commentCount ?? raw.comment_count ?? counts.patch_comment ?? counts.comment ?? 0,
     viewCount: raw.viewCount ?? raw.view_count ?? raw.view ?? 0,
     downloadCount: raw.downloadCount ?? raw.download_count ?? raw.download ?? 0,
     ratingSummary,
-    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? null,
+    companyAliases,
+    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? raw.updatedAt ?? raw.updated_at ?? null,
     touchgalUrl: raw.touchgalUrl ?? raw.touchgal_url ?? null
   };
 };
