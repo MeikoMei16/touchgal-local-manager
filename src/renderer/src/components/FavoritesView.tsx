@@ -23,7 +23,7 @@ import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 import QuickDownloadPopoverButton from './QuickDownloadPopoverButton';
 
 const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
-  id: 0,
+  id: item.resourceId,
   uniqueId: item.uniqueId,
   name: item.name,
   banner: item.banner,
