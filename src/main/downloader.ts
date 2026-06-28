@@ -55,6 +55,7 @@ interface QueueDownloadInput {
     averageRating?: number
     viewCount?: number
     downloadCount?: number
+    resourceCount?: number
     ratingCount?: number
     introduction?: string | null
     screenshots?: string[]
@@ -851,6 +852,7 @@ class DownloadManager {
         averageRating: gameMetadata.averageRating ?? 0,
         viewCount: gameMetadata.viewCount ?? 0,
         downloadCount: gameMetadata.downloadCount ?? 0,
+        resourceCount: gameMetadata.resourceCount ?? 0,
         ratingCount: gameMetadata.ratingCount ?? 0,
         introduction: gameMetadata.introduction ?? null,
         screenshots: gameMetadata.screenshots ?? [],

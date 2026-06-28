@@ -196,6 +196,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     averageRating: resource.averageRating,
     viewCount: resource.viewCount,
     downloadCount: resource.downloadCount,
+    resourceCount: resource.resourceCount,
     ratingCount: resource.ratingCount,
     introduction: resource.introduction,
     screenshots: resource.screenshots,

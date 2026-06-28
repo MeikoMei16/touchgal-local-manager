@@ -15,6 +15,7 @@ export interface LocalCollectionGamePayload {
   averageRating?: number
   viewCount?: number
   downloadCount?: number
+  resourceCount?: number
   ratingCount?: number
   introduction?: string | null
   screenshots?: string[]
@@ -41,6 +42,7 @@ export interface LocalCollectionItemRecord {
   averageRating: number
   viewCount: number
   downloadCount: number
+  resourceCount: number
   ratingCount: number
   introduction: string | null
   screenshots: string[]
@@ -705,6 +707,7 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
           created: readString(detail.created),
           releasedDate: readString(detail.releasedDate),
           resourceUpdateTime: readString(detail.resourceUpdateTime),
+          resourceCount: typeof detail.resourceCount === 'number' ? detail.resourceCount : Number(detail.resourceCount) || 0,
           ratingCount: typeof detail.ratingCount === 'number' ? detail.ratingCount : Number(detail.ratingCount) || 0,
           introduction: readString(detail.introduction),
           screenshots: readStrings(detail.screenshots),

@@ -2994,6 +2994,7 @@ handleWithLog(
       averageRating?: number
       viewCount?: number
       downloadCount?: number
+      resourceCount?: number
       ratingCount?: number
       introduction?: string | null
       screenshots?: string[]
@@ -3416,6 +3417,7 @@ handleWithLog('tg-local-collections-add-item', async (_event, collectionId: numb
   averageRating?: number
   viewCount?: number
   downloadCount?: number
+  resourceCount?: number
   ratingCount?: number
   introduction?: string | null
   screenshots?: string[]

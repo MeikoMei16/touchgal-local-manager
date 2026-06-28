@@ -102,6 +102,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
           averageRating: resource.averageRating ?? 0,
           viewCount: resource.viewCount ?? 0,
           downloadCount: resource.downloadCount ?? 0,
+          resourceCount: resource.resourceCount ?? 0,
           ratingCount: resource.ratingCount ?? 0,
           introduction: resource.introduction ?? null,
           screenshots: resource.screenshots ?? [],

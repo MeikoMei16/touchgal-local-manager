@@ -50,6 +50,7 @@ export interface LocalCollectionItem {
   averageRating: number;
   viewCount: number;
   downloadCount: number;
+  resourceCount?: number;
   ratingCount?: number;
   introduction?: string | null;
   screenshots?: string[];
@@ -82,6 +83,7 @@ export interface LocalCollectionGameInput {
   averageRating?: number;
   viewCount?: number;
   downloadCount?: number;
+  resourceCount?: number;
   ratingCount?: number;
   introduction?: string | null;
   screenshots?: string[];
@@ -107,6 +109,7 @@ export interface DownloadQueueGameMetadata {
   averageRating?: number;
   viewCount?: number;
   downloadCount?: number;
+  resourceCount?: number;
   ratingCount?: number;
   introduction?: string | null;
   screenshots?: string[];

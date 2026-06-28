@@ -132,6 +132,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
           averageRating: downloadGameMetadata?.averageRating ?? 0,
           viewCount: downloadGameMetadata?.viewCount ?? 0,
           downloadCount: downloadGameMetadata?.downloadCount ?? 0,
+          resourceCount: downloadGameMetadata?.resourceCount ?? 0,
           ratingCount: downloadGameMetadata?.ratingCount ?? 0,
           introduction: downloadGameMetadata?.introduction ?? null,
           screenshots: downloadGameMetadata?.screenshots ?? [],
