@@ -1002,13 +1002,19 @@ const upsertNormalizedGames = (games: Array<{
   name: string
   banner?: string | null
   averageRating?: number
+  ratingCount?: number
+  ratingSummary?: unknown
   viewCount?: number
   downloadCount?: number
+  favoriteCount?: number
+  resourceCount?: number
+  commentCount?: number
   alias?: string[]
   tags?: string[]
   platform?: string[]
   language?: string[]
   type?: string[]
+  created?: string | null
   releasedDate?: string | null
   resourceUpdateTime?: string | null
   touchgalUrl?: string | null
@@ -1021,13 +1027,19 @@ const upsertNormalizedGames = (games: Array<{
       name: game.name,
       banner: game.banner ?? null,
       averageRating: game.averageRating ?? 0,
+      ratingCount: game.ratingCount ?? 0,
+      ratingSummary: game.ratingSummary ?? null,
       viewCount: game.viewCount ?? 0,
       downloadCount: game.downloadCount ?? 0,
+      favoriteCount: game.favoriteCount ?? 0,
+      resourceCount: game.resourceCount ?? 0,
+      commentCount: game.commentCount ?? 0,
       alias: Array.isArray(game.alias) ? game.alias : [],
       tags: Array.isArray(game.tags) ? game.tags : [],
       platform: Array.isArray(game.platform) ? game.platform : [],
       language: Array.isArray(game.language) ? game.language : [],
       type: Array.isArray(game.type) ? game.type : [],
+      created: game.created ?? null,
       releasedDate: game.releasedDate ?? null,
       resourceUpdateTime: game.resourceUpdateTime ?? null,
       touchgalUrl: game.touchgalUrl ?? null
@@ -1051,6 +1063,15 @@ const getCachedRemotePatchId = (detail: Record<string, unknown>) => {
   }
   return 0
 }
+
+const getCachedNumber = (detail: Record<string, unknown>, key: string, fallback = 0) => {
+  const value = detail[key]
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numberValue) ? numberValue : fallback
+}
+
+const getCachedString = (detail: Record<string, unknown>, key: string) =>
+  typeof detail[key] === 'string' ? detail[key] as string : null
 
 const fetchCachedGameFeed = (page: number, limit: number) => {
   const safePage = Math.max(1, Number(page) || 1)
@@ -1083,33 +1104,36 @@ const fetchCachedGameFeed = (page: number, limit: number) => {
         name: row.name ?? 'Unknown title',
         banner: row.banner ?? null,
         averageRating: row.averageRating ?? 0,
-        ratingCount: 0,
-        ratingSummary: null,
+        ratingCount: getCachedNumber(detail, 'ratingCount'),
+        ratingSummary:
+          detail.ratingSummary && typeof detail.ratingSummary === 'object'
+            ? detail.ratingSummary
+            : null,
         tags: asStringArray(detail.tags),
         viewCount: row.viewCount ?? 0,
         downloadCount: row.downloadCount ?? 0,
-        favoriteCount: 0,
-        resourceCount: 0,
-        commentCount: 0,
-        releasedDate: typeof detail.releasedDate === 'string' ? detail.releasedDate : null,
+        favoriteCount: getCachedNumber(detail, 'favoriteCount'),
+        resourceCount: getCachedNumber(detail, 'resourceCount'),
+        commentCount: getCachedNumber(detail, 'commentCount'),
+        releasedDate: getCachedString(detail, 'releasedDate'),
         resourceUpdateTime:
           typeof detail.resourceUpdateTime === 'string'
             ? detail.resourceUpdateTime
             : row.resourceUpdateTime ?? null,
-        created: null,
+        created: getCachedString(detail, 'created'),
         company: null,
         pvUrl: null,
         screenshots: [],
         detail: null,
         alias: asStringArray(detail.alias),
-        vndbId: null,
-        bangumiId: null,
-        steamId: null,
-        contentLimit: null,
+        vndbId: getCachedString(detail, 'vndbId'),
+        bangumiId: getCachedNumber(detail, 'bangumiId') || null,
+        steamId: getCachedString(detail, 'steamId'),
+        contentLimit: getCachedString(detail, 'contentLimit'),
         platform: asStringArray(detail.platform),
         language: asStringArray(detail.language),
         type: asStringArray(detail.type),
-        touchgalUrl: typeof detail.touchgalUrl === 'string' ? detail.touchgalUrl : null,
+        touchgalUrl: getCachedString(detail, 'touchgalUrl'),
         downloads: [],
         source: 'local-cache'
       }

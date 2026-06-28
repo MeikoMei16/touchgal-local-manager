@@ -348,8 +348,12 @@ export const upsertGame = (game: {
   averageRating?: number
   favoriteCount?: number
   resourceCount?: number
+  commentCount?: number
   viewCount?: number
   downloadCount?: number
+  ratingCount?: number
+  ratingSummary?: unknown
+  created?: string | null
   alias?: string[]
   tags?: string[]
   platform?: string[]
@@ -396,7 +400,13 @@ export const upsertGame = (game: {
     (game.type?.length ?? 0) > 0 ||
     Boolean(game.releasedDate) ||
     Boolean(game.resourceUpdateTime) ||
-    Boolean(game.touchgalUrl)
+    Boolean(game.touchgalUrl) ||
+    Boolean(game.created) ||
+    game.favoriteCount !== undefined ||
+    game.resourceCount !== undefined ||
+    game.commentCount !== undefined ||
+    game.ratingCount !== undefined ||
+    game.ratingSummary !== undefined
 
   if (gameId > 0 && hasDetailPatch) {
     const existing = db
@@ -426,7 +436,13 @@ export const upsertGame = (game: {
       releasedDate: game.releasedDate ?? detail.releasedDate ?? null,
       resourceUpdateTime: game.resourceUpdateTime ?? detail.resourceUpdateTime ?? null,
       touchgalUrl: game.touchgalUrl ?? detail.touchgalUrl ?? null,
-      remotePatchId: hasRemoteNumericId ? game.id : detail.remotePatchId ?? null
+      remotePatchId: hasRemoteNumericId ? game.id : detail.remotePatchId ?? null,
+      created: game.created ?? detail.created ?? null,
+      favoriteCount: game.favoriteCount ?? detail.favoriteCount ?? null,
+      resourceCount: game.resourceCount ?? detail.resourceCount ?? null,
+      commentCount: game.commentCount ?? detail.commentCount ?? null,
+      ratingCount: game.ratingCount ?? detail.ratingCount ?? null,
+      ratingSummary: game.ratingSummary ?? detail.ratingSummary ?? null
     }
 
     db.prepare('UPDATE games SET detail_json = ? WHERE id = ?').run(
