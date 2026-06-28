@@ -433,6 +433,18 @@ const isSessionExpiredPayload = (payload: unknown) => {
   return SESSION_EXPIRED_PATTERNS.some((pattern) => message.includes(pattern))
 }
 
+const isLegacySessionUnavailableError = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    return error.response?.status === 401 || isSessionExpiredPayload(error.response?.data)
+  }
+
+  const message = error instanceof Error ? error.message : stringifyErrorPayload(error)
+  return isSessionExpiredPayload(message)
+}
+
+const shouldReturnDeveloperOnlyEmptyLegacyRead = (error: unknown) =>
+  isTouchGalDeveloperApiConfigured() && isLegacySessionUnavailableError(error)
+
 let cloudflareVerificationPromise: Promise<void> | null = null
 
 const probeTouchGalAccess = async (verificationWindow: BrowserWindow) => {
@@ -2875,36 +2887,68 @@ handleWithLog('tg-get-developer-api-status', async () => {
 })
 
 handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, limit: number) => {
-  const response = await API_CLIENT.get('/user/profile/comment', { params: { uid, page, limit } })
-  const data = ensureValidResponse(response.data) as any;
-  return {
-    comments: data.comments || data.list || [],
-    total: data.total ?? 0
+  try {
+    const response = await API_CLIENT.get('/user/profile/comment', { params: { uid, page, limit } })
+    const data = ensureValidResponse(response.data) as any
+    return {
+      comments: data.comments || data.list || [],
+      total: data.total ?? 0
+    }
+  } catch (error) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      log.warn('[API] Legacy user comments unavailable in Developer API mode; returning empty activity:', getSafeErrorMessage(error))
+      return { comments: [], total: 0, requiresLogin: true }
+    }
+    throw error
   }
 })
 
 handleWithLog('tg-get-user-ratings', async (_event, uid: number, page: number, limit: number) => {
-  const response = await API_CLIENT.get('/user/profile/rating', { params: { uid, page, limit } })
-  const data = ensureValidResponse(response.data) as any;
-  return {
-    ratings: data.ratings || data.list || [],
-    total: data.total ?? 0
+  try {
+    const response = await API_CLIENT.get('/user/profile/rating', { params: { uid, page, limit } })
+    const data = ensureValidResponse(response.data) as any
+    return {
+      ratings: data.ratings || data.list || [],
+      total: data.total ?? 0
+    }
+  } catch (error) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      log.warn('[API] Legacy user ratings unavailable in Developer API mode; returning empty activity:', getSafeErrorMessage(error))
+      return { ratings: [], total: 0, requiresLogin: true }
+    }
+    throw error
   }
 })
 
 handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number, limit: number) => {
-  const response = await API_CLIENT.get('/user/profile/resource', { params: { uid, page, limit } })
-  return ensureValidResponse(response.data)
+  try {
+    const response = await API_CLIENT.get('/user/profile/resource', { params: { uid, page, limit } })
+    return ensureValidResponse(response.data)
+  } catch (error) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      log.warn('[API] Legacy user resources unavailable in Developer API mode; returning empty activity:', getSafeErrorMessage(error))
+      return { resources: [], total: 0, requiresLogin: true }
+    }
+    throw error
+  }
 })
 
 handleWithLog('tg-get-favorite-folders', async (_event, uid: number, patchId?: number) => {
-  const response = await API_CLIENT.get('/user/profile/favorite/folder', {
-    params: patchId ? { uid, patchId } : { uid }
-  })
-  const data = ensureValidResponse(response.data) as any;
-  // Support both old array format and new object format { folders, total }
-  if (Array.isArray(data)) return data;
-  return data.folders || [];
+  try {
+    const response = await API_CLIENT.get('/user/profile/favorite/folder', {
+      params: patchId ? { uid, patchId } : { uid }
+    })
+    const data = ensureValidResponse(response.data) as any
+    // Support both old array format and new object format { folders, total }
+    if (Array.isArray(data)) return data
+    return data.folders || []
+  } catch (error) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      log.warn('[API] Legacy favorite folders unavailable in Developer API mode; returning empty folders:', getSafeErrorMessage(error))
+      return []
+    }
+    throw error
+  }
 })
 
 handleWithLog(
@@ -2927,10 +2971,20 @@ handleWithLog('tg-delete-favorite-folder', async (_event, folderId: number) => {
 })
 
 handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number, page: number, limit: number) => {
-  const response = await API_CLIENT.get('/user/profile/favorite/folder/patch', {
-    params: { folderId, page, limit }
-  })
-  const data = ensureValidResponse(response.data) as { patches?: any[]; total?: number }
+  let data: { patches?: any[]; total?: number }
+
+  try {
+    const response = await API_CLIENT.get('/user/profile/favorite/folder/patch', {
+      params: { folderId, page, limit }
+    })
+    data = ensureValidResponse(response.data) as { patches?: any[]; total?: number }
+  } catch (error) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      log.warn('[API] Legacy favorite folder patches unavailable in Developer API mode; returning empty folder:', getSafeErrorMessage(error))
+      return { patches: [], total: 0, requiresLogin: true }
+    }
+    throw error
+  }
 
   const patches = (data.patches ?? []).map((patch) => ({
     id: patch.id ?? 0,
