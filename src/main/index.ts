@@ -2589,7 +2589,7 @@ handleWithLog('tg-match-folder', async (_event, folderName: string) => {
     LIMIT 10
   `).all(cleaned + '*')
 
-  if (results.length > 0 || !cleaned) {
+  if (!cleaned) {
     return results
   }
 
@@ -2613,8 +2613,23 @@ handleWithLog('tg-match-folder', async (_event, folderName: string) => {
     })
     .slice(0, 10)
 
-  if (aliasMatches.length > 0 || !isTouchGalDeveloperApiConfigured()) {
-    return aliasMatches
+  const mergeRows = (...groups: Array<Array<any>>) => {
+    const seen = new Set<string>()
+    const rows: any[] = []
+    for (const group of groups) {
+      for (const row of group) {
+        const key = String(row.unique_id ?? row.id ?? '')
+        if (!key || seen.has(key)) continue
+        seen.add(key)
+        rows.push(row)
+      }
+    }
+    return rows.slice(0, 10)
+  }
+
+  const localMatches = mergeRows(aliasMatches, results as Array<any>)
+  if (localMatches.length > 0 || !isTouchGalDeveloperApiConfigured()) {
+    return localMatches
   }
 
   try {
