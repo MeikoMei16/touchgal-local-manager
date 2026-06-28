@@ -207,6 +207,7 @@ const normalizeTouchGalResourceInput = (value: unknown) => {
         : null
   );
   const companies = Array.isArray(raw.companies) ? raw.companies : [];
+  const companyNames = companies.map((company) => objectRecord(company).name).filter(Boolean);
   const companyAliases = raw.companyAliases ?? raw.company_aliases ?? companies.flatMap((company) => {
     const record = objectRecord(company);
     const aliases = record.aliases ?? record.alias;
@@ -233,6 +234,7 @@ const normalizeTouchGalResourceInput = (value: unknown) => {
     viewCount: raw.viewCount ?? raw.view_count ?? raw.view ?? 0,
     downloadCount: raw.downloadCount ?? raw.download_count ?? raw.download ?? 0,
     ratingSummary,
+    company: raw.company ?? (companyNames.length > 0 ? companyNames.join(', ') : undefined),
     companyAliases,
     resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? raw.updatedAt ?? raw.updated_at ?? null,
     touchgalUrl: raw.touchgalUrl ?? raw.touchgal_url ?? null

@@ -922,7 +922,9 @@ const normalizeResource = (resource: any) => {
       ? raw.company
       : Array.isArray(raw.company)
         ? raw.company.map((item: any) => item?.name).filter(Boolean).join(', ')
-        : null
+        : Array.isArray(raw.companies)
+          ? raw.companies.map((item: any) => item?.name).filter(Boolean).join(', ') || null
+          : null
 
   const releasedDate = raw.releasedDate ?? raw.released ?? null
 
