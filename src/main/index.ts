@@ -2249,7 +2249,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
     }
 
     const developerResult = await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
-      hydrateDetails: clampApiLimit(limit) <= 20,
+      hydrateDetails: true,
     })
     const list = applyQueryToDeveloperFallbackList(developerResult.list, options)
     upsertNormalizedGames(list)
