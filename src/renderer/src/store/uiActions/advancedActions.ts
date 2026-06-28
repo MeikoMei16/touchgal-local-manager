@@ -117,6 +117,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                       ? {
                           ...item,
                           fullTags: intro.tags?.length ? intro.tags : item.fullTags,
+                          company: intro.company ?? (item as any).company,
                           releasedDate: intro.releasedDate || item.releasedDate,
                           normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear,
                           introHydrated: true,
@@ -333,6 +334,7 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
                 ? {
                     ...item,
                     fullTags: intro.tags?.length ? intro.tags : item.fullTags,
+                    company: intro.company ?? (item as any).company,
                     releasedDate: intro.releasedDate || item.releasedDate,
                     normalizedYear: intro.releasedDate ? normalizeYear({ ...item, releasedDate: intro.releasedDate }) : item.normalizedYear,
                     introHydrated: true,

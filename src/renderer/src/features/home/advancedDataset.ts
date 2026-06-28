@@ -49,6 +49,17 @@ export const compareConstraint = (year: number, op: string, value: number): bool
   return true;
 };
 
+const getCompanySet = (resource: AdvancedResourceRecord) => {
+  const rawCompany = (resource as any).company;
+  const values = Array.isArray(rawCompany)
+    ? rawCompany
+    : typeof rawCompany === 'string'
+      ? rawCompany.split(',')
+      : [];
+
+  return new Set(values.map((value) => String(value).trim()).filter(Boolean));
+};
+
 export const applyAdvancedPredicate = (resources: AdvancedResourceRecord[], draft: AdvancedFilterDraft): AdvancedResourceRecord[] =>
   resources.filter((resource) => {
     if (draft.yearConstraints.length > 0) {
@@ -60,7 +71,8 @@ export const applyAdvancedPredicate = (resources: AdvancedResourceRecord[], draf
     if (draft.selectedTags.length > 0) {
       if (!resource.tagsHydrated) return false;
       const tagSet = new Set(resource.fullTags);
-      if (!draft.selectedTags.every(tag => tagSet.has(tag))) return false;
+      const companySet = getCompanySet(resource);
+      if (!draft.selectedTags.every(tag => tagSet.has(tag) || companySet.has(tag))) return false;
     }
     return true;
   });
