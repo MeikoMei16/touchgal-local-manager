@@ -1,7 +1,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { Download, ExternalLink, HardDrive, Languages, Loader2, X } from 'lucide-react'
-import type { TouchGalDownload } from '../types'
+import type { TouchGalDetail, TouchGalDownload } from '../types'
 import { TouchGalClient } from '../data/TouchGalClient'
 import {
   getDownloadDisplayName,
@@ -37,6 +37,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
   const [officialDownloads, setOfficialDownloads] = React.useState<TouchGalDownload[]>([])
   const [touchgalUrl, setTouchgalUrl] = React.useState<string | null>(null)
   const [isDeveloperOnlyDetail, setIsDeveloperOnlyDetail] = React.useState(false)
+  const [downloadGameMetadata, setDownloadGameMetadata] = React.useState<Partial<TouchGalDetail> | null>(null)
   const [activeDownloadIndex, setActiveDownloadIndex] = React.useState<number | null>(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const panelRef = React.useRef<HTMLDivElement>(null)
@@ -91,12 +92,14 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
         setOfficialDownloads(getOfficialGalgameDownloads(detail.downloads ?? []))
         setTouchgalUrl(detail.touchgalUrl ?? null)
         setIsDeveloperOnlyDetail(!detail.id && Boolean(detail.touchgalUrl))
+        setDownloadGameMetadata(detail)
       } catch (loadError) {
         if (cancelled) return
         setError(loadError instanceof Error ? loadError.message : '读取官方资源失败')
         setOfficialDownloads([])
         setTouchgalUrl(null)
         setIsDeveloperOnlyDetail(false)
+        setDownloadGameMetadata(null)
       } finally {
         if (!cancelled) {
           setIsLoading(false)
@@ -125,6 +128,21 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
           id: resourceId ?? 0,
           uniqueId,
           name: resourceName,
+          banner: downloadGameMetadata?.banner ?? null,
+          averageRating: downloadGameMetadata?.averageRating ?? 0,
+          viewCount: downloadGameMetadata?.viewCount ?? 0,
+          downloadCount: downloadGameMetadata?.downloadCount ?? 0,
+          alias: downloadGameMetadata?.alias ?? [],
+          tags: downloadGameMetadata?.tags ?? [],
+          company: downloadGameMetadata?.company ?? null,
+          companyAliases: downloadGameMetadata?.companyAliases ?? [],
+          platform: downloadGameMetadata?.platform ?? [],
+          language: downloadGameMetadata?.language ?? [],
+          type: downloadGameMetadata?.type ?? [],
+          created: downloadGameMetadata?.created ?? null,
+          releasedDate: downloadGameMetadata?.releasedDate ?? null,
+          resourceUpdateTime: downloadGameMetadata?.resourceUpdateTime ?? null,
+          touchgalUrl: downloadGameMetadata?.touchgalUrl ?? null,
         })
         added += result.added
         reused += result.reused

@@ -56,6 +56,16 @@ interface QueueDownloadInput {
     viewCount?: number
     downloadCount?: number
     alias?: string[]
+    tags?: string[]
+    company?: string | null
+    companyAliases?: string[]
+    platform?: string[] | string
+    language?: string[] | string
+    type?: string[]
+    created?: string | null
+    releasedDate?: string | null
+    resourceUpdateTime?: string | null
+    touchgalUrl?: string | null
   } | null
 }
 
@@ -838,6 +848,16 @@ class DownloadManager {
         viewCount: gameMetadata.viewCount ?? 0,
         downloadCount: gameMetadata.downloadCount ?? 0,
         alias: gameMetadata.alias ?? [],
+        tags: gameMetadata.tags ?? [],
+        company: gameMetadata.company ?? null,
+        companyAliases: gameMetadata.companyAliases ?? [],
+        platform: gameMetadata.platform ?? [],
+        language: gameMetadata.language ?? [],
+        type: gameMetadata.type ?? [],
+        created: gameMetadata.created ?? null,
+        releasedDate: gameMetadata.releasedDate ?? null,
+        resourceUpdateTime: gameMetadata.resourceUpdateTime ?? null,
+        touchgalUrl: gameMetadata.touchgalUrl ?? null,
       })
 
       const db = getDb()

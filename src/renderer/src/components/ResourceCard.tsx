@@ -291,6 +291,16 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
           viewCount: resource.viewCount ?? 0,
           downloadCount: resource.downloadCount ?? 0,
           alias: resource.alias ?? [],
+          tags: resource.tags ?? [],
+          company: resource.company ?? null,
+          companyAliases: resource.companyAliases ?? [],
+          platform: resource.platform,
+          language: resource.language,
+          type: resource.type ?? [],
+          created: resource.created ?? null,
+          releasedDate: resource.releasedDate ?? null,
+          resourceUpdateTime: resource.resourceUpdateTime ?? null,
+          touchgalUrl: resource.touchgalUrl ?? null,
         });
         added += result.added;
         reused += result.reused;
