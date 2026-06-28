@@ -1184,6 +1184,27 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
   },
 })
 
+const isDefaultSearchOption = (value: unknown) => {
+  if (!value || typeof value !== 'object') return true
+  const option = value as Record<string, unknown>
+  return option.searchInIntroduction !== false &&
+    option.searchInAlias !== false &&
+    option.searchInTag !== false
+}
+
+const shouldPreferLegacySearch = (options?: Record<string, any>) => {
+  if (!options) return false
+
+  const sortField = options.sortField ?? 'resource_update_time'
+  const sortOrder = options.sortOrder ?? 'desc'
+  const nsfwMode = options.nsfwMode ?? 'safe'
+
+  return !isDefaultSearchOption(options.searchOption) ||
+    nsfwMode !== 'safe' ||
+    sortField !== 'resource_update_time' ||
+    sortOrder !== 'desc'
+}
+
 const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
   if (!payload) {
     throw new Error('Empty response from API')
@@ -1774,29 +1795,45 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
     return { list: [], total: 0 }
   }
 
-  if (isTouchGalDeveloperApiConfigured()) {
+  const preferLegacySearch = shouldPreferLegacySearch(options)
+  const fetchFromDeveloperApi = async () => {
+    const developerResult = await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
+      hydrateDetails: clampApiLimit(limit) <= 20,
+    })
+    upsertNormalizedGames(developerResult.list)
+    return developerResult
+  }
+
+  if (isTouchGalDeveloperApiConfigured() && !preferLegacySearch) {
     try {
-      const developerResult = await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
-        hydrateDetails: clampApiLimit(limit) <= 20,
-      })
-      upsertNormalizedGames(developerResult.list)
-      return developerResult
+      return await fetchFromDeveloperApi()
     } catch (error) {
       log.warn('[Developer API] GET /games/search failed, falling back to legacy /search:', getSafeErrorMessage(error))
     }
   }
 
-  const body = { ...buildSearchBody(normalizedKeyword, page, limit), ...options }
+  const searchOptions = { ...(options ?? {}) }
+  delete searchOptions.nsfwMode
+  const body = { ...buildSearchBody(normalizedKeyword, page, limit), ...searchOptions }
   const cookieString = buildRequestCookie(options?.nsfwMode);
 
-  const response = await API_CLIENT.post('/search', body, {
-    headers: cookieString ? { 'Cookie': cookieString } : undefined
-  })
-  const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
+  try {
+    const response = await API_CLIENT.post('/search', body, {
+      headers: cookieString ? { 'Cookie': cookieString } : undefined
+    })
+    const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-  upsertNormalizedGames(normalized.list)
+    upsertNormalizedGames(normalized.list)
 
-  return normalized
+    return normalized
+  } catch (error) {
+    if (!isTouchGalDeveloperApiConfigured() || !preferLegacySearch) {
+      throw error
+    }
+
+    log.warn('[API] Legacy /search failed for optioned search; returning Developer API keyword results:', getSafeErrorMessage(error))
+    return fetchFromDeveloperApi()
+  }
 })
 
 handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
