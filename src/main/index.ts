@@ -1259,10 +1259,7 @@ const fetchDeveloperTagSuggestions = async (keyword: string) => {
   return sortTagSuggestions(suggestions)
 }
 
-const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
-  const safePage = Math.max(1, Number(page) || 1)
-  const safeLimit = clampApiLimit(limit)
-  const offset = (safePage - 1) * safeLimit
+const getCachedGameList = () => {
   const db = getDb()
   const rows = db.prepare(`
     SELECT
@@ -1279,7 +1276,7 @@ const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
     ORDER BY local_updated_at DESC, id DESC
   `).all()
 
-  const list = rows.map((row: any) => {
+  return rows.map((row: any) => {
       const detail = parseCachedGameDetail(row.detailJson)
       return {
         id: getCachedRemotePatchId(detail),
@@ -1309,6 +1306,7 @@ const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
         pvUrl: null,
         screenshots: [],
         detail: null,
+        introduction: getCachedString(detail, 'introduction'),
         alias: asStringArray(detail.alias),
         vndbId: getCachedString(detail, 'vndbId'),
         bangumiId: getCachedNumber(detail, 'bangumiId') || null,
@@ -1322,6 +1320,13 @@ const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
         source: 'local-cache'
       }
     })
+}
+
+const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
+  const safePage = Math.max(1, Number(page) || 1)
+  const safeLimit = clampApiLimit(limit)
+  const offset = (safePage - 1) * safeLimit
+  const list = getCachedGameList()
   const filtered = applyQueryToDeveloperFallbackList(list, query)
 
   return {
@@ -1561,6 +1566,22 @@ const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
     const diff = getSortValue(left) - getSortValue(right)
     return sortOrder === 'asc' ? diff : -diff
   })
+}
+
+const fetchCachedSearchFeed = (keyword: string, page: number, limit: number, options?: Record<string, any>) => {
+  const safePage = Math.max(1, Number(page) || 1)
+  const safeLimit = clampApiLimit(limit)
+  const offset = (safePage - 1) * safeLimit
+  const searched = getCachedGameList().filter((game) =>
+    developerGameMatchesSearchOptions(game, keyword, options)
+  )
+  const filtered = applyQueryToDeveloperFallbackList(searched, options)
+
+  return {
+    list: filtered.slice(offset, offset + safeLimit),
+    total: filtered.length,
+    source: 'local-cache-search'
+  }
 }
 
 const buildDeveloperFallbackTotal = (
@@ -2373,6 +2394,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
   }
 
   const preferLegacySearch = shouldPreferLegacySearch(options)
+  const fetchFromLocalCache = () => fetchCachedSearchFeed(normalizedKeyword, page, limit, options)
   const fetchFromDeveloperApi = async (applyLocalOptions = false) => {
     if (applyLocalOptions) {
       return fetchDeveloperFilteredFallback({
@@ -2420,12 +2442,28 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
 
     return normalized
   } catch (error) {
-    if (!isTouchGalDeveloperApiConfigured() || !preferLegacySearch) {
+    if (!isTouchGalDeveloperApiConfigured()) {
       throw error
     }
 
-    log.warn('[API] Legacy /search failed for optioned search; returning Developer API keyword results:', getSafeErrorMessage(error))
-    return fetchFromDeveloperApi(true)
+    if (preferLegacySearch) {
+      log.warn('[API] Legacy /search failed for optioned search; returning Developer API keyword results:', getSafeErrorMessage(error))
+      try {
+        return await fetchFromDeveloperApi(true)
+      } catch (fallbackError) {
+        log.warn('[Developer API] Search fallback failed after legacy /search error; trying local cache:', getSafeErrorMessage(fallbackError))
+      }
+    } else {
+      log.warn('[API] Legacy /search failed after Developer API search error; trying local cache:', getSafeErrorMessage(error))
+    }
+
+    const cached = fetchFromLocalCache()
+    if (cached.list.length > 0) {
+      log.warn(`[API] Returning ${cached.list.length} cached search results for "${normalizedKeyword}"`)
+      return cached
+    }
+
+    throw error
   }
 })
 
