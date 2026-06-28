@@ -439,11 +439,16 @@ const isLegacySessionUnavailableError = (error: unknown) => {
   }
 
   const message = error instanceof Error ? error.message : stringifyErrorPayload(error)
-  return isSessionExpiredPayload(message)
+  return isSessionExpiredPayload(message) || message.includes('TouchGal legacy API requires browser verification')
 }
 
 const shouldReturnDeveloperOnlyEmptyLegacyRead = (error: unknown) =>
   isTouchGalDeveloperApiConfigured() && isLegacySessionUnavailableError(error)
+
+const getDeveloperModeLegacyRequestConfig = (): TouchGalAxiosRequestConfig =>
+  isTouchGalDeveloperApiConfigured()
+    ? { __touchGalSkipChallengeVerification: true }
+    : {}
 
 const LEGACY_CLOUD_COLLECTION_LOGIN_REQUIRED_MESSAGE =
   '云端收藏需要旧站登录；TouchGal Developer API 暂不支持云端收藏写入。'
@@ -2327,6 +2332,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
   log.info('[API] GET /galgame params:', apiParams);
   try {
     const response = await API_CLIENT.get('/galgame', {
+      ...getDeveloperModeLegacyRequestConfig(),
       params: apiParams,
       headers: cookieString ? { 'Cookie': cookieString } : undefined
     })
@@ -2405,6 +2411,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
 
   try {
     const response = await API_CLIENT.post('/search', body, {
+      ...getDeveloperModeLegacyRequestConfig(),
       headers: cookieString ? { 'Cookie': cookieString } : undefined
     })
     const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
@@ -2497,7 +2504,10 @@ function normalizeRating(raw: any) {
 handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: number, limit: number) => {
   try {
     if (!patchId) return { total: 0, list: [] }
-    const response = await API_CLIENT.get('/patch/comment', { params: { patchId, page, limit } })
+    const response = await API_CLIENT.get('/patch/comment', {
+      ...getDeveloperModeLegacyRequestConfig(),
+      params: { patchId, page, limit }
+    })
     const data = ensureValidResponse(response.data)
     return {
       total: data.total || 0,
@@ -2505,7 +2515,7 @@ handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: num
     }
   } catch (error: any) {
     log.error(`[API] Failed to fetch comments for patch ${patchId}:`, error.message)
-    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401)) {
+    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401) || shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
       return { total: 0, list: [], requiresLogin: true }
     }
     // Return empty list instead of crashing renderer
@@ -2516,7 +2526,10 @@ handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: num
 handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: number, limit: number) => {
   try {
     if (!patchId) return { total: 0, list: [] }
-    const response = await API_CLIENT.get('/patch/rating', { params: { patchId, page, limit } })
+    const response = await API_CLIENT.get('/patch/rating', {
+      ...getDeveloperModeLegacyRequestConfig(),
+      params: { patchId, page, limit }
+    })
     const data = ensureValidResponse(response.data)
     return {
       total: data.total || 0,
@@ -2524,7 +2537,7 @@ handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: numb
     }
   } catch (error: any) {
     log.error(`[API] Failed to fetch ratings for patch ${patchId}:`, error.message)
-    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401)) {
+    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401) || shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
       return { total: 0, list: [], requiresLogin: true }
     }
     return { total: 0, list: [], error: error.message }
@@ -2557,7 +2570,10 @@ handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
     }
   }
 
-  const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
+  const response = await API_CLIENT.get('/patch/introduction', {
+    ...getDeveloperModeLegacyRequestConfig(),
+    params: { uniqueId }
+  })
   return normalizeIntroduction(ensureValidResponse(response.data))
 })
 
@@ -2908,7 +2924,7 @@ handleWithLog('tg-search-tags', async (_event, keyword: string) => {
   }
 
   try {
-    const response = await API_CLIENT.post('/search/tag', { query })
+    const response = await API_CLIENT.post('/search/tag', { query }, getDeveloperModeLegacyRequestConfig())
     return ensureValidResponse(response.data)
   } catch (error) {
     if (cachedSuggestions.length > 0) {
@@ -2920,13 +2936,16 @@ handleWithLog('tg-search-tags', async (_event, keyword: string) => {
 })
 
 handleWithLog('tg-get-user-status', async (_event, id: number) => {
-  const response = await API_CLIENT.get('/user/status/info', { params: { id } })
+  const response = await API_CLIENT.get('/user/status/info', {
+    ...getDeveloperModeLegacyRequestConfig(),
+    params: { id }
+  })
   return ensureValidResponse(response.data)
 })
 
 handleWithLog('tg-get-user-status-self', async () => {
   try {
-    const response = await API_CLIENT.get('/user/status')
+    const response = await API_CLIENT.get('/user/status', getDeveloperModeLegacyRequestConfig())
     return ensureValidResponse(response.data)
   } catch (error) {
     if (!isTouchGalDeveloperApiConfigured()) {
@@ -2953,7 +2972,10 @@ handleWithLog('tg-get-developer-api-status', async () => {
 
 handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, limit: number) => {
   try {
-    const response = await API_CLIENT.get('/user/profile/comment', { params: { uid, page, limit } })
+    const response = await API_CLIENT.get('/user/profile/comment', {
+      ...getDeveloperModeLegacyRequestConfig(),
+      params: { uid, page, limit }
+    })
     const data = ensureValidResponse(response.data) as any
     return {
       comments: data.comments || data.list || [],
@@ -2970,7 +2992,10 @@ handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, 
 
 handleWithLog('tg-get-user-ratings', async (_event, uid: number, page: number, limit: number) => {
   try {
-    const response = await API_CLIENT.get('/user/profile/rating', { params: { uid, page, limit } })
+    const response = await API_CLIENT.get('/user/profile/rating', {
+      ...getDeveloperModeLegacyRequestConfig(),
+      params: { uid, page, limit }
+    })
     const data = ensureValidResponse(response.data) as any
     return {
       ratings: data.ratings || data.list || [],
@@ -2987,7 +3012,10 @@ handleWithLog('tg-get-user-ratings', async (_event, uid: number, page: number, l
 
 handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number, limit: number) => {
   try {
-    const response = await API_CLIENT.get('/user/profile/resource', { params: { uid, page, limit } })
+    const response = await API_CLIENT.get('/user/profile/resource', {
+      ...getDeveloperModeLegacyRequestConfig(),
+      params: { uid, page, limit }
+    })
     return ensureValidResponse(response.data)
   } catch (error) {
     if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
@@ -3001,6 +3029,7 @@ handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number,
 handleWithLog('tg-get-favorite-folders', async (_event, uid: number, patchId?: number) => {
   try {
     const response = await API_CLIENT.get('/user/profile/favorite/folder', {
+      ...getDeveloperModeLegacyRequestConfig(),
       params: patchId ? { uid, patchId } : { uid }
     })
     const data = ensureValidResponse(response.data) as any
@@ -3024,7 +3053,7 @@ handleWithLog(
         name: input.name,
         description: input.description ?? '',
         isPublic: Boolean(input.isPublic)
-      })
+      }, getDeveloperModeLegacyRequestConfig())
       return ensureValidResponse(response.data)
     } catch (error) {
       throwDeveloperOnlyCloudCollectionLoginRequired(error)
@@ -3035,6 +3064,7 @@ handleWithLog(
 handleWithLog('tg-delete-favorite-folder', async (_event, folderId: number) => {
   try {
     const response = await API_CLIENT.delete('/user/profile/favorite/folder', {
+      ...getDeveloperModeLegacyRequestConfig(),
       params: { folderId }
     })
     return ensureValidResponse(response.data)
@@ -3048,6 +3078,7 @@ handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number,
 
   try {
     const response = await API_CLIENT.get('/user/profile/favorite/folder/patch', {
+      ...getDeveloperModeLegacyRequestConfig(),
       params: { folderId, page, limit }
     })
     data = ensureValidResponse(response.data) as { patches?: any[]; total?: number }
@@ -3088,7 +3119,7 @@ handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number,
 
 handleWithLog('tg-toggle-patch-favorite', async (_event, patchId: number, folderId: number) => {
   try {
-    const response = await API_CLIENT.put('/patch/favorite', { patchId, folderId })
+    const response = await API_CLIENT.put('/patch/favorite', { patchId, folderId }, getDeveloperModeLegacyRequestConfig())
     return ensureValidResponse(response.data)
   } catch (error) {
     throwDeveloperOnlyCloudCollectionLoginRequired(error)
