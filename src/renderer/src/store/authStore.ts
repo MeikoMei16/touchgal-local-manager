@@ -153,8 +153,18 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const data = await TouchGalClient.fetchCaptcha();
-          if (data.images && data.sessionId) set({ captchaChallenge: data, captchaUrl: null, isLoading: false });
-          else set({ captchaUrl: data.url || data, captchaChallenge: null, isLoading: false });
+          if (Array.isArray(data.images) && data.sessionId) {
+            set({
+              captchaChallenge: {
+                images: data.images,
+                sessionId: data.sessionId,
+                target: data.target ?? undefined
+              },
+              captchaUrl: null,
+              isLoading: false
+            });
+          }
+          else set({ captchaUrl: data.url || null, captchaChallenge: null, isLoading: false });
         } catch (err: any) {
           set({ error: err.message, isLoading: false });
         }

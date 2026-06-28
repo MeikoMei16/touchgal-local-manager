@@ -172,6 +172,41 @@ const normalizeSearchTagSuggestionInput = (value: unknown) => {
   };
 };
 
+const normalizeCaptchaImageInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    id: raw.id ?? '',
+    url: raw.url ?? raw.data ?? '',
+  };
+};
+
+const normalizeCaptchaResponseInput = (value: unknown) => {
+  if (typeof value === 'string') {
+    return { url: value };
+  }
+
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    url: raw.url ?? raw.data ?? '',
+    images: raw.images,
+    sessionId: raw.sessionId ?? raw.session_id ?? '',
+  };
+};
+
+const normalizeCaptchaVerifyInput = (value: unknown) => {
+  if (typeof value === 'string') {
+    return { code: value };
+  }
+
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    code: raw.code ?? raw.captcha ?? raw.token ?? '',
+  };
+};
+
 const normalizePatchCommentInput = (value: unknown) => {
   const raw = objectRecord(value);
   const user = objectRecord(raw.user);
@@ -370,6 +405,31 @@ export const SearchTagSuggestionSchema = z.preprocess(
 
 export const SearchTagSuggestionListSchema = arrayOf(SearchTagSuggestionSchema);
 
+export const CaptchaImageSchema = z.preprocess(
+  normalizeCaptchaImageInput,
+  z.object({
+    id: stringDefault(),
+    url: stringDefault(),
+  }).passthrough()
+);
+
+export const CaptchaResponseSchema = z.preprocess(
+  normalizeCaptchaResponseInput,
+  z.object({
+    url: stringDefault(),
+    images: arrayOf(CaptchaImageSchema).optional(),
+    sessionId: stringDefault(),
+    target: nullableString,
+  }).passthrough()
+);
+
+export const CaptchaVerifyResponseSchema = z.preprocess(
+  normalizeCaptchaVerifyInput,
+  z.object({
+    code: stringDefault(),
+  }).passthrough()
+);
+
 export const UserProfileSchema = z.preprocess(
   normalizeUserProfileInput,
   z.object({
@@ -384,6 +444,12 @@ export const UserProfileSchema = z.preprocess(
     _count: UserProfileCountSchema,
   }).passthrough()
 ).transform((user) => ({ ...user, uid: user.uid || user.id }));
+
+export const LoginResponseSchema = UserProfileSchema.and(
+  z.object({
+    require2FA: booleanDefault(),
+  }).passthrough()
+);
 
 export const UserActivityCommentSchema = z.preprocess(
   normalizeUserCommentInput,

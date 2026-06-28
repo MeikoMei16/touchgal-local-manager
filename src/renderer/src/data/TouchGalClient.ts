@@ -10,7 +10,10 @@ import {
   PatchRatingResponseSchema,
   FavoriteFolderSchema,
   FavoriteToggleResponseSchema,
-  SearchTagSuggestionListSchema
+  SearchTagSuggestionListSchema,
+  CaptchaResponseSchema,
+  CaptchaVerifyResponseSchema,
+  LoginResponseSchema
 } from '../schemas';
 
 const asRecord = (value: unknown): Record<string, any> =>
@@ -97,15 +100,18 @@ export const TouchGalClient = {
   },
 
   fetchCaptcha: async () => {
-    return await window.api.fetchCaptcha();
+    const raw = await window.api.fetchCaptcha();
+    return CaptchaResponseSchema.parse(unwrapResponseData(raw));
   },
 
   verifyCaptcha: async (sessionId: string, selectedIds: string[]) => {
-    return await window.api.verifyCaptcha(sessionId, selectedIds);
+    const raw = await window.api.verifyCaptcha(sessionId, selectedIds);
+    return CaptchaVerifyResponseSchema.parse(unwrapResponseData(raw));
   },
 
   login: async (username: string, password: string, captcha: string) => {
-    return await window.api.login(username, password, captcha);
+    const raw = await window.api.login(username, password, captcha);
+    return LoginResponseSchema.parse(unwrapResponseData(raw));
   },
 
   logout: async () => {
