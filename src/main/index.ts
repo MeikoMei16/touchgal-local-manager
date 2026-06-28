@@ -2992,9 +2992,11 @@ handleWithLog(
       name: string
       banner?: string | null
       averageRating?: number
+      favoriteCount?: number
       viewCount?: number
       downloadCount?: number
       resourceCount?: number
+      commentCount?: number
       ratingCount?: number
       introduction?: string | null
       screenshots?: string[]
@@ -3415,9 +3417,11 @@ handleWithLog('tg-local-collections-add-item', async (_event, collectionId: numb
   name: string
   banner?: string | null
   averageRating?: number
+  favoriteCount?: number
   viewCount?: number
   downloadCount?: number
   resourceCount?: number
+  commentCount?: number
   ratingCount?: number
   introduction?: string | null
   screenshots?: string[]

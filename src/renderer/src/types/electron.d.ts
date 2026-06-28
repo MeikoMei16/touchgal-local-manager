@@ -48,9 +48,11 @@ export interface LocalCollectionItem {
   name: string;
   banner: string | null;
   averageRating: number;
+  favoriteCount?: number;
   viewCount: number;
   downloadCount: number;
   resourceCount?: number;
+  commentCount?: number;
   ratingCount?: number;
   introduction?: string | null;
   screenshots?: string[];
@@ -81,9 +83,11 @@ export interface LocalCollectionGameInput {
   name: string;
   banner?: string | null;
   averageRating?: number;
+  favoriteCount?: number;
   viewCount?: number;
   downloadCount?: number;
   resourceCount?: number;
+  commentCount?: number;
   ratingCount?: number;
   introduction?: string | null;
   screenshots?: string[];
@@ -107,9 +111,11 @@ export interface DownloadQueueGameMetadata {
   name: string;
   banner?: string | null;
   averageRating?: number;
+  favoriteCount?: number;
   viewCount?: number;
   downloadCount?: number;
   resourceCount?: number;
+  commentCount?: number;
   ratingCount?: number;
   introduction?: string | null;
   screenshots?: string[];

@@ -13,9 +13,11 @@ export interface LocalCollectionGamePayload {
   name: string
   banner?: string | null
   averageRating?: number
+  favoriteCount?: number
   viewCount?: number
   downloadCount?: number
   resourceCount?: number
+  commentCount?: number
   ratingCount?: number
   introduction?: string | null
   screenshots?: string[]
@@ -40,9 +42,11 @@ export interface LocalCollectionItemRecord {
   name: string
   banner: string | null
   averageRating: number
+  favoriteCount: number
   viewCount: number
   downloadCount: number
   resourceCount: number
+  commentCount: number
   ratingCount: number
   introduction: string | null
   screenshots: string[]
@@ -707,7 +711,9 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
           created: readString(detail.created),
           releasedDate: readString(detail.releasedDate),
           resourceUpdateTime: readString(detail.resourceUpdateTime),
+          favoriteCount: typeof detail.favoriteCount === 'number' ? detail.favoriteCount : Number(detail.favoriteCount) || 0,
           resourceCount: typeof detail.resourceCount === 'number' ? detail.resourceCount : Number(detail.resourceCount) || 0,
+          commentCount: typeof detail.commentCount === 'number' ? detail.commentCount : Number(detail.commentCount) || 0,
           ratingCount: typeof detail.ratingCount === 'number' ? detail.ratingCount : Number(detail.ratingCount) || 0,
           introduction: readString(detail.introduction),
           screenshots: readStrings(detail.screenshots),
