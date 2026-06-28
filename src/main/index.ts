@@ -1081,6 +1081,9 @@ const upsertNormalizedGames = (games: Array<{
   favoriteCount?: number
   resourceCount?: number
   commentCount?: number
+  introduction?: string | null
+  screenshots?: string[]
+  pvUrl?: string | null
   alias?: string[]
   tags?: string[]
   company?: string | null
@@ -1108,6 +1111,9 @@ const upsertNormalizedGames = (games: Array<{
       favoriteCount: game.favoriteCount ?? 0,
       resourceCount: game.resourceCount ?? 0,
       commentCount: game.commentCount ?? 0,
+      introduction: game.introduction ?? null,
+      screenshots: Array.isArray(game.screenshots) ? game.screenshots : [],
+      pvUrl: game.pvUrl ?? null,
       alias: Array.isArray(game.alias) ? game.alias : [],
       tags: Array.isArray(game.tags) ? game.tags : [],
       company: game.company ?? null,

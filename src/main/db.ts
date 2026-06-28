@@ -375,6 +375,9 @@ export const upsertGame = (game: {
   ratingCount?: number
   ratingSummary?: unknown
   created?: string | null
+  introduction?: string | null
+  screenshots?: string[]
+  pvUrl?: string | null
   alias?: string[]
   tags?: string[]
   company?: string | null
@@ -459,6 +462,9 @@ export const upsertGame = (game: {
     Boolean(game.resourceUpdateTime) ||
     Boolean(game.touchgalUrl) ||
     Boolean(game.created) ||
+    Boolean(game.introduction) ||
+    (game.screenshots?.length ?? 0) > 0 ||
+    Boolean(game.pvUrl) ||
     isPositiveNumber(game.favoriteCount) ||
     isPositiveNumber(game.resourceCount) ||
     isPositiveNumber(game.commentCount) ||
@@ -513,6 +519,9 @@ export const upsertGame = (game: {
       touchgalUrl: game.touchgalUrl ?? detail.touchgalUrl ?? null,
       remotePatchId: hasRemoteNumericId ? game.id : detail.remotePatchId ?? null,
       created: game.created ?? detail.created ?? null,
+      introduction: game.introduction ?? detail.introduction ?? null,
+      screenshots: mergeStrings(detail.screenshots, game.screenshots),
+      pvUrl: game.pvUrl ?? detail.pvUrl ?? null,
       favoriteCount: preserveNumber(detail.favoriteCount, game.favoriteCount),
       resourceCount: preserveNumber(detail.resourceCount, game.resourceCount),
       commentCount: preserveNumber(detail.commentCount, game.commentCount),
