@@ -17,14 +17,14 @@ const preserveStringArray = (primary: string[] | undefined, fallback: string[] |
 
 export const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
   ...resource,
-  introduction: null,
+  introduction: readDetailFallbackString(resource, 'introduction'),
   company: resource.company ?? null,
   vndbId: readDetailFallbackString(resource, 'vndbId'),
   bangumiId: (resource as Partial<TouchGalDetail>).bangumiId ?? null,
   steamId: readDetailFallbackString(resource, 'steamId'),
   resourceUpdateTime: resource.resourceUpdateTime ?? null,
   contentLimit: readDetailFallbackString(resource, 'contentLimit'),
-  screenshots: [],
+  screenshots: preserveStringArray((resource as Partial<TouchGalDetail>).screenshots, []),
   pvUrl: readDetailFallbackString(resource, 'pvUrl'),
   touchgalUrl: resource.touchgalUrl ?? null,
   downloads: []
