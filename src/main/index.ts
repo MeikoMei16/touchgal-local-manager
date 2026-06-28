@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, safeStorage, session } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import axios from 'axios'
+import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import log from 'electron-log'
 import {
   addItemToLocalCollection,
@@ -32,11 +33,19 @@ import {
 import {
   buildTouchGalBaseHeaders,
   defaultHttpConfigState,
-  resolveHttpProfile
+  resolveHttpProfile,
+  TOUCHGAL_API_BASE,
+  TOUCHGAL_ORIGIN
 } from './httpProfile'
 import { cleanFolderName, discoverExecutables } from './utils'
 import { downloadManager } from './downloader'
 import { getExtractorStatus } from './extractor'
+import {
+  fetchDeveloperApiStatus,
+  fetchDeveloperGameDetail,
+  fetchDeveloperGameSearch,
+  isTouchGalDeveloperApiConfigured
+} from './developerApi'
 
 // Configure logging
 log.initialize({ spyRendererConsole: true })
@@ -50,8 +59,14 @@ log.info('Log initialized (Spying on Renderer) at:', logPath)
 // Persistence Helpers: JWT Token with Encryption
 const tokenPath = join(app.getPath('userData'), 'session_token.dat')
 const cookiePath = join(app.getPath('userData'), 'session_cookies.txt')
+const CLOUDFLARE_CLEARANCE_COOKIE_NAME = 'cf_clearance'
+const TOUCHGAL_CHALLENGE_TIMEOUT_MS = 120000
+const TOUCHGAL_ACCESS_PROBE_PATH =
+  '/api/galgame?page=1&limit=1&selectedType=all&selectedLanguage=all&selectedPlatform=all&sortField=resource_update_time&sortOrder=desc&yearString=%5B%22all%22%5D&monthString=%5B%22all%22%5D&minRatingCount=0'
 let currentToken = ''
 let authCookies: Record<string, string> = {}
+let win: BrowserWindow | null = null
+let activeNsfwCookieMode: unknown
 
 const sanitizeToken = (token: string) => token.replace(/[\r\n\t]/g, '').trim()
 
@@ -88,6 +103,28 @@ const serializeAuthCookies = () =>
   Object.entries(authCookies)
     .map(([name, value]) => `${name}=${value}`)
     .join('; ')
+
+const mergeCookieStrings = (...cookieStrings: Array<string | null | undefined>) => {
+  const cookies = new Map<string, string>()
+
+  for (const cookieString of cookieStrings) {
+    if (!cookieString) continue
+    for (const entry of cookieString.split(';')) {
+      const parsed = parseCookiePair(entry.trim())
+      if (!parsed) continue
+      cookies.set(parsed.name, parsed.value)
+    }
+  }
+
+  return Array.from(cookies.entries())
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ')
+}
+
+const getStoredCookieHeader = () =>
+  currentToken
+    ? mergeCookieStrings(serializeAuthCookies(), buildAuthCookie(currentToken))
+    : serializeAuthCookies()
 
 const persistAuthCookies = () => {
   try {
@@ -138,16 +175,56 @@ const normalizeNsfwCookieValue = (value: unknown) => {
 const buildNsfwCookie = (nsfwMode: unknown) =>
   `kun-patch-setting-store|state|data|kunNsfwEnable=${normalizeNsfwCookieValue(nsfwMode)}`
 
-const buildRequestCookie = (nsfwMode?: unknown) => {
-  const cookies: string[] = []
-  const serializedAuthCookies = serializeAuthCookies()
-  if (serializedAuthCookies) {
-    cookies.push(serializedAuthCookies)
-  } else if (currentToken) {
-    cookies.push(buildAuthCookie(currentToken))
+const buildRequestCookie = (nsfwMode?: unknown, extraCookie?: string) => {
+  if (nsfwMode !== undefined) {
+    activeNsfwCookieMode = nsfwMode
   }
-  cookies.push(buildNsfwCookie(nsfwMode))
-  return cookies.join('; ')
+
+  return mergeCookieStrings(
+    extraCookie,
+    getStoredCookieHeader(),
+    activeNsfwCookieMode !== undefined ? buildNsfwCookie(activeNsfwCookieMode) : undefined
+  )
+}
+
+const syncTouchGalSessionCookies = async () => {
+  if (!app.isReady()) return
+
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: TOUCHGAL_ORIGIN })
+    let didChange = false
+
+    for (const cookie of cookies) {
+      if (!cookie.name || authCookies[cookie.name] === cookie.value) continue
+      authCookies[cookie.name] = cookie.value
+      didChange = true
+
+      if (cookie.name === 'kun-galgame-patch-moe-token') {
+        currentToken = normalizeTokenInput(cookie.value)
+      }
+    }
+
+    if (didChange) {
+      persistAuthCookies()
+    }
+  } catch (error) {
+    log.warn('[API] Failed to sync TouchGal browser cookies:', error)
+  }
+}
+
+const hasTouchGalClearanceCookie = async () => {
+  await syncTouchGalSessionCookies()
+  if (authCookies[CLOUDFLARE_CLEARANCE_COOKIE_NAME]) return true
+
+  try {
+    const cookies = await session.defaultSession.cookies.get({
+      url: TOUCHGAL_ORIGIN,
+      name: CLOUDFLARE_CLEARANCE_COOKIE_NAME
+    })
+    return cookies.length > 0
+  } catch {
+    return false
+  }
 }
 
 const saveToken = (token: string) => {
@@ -291,29 +368,178 @@ log.info('Active HTTP profile:', {
   label: activeHttpProfile.label
 })
 
+interface TouchGalAxiosRequestConfig extends AxiosRequestConfig {
+  __touchGalChallengeRetried?: boolean
+}
+
+const getHeaderValue = (headers: AxiosResponse['headers'] | undefined, key: string) => {
+  if (!headers) return ''
+  const value = headers[key] ?? headers[key.toLowerCase()]
+  if (Array.isArray(value)) return value.join(',')
+  return typeof value === 'string' ? value : String(value ?? '')
+}
+
+const looksLikeCloudflareChallengeHtml = (data: unknown) =>
+  typeof data === 'string' &&
+  (/cf-mitigated/i.test(data) ||
+    /Just a moment/i.test(data) ||
+    /cdn-cgi\/challenge/i.test(data) ||
+    /Enable JavaScript and cookies to continue/i.test(data))
+
+const isCloudflareChallengeResponse = (response: AxiosResponse | undefined) => {
+  if (!response) return false
+
+  const contentType = getHeaderValue(response.headers, 'content-type').toLowerCase()
+  const cfMitigated = getHeaderValue(response.headers, 'cf-mitigated').toLowerCase()
+
+  return (
+    response.status === 403 &&
+    (cfMitigated === 'challenge' ||
+      (contentType.includes('text/html') && looksLikeCloudflareChallengeHtml(response.data)))
+  )
+}
+
+let cloudflareVerificationPromise: Promise<void> | null = null
+
+const probeTouchGalAccess = async (verificationWindow: BrowserWindow) => {
+  if (verificationWindow.isDestroyed()) return false
+
+  try {
+    const result = (await verificationWindow.webContents.executeJavaScript(
+      `
+        fetch(${JSON.stringify(TOUCHGAL_ACCESS_PROBE_PATH)}, { credentials: 'include' })
+          .then(async (response) => ({
+            ok: response.ok,
+            status: response.status,
+            contentType: response.headers.get('content-type') || '',
+            body: (await response.text()).slice(0, 160)
+          }))
+          .catch((error) => ({
+            ok: false,
+            status: 0,
+            contentType: '',
+            body: String(error)
+          }))
+      `,
+      true
+    )) as { ok: boolean; status: number; contentType: string; body: string }
+
+    return result.ok && result.contentType.toLowerCase().includes('application/json')
+  } catch {
+    return false
+  }
+}
+
+const ensureTouchGalBrowserAccess = async () => {
+  if (await hasTouchGalClearanceCookie()) return
+  if (cloudflareVerificationPromise) return cloudflareVerificationPromise
+
+  cloudflareVerificationPromise = new Promise<void>((resolve, reject) => {
+    const verificationWindow = new BrowserWindow({
+      width: 960,
+      height: 720,
+      minWidth: 720,
+      minHeight: 520,
+      title: 'TouchGal access verification',
+      autoHideMenuBar: true,
+      parent: win && !win.isDestroyed() ? win : undefined,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+
+    verificationWindow.webContents.setWindowOpenHandler((details) => {
+      shell.openExternal(details.url)
+      return { action: 'deny' }
+    })
+
+    let isDone = false
+    let interval: NodeJS.Timeout | null = null
+    let timeout: NodeJS.Timeout | null = null
+
+    const cleanup = () => {
+      if (interval) clearInterval(interval)
+      if (timeout) clearTimeout(timeout)
+      interval = null
+      timeout = null
+    }
+
+    const finish = (error?: Error) => {
+      if (isDone) return
+      isDone = true
+      cleanup()
+
+      if (!verificationWindow.isDestroyed()) {
+        verificationWindow.close()
+      }
+
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+
+    const checkAccess = async () => {
+      if (isDone || verificationWindow.isDestroyed()) return
+
+      await syncTouchGalSessionCookies()
+      if (authCookies[CLOUDFLARE_CLEARANCE_COOKIE_NAME]) {
+        finish()
+        return
+      }
+
+      if (await probeTouchGalAccess(verificationWindow)) {
+        await syncTouchGalSessionCookies()
+        finish()
+      }
+    }
+
+    verificationWindow.webContents.on('did-finish-load', () => void checkAccess())
+    verificationWindow.webContents.on('did-navigate', () => void checkAccess())
+    verificationWindow.webContents.on('page-title-updated', () => void checkAccess())
+    verificationWindow.on('closed', () => {
+      finish(new Error('TouchGal access verification was closed before completion'))
+    })
+
+    interval = setInterval(() => void checkAccess(), 1500)
+    timeout = setTimeout(
+      () => finish(new Error('TouchGal access verification timed out')),
+      TOUCHGAL_CHALLENGE_TIMEOUT_MS
+    )
+
+    void verificationWindow.loadURL(TOUCHGAL_ORIGIN).catch((error) => {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    })
+  }).finally(() => {
+    cloudflareVerificationPromise = null
+  })
+
+  return cloudflareVerificationPromise
+}
+
 const API_CLIENT = axios.create({
-  baseURL: 'https://www.touchgal.top/api',
+  baseURL: TOUCHGAL_API_BASE,
   headers: buildTouchGalBaseHeaders(activeHttpProfile),
   timeout: 30000,
 })
 
 // JWT & Cookie Interceptors
-API_CLIENT.interceptors.request.use((config) => {
+API_CLIENT.interceptors.request.use(async (config) => {
+  await syncTouchGalSessionCookies()
+
+  config.headers = config.headers ?? {}
+  const existingCookie = config.headers['Cookie'] as string | undefined
+  const cookieHeader = buildRequestCookie(undefined, existingCookie)
+  if (cookieHeader) {
+    config.headers['Cookie'] = cookieHeader
+  }
+
   if (currentToken) {
     // 1. Standard JWT Authorization Header
     config.headers['Authorization'] = `Bearer ${currentToken}`;
-    
-    // 2. Compatibility Cookie Header (for backend middleware)
-    const existingCookie = config.headers['Cookie'] as string | undefined;
-    const authCookie = serializeAuthCookies() || buildAuthCookie(currentToken);
-    
-    if (existingCookie) {
-      if (!existingCookie.includes('kun-galgame-patch-moe-token')) {
-        config.headers['Cookie'] = `${authCookie}; ${existingCookie}`;
-      }
-    } else {
-      config.headers['Cookie'] = authCookie;
-    }
   }
   
   log.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
@@ -321,7 +547,7 @@ API_CLIENT.interceptors.request.use((config) => {
     headers: { ...config.headers, Authorization: 'Bearer [REDACTED]', Cookie: '[REDACTED]' }
   });
   return config;
-});
+})
 
 API_CLIENT.interceptors.response.use((response) => {
   const setCookies = response.headers['set-cookie'] as string[] | undefined;
@@ -342,12 +568,41 @@ API_CLIENT.interceptors.response.use((response) => {
     }
   }
   return response;
-});
+}, async (error: AxiosError) => {
+  if (isCloudflareChallengeResponse(error.response)) {
+    const originalConfig = error.config as TouchGalAxiosRequestConfig | undefined
+
+    if (originalConfig && !originalConfig.__touchGalChallengeRetried) {
+      originalConfig.__touchGalChallengeRetried = true
+      log.warn('[API] TouchGal returned Cloudflare challenge; opening browser verification window')
+
+      try {
+        await ensureTouchGalBrowserAccess()
+        await syncTouchGalSessionCookies()
+        return API_CLIENT.request(originalConfig)
+      } catch (verificationError) {
+        log.error('[API] TouchGal browser verification failed:', verificationError)
+        throw new Error('TouchGal 访问验证未完成。请在弹出的 TouchGal 窗口完成验证后重试。', {
+          cause: verificationError
+        })
+      }
+    }
+
+    throw new Error('TouchGal 返回了 Cloudflare 验证页面，当前请求未获得 JSON 数据。')
+  }
+
+  throw error
+})
 
 interface RawCount {
   favorite_folder?: number
+  patch_resource?: number
+  patch_comment?: number
+  resource_count?: number
+  comment_count?: number
   resource?: number
   comment?: number
+  patch?: number
 }
 
 interface RawResource {
@@ -405,6 +660,7 @@ interface RawDownload {
     code?: string | null
     password?: string | null
     hash?: string | null
+    url?: string | null
     content?: string | null
     sortOrder?: number | null
     download?: number | null
@@ -529,8 +785,22 @@ const normalizeResource = (resource: any) => {
   // Explicit mapping to avoid passthrough pollution
   const viewCount = raw.view ?? raw.view_count ?? raw.visit ?? raw.views ?? 0
   const downloadCount = raw.download ?? raw.download_count ?? raw.downloads ?? 0
-  const favoriteCount = counts.favorite_folder ?? raw.favorite_count ?? 0
-  const commentCount = counts.comment ?? raw.comment_count ?? 0
+  const favoriteCount = raw.favoriteCount ?? raw.favorite_count ?? counts.favorite_folder ?? 0
+  const resourceCount =
+    raw.resourceCount ??
+    raw.resource_count ??
+    counts.patch_resource ??
+    counts.resource_count ??
+    counts.resource ??
+    counts.patch ??
+    0
+  const commentCount =
+    raw.commentCount ??
+    raw.comment_count ??
+    counts.patch_comment ??
+    counts.comment_count ??
+    counts.comment ??
+    0
 
   // Standardize naming
   const uniqueId = raw.uniqueId ?? raw.unique_id ?? ''
@@ -599,8 +869,10 @@ const normalizeResource = (resource: any) => {
     viewCount,
     downloadCount,
     favoriteCount,
+    resourceCount,
     commentCount,
     releasedDate,
+    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? null,
     created: raw.created ?? null,
     company,
     pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
@@ -656,8 +928,9 @@ const normalizeDownloads = (downloads: RawDownload[]) =>
     }
   })
 
-const normalizeFeedResponse = (payload: { galgames?: RawResource[]; total?: number }) => {
-  const list = (payload.galgames ?? []).map(normalizeResource)
+const normalizeFeedResponse = (payload: { galgames?: RawResource[]; resources?: RawResource[]; list?: RawResource[]; total?: number }) => {
+  const sourceList = payload.galgames ?? payload.resources ?? payload.list ?? []
+  const list = sourceList.map(normalizeResource)
   log.info(`[API] Normalized ${list.length} games. Total: ${payload.total}`)
   return {
     list,
@@ -709,19 +982,22 @@ const buildSearchTerms = (keyword: string) => {
   return uniqueTerms.length > 0 ? uniqueTerms : [keyword.trim()].filter(Boolean)
 }
 
+const clampApiLimit = (limit: number) => Math.min(Math.max(Number(limit) || 24, 1), 24)
+
 const buildSearchBody = (keyword: string, page: number, limit: number) => ({
   queryString: JSON.stringify(
     buildSearchTerms(keyword).map((term) => ({ type: 'keyword', name: term }))
   ),
-  limit,
+  limit: clampApiLimit(limit),
   page,
   selectedType: 'all',
   selectedLanguage: 'all',
   selectedPlatform: 'all',
-  sortField: 'created',
+  sortField: 'resource_update_time',
   sortOrder: 'desc',
   selectedYears: ['all'],
   selectedMonths: ['all'],
+  minRatingCount: 0,
   searchOption: {
     searchInIntroduction: true,
     searchInAlias: true,
@@ -769,6 +1045,61 @@ const ensureValidResponse = <T>(payload: T | string | unknown[]): T => {
   return payload as T
 }
 
+const getSafeErrorMessage = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status ? `HTTP ${error.response.status}: ` : ''
+    return `${status}${error.message}`
+  }
+
+  return error instanceof Error ? error.message : String(error)
+}
+
+const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any | null) => {
+  if (!legacyDetail) return developerDetail
+
+  return {
+    ...legacyDetail,
+    ...developerDetail,
+    id: legacyDetail.id || developerDetail.id || 0,
+    viewCount: legacyDetail.viewCount || developerDetail.viewCount || 0,
+    downloadCount: legacyDetail.downloadCount || developerDetail.downloadCount || 0,
+    favoriteCount: legacyDetail.favoriteCount || developerDetail.favoriteCount || 0,
+    resourceCount: legacyDetail.resourceCount || developerDetail.resourceCount || 0,
+    commentCount: legacyDetail.commentCount || developerDetail.commentCount || 0,
+    screenshots:
+      Array.isArray(legacyDetail.screenshots) && legacyDetail.screenshots.length > 0
+        ? legacyDetail.screenshots
+        : developerDetail.screenshots,
+    pvUrl: legacyDetail.pvUrl || developerDetail.pvUrl || null,
+    downloads:
+      Array.isArray(legacyDetail.downloads) && legacyDetail.downloads.length > 0
+        ? legacyDetail.downloads
+        : developerDetail.downloads,
+  }
+}
+
+const fetchLegacyPatchDetail = async (uniqueId: string) => {
+  const [detailResponse, introResponse] = await Promise.all([
+    API_CLIENT.get('/patch', { params: { uniqueId } }),
+    API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
+  ])
+
+  const detail = normalizeResource(ensureValidResponse(detailResponse.data))
+  const intro = normalizeIntroduction(ensureValidResponse(introResponse.data))
+
+  let downloads: any[] = []
+  try {
+    if (detail.id) {
+      const dlResponse = await API_CLIENT.get('/patch/resource', { params: { patchId: detail.id } })
+      downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
+    }
+  } catch {
+    log.warn('Failed to fetch downloads for', uniqueId)
+  }
+
+  return { ...detail, ...intro, downloads }
+}
+
 interface ScannedLibraryFolder {
   rootPath: string
   path: string
@@ -798,7 +1129,7 @@ const scanForGalgameFolders = async (rootPaths: string[]) => {
   const walkDirectory = async (rootPath: string, currentPath: string, depth: number): Promise<void> => {
     if (depth > MAX_LIBRARY_SCAN_DEPTH) return
 
-    let entries: fs.Dirent[] = []
+    let entries: fs.Dirent[]
     try {
       entries = await fs.promises.readdir(currentPath, { withFileTypes: true })
     } catch {
@@ -857,7 +1188,6 @@ const scanForGalgameFolders = async (rootPaths: string[]) => {
   return results
 }
 
-let win: BrowserWindow | null = null
 const childWindows = new Set<BrowserWindow>()
 
 const loadRendererTarget = (targetWindow: BrowserWindow, query?: Record<string, string>) => {
@@ -1203,11 +1533,11 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
   // --- API Request Handling ---
   const apiParams: any = {
     page,
-    limit,
+    limit: clampApiLimit(limit),
     selectedType: query.selectedType ?? 'all',
     selectedLanguage: query.selectedLanguage ?? 'all',
     selectedPlatform: query.selectedPlatform ?? 'all',
-    sortField: query.sortField ?? 'created',
+    sortField: query.sortField ?? 'resource_update_time',
     sortOrder: query.sortOrder ?? 'desc',
     yearString: (yearArray && yearArray.length > 0) ? JSON.stringify(yearArray) : (query.yearString ?? '["all"]'),
     monthString: query.monthString ?? '["all"]',
@@ -1237,7 +1567,22 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
 })
 
 handleWithLog('tg-search-resources', async (_event, keyword: string, page: number, limit: number, options?: Record<string, any>) => {
-  const body = { ...buildSearchBody(keyword, page, limit), ...options }
+  const normalizedKeyword = typeof keyword === 'string' ? keyword.trim() : ''
+  if (!normalizedKeyword) {
+    return { list: [], total: 0 }
+  }
+
+  if (isTouchGalDeveloperApiConfigured()) {
+    try {
+      return await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
+        hydrateDetails: clampApiLimit(limit) <= 20,
+      })
+    } catch (error) {
+      log.warn('[Developer API] GET /games/search failed, falling back to legacy /search:', getSafeErrorMessage(error))
+    }
+  }
+
+  const body = { ...buildSearchBody(normalizedKeyword, page, limit), ...options }
   const cookieString = buildRequestCookie(options?.nsfwMode);
 
   const response = await API_CLIENT.post('/search', body, {
@@ -1256,28 +1601,27 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
     throw new Error('Invalid resource ID (must be 8 characters)')
   }
 
-  // COMPLETELY DEPEND ON NETWORK IO - No DB fallback
-  try {
-    const [detailResponse, introResponse] = await Promise.all([
-      API_CLIENT.get('/patch', { params: { uniqueId } }),
-      API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
-    ])
-
-    const detail = normalizeResource(ensureValidResponse(detailResponse.data))
-    const intro = normalizeIntroduction(ensureValidResponse(introResponse.data))
-
-    let downloads: any[] = []
+  let developerDetail: any | null = null
+  if (isTouchGalDeveloperApiConfigured()) {
     try {
-      if (detail.id) {
-        const dlResponse = await API_CLIENT.get('/patch/resource', { params: { patchId: detail.id } })
-        downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
-      }
-    } catch {
-      log.warn('Failed to fetch downloads for', uniqueId)
+      developerDetail = await fetchDeveloperGameDetail(uniqueId)
+    } catch (error) {
+      log.warn(`[Developer API] GET /games/${uniqueId} failed, falling back to legacy detail:`, getSafeErrorMessage(error))
     }
+  }
 
-    // Merge detail, intro, and downloads. intro overrides detail fields.
-    return { ...detail, ...intro, downloads }
+  if (developerDetail) {
+    try {
+      const legacyDetail = await fetchLegacyPatchDetail(uniqueId)
+      return mergeDeveloperAndLegacyDetail(developerDetail, legacyDetail)
+    } catch (error) {
+      log.warn(`[API] Legacy detail fallback failed for ${uniqueId}; using developer API detail only:`, getSafeErrorMessage(error))
+      return developerDetail
+    }
+  }
+
+  try {
+    return await fetchLegacyPatchDetail(uniqueId)
   } catch (error) {
     log.error(`[API] Network IO failed for ${uniqueId}:`, error)
     throw error
@@ -1290,7 +1634,11 @@ function normalizeComment(raw: any) {
     content: raw.content ?? raw.text ?? raw.body ?? '',
     userName: raw.user?.name || raw.user_name || raw.author?.name || 'Anonymous',
     userAvatar: raw.user?.avatar || raw.user_avatar || raw.author?.avatar || null,
-    createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+    createdAt: raw.created_at || raw.createdAt || raw.created || new Date().toISOString(),
+    likeCount: raw.likeCount ?? 0,
+    isLike: Boolean(raw.isLike),
+    isSpoiler: Boolean(raw.isSpoiler),
+    reply: Array.isArray(raw.reply) ? raw.reply.map(normalizeComment) : [],
   }
 }
 
@@ -1303,6 +1651,10 @@ function normalizeRating(raw: any) {
     playStatus: raw.playStatus || raw.play_status || 'other',
     userName: raw.user?.name || raw.user_name || raw.author?.name || 'Anonymous',
     userAvatar: raw.user?.avatar || raw.user_avatar || raw.author?.avatar || null,
+    spoilerLevel: raw.spoilerLevel ?? raw.spoiler_level ?? 'none',
+    likeCount: raw.likeCount ?? 0,
+    isLike: Boolean(raw.isLike),
+    createdAt: raw.created_at || raw.createdAt || raw.created || new Date().toISOString(),
   }
 }
 
@@ -1344,7 +1696,26 @@ handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: numb
 })
 
 handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
-  // COMPLETELY DEPEND ON NETWORK IO
+  if (isTouchGalDeveloperApiConfigured()) {
+    try {
+      const detail = await fetchDeveloperGameDetail(uniqueId)
+      return {
+        introduction: detail.introduction,
+        created: detail.created,
+        releasedDate: detail.releasedDate,
+        resourceUpdateTime: detail.resourceUpdateTime,
+        alias: detail.alias,
+        tags: detail.tags,
+        company: detail.company,
+        vndbId: detail.vndbId,
+        bangumiId: detail.bangumiId,
+        steamId: detail.steamId,
+      }
+    } catch (error) {
+      log.warn(`[Developer API] GET /games/${uniqueId} introduction failed, falling back to legacy introduction:`, getSafeErrorMessage(error))
+    }
+  }
+
   const response = await API_CLIENT.get('/patch/introduction', { params: { uniqueId } })
   return normalizeIntroduction(ensureValidResponse(response.data))
 })
@@ -1580,7 +1951,10 @@ handleWithLog('tg-clear-persisted-auth', async () => {
 })
 
 handleWithLog('tg-search-tags', async (_event, keyword: string) => {
-  const response = await API_CLIENT.get('/tag', { params: { name: keyword, limit: 20 } })
+  const query = buildSearchTerms(keyword).slice(0, 10)
+  if (query.length === 0) return []
+
+  const response = await API_CLIENT.post('/search/tag', { query })
   return ensureValidResponse(response.data)
 })
 
@@ -1590,8 +1964,30 @@ handleWithLog('tg-get-user-status', async (_event, id: number) => {
 })
 
 handleWithLog('tg-get-user-status-self', async () => {
-  const response = await API_CLIENT.get('/user/status')
-  return ensureValidResponse(response.data)
+  try {
+    const response = await API_CLIENT.get('/user/status')
+    return ensureValidResponse(response.data)
+  } catch (error) {
+    if (!isTouchGalDeveloperApiConfigured()) {
+      throw error
+    }
+    log.warn('[API] Legacy /user/status failed; returning developer API credential status:', getSafeErrorMessage(error))
+    return fetchDeveloperApiStatus()
+  }
+})
+
+handleWithLog('tg-get-developer-api-status', async () => {
+  if (!isTouchGalDeveloperApiConfigured()) {
+    return {
+      configured: false,
+      isDeveloperApiCredential: true,
+      applicationStatus: 'missing',
+      dailyLimit: null,
+      minuteLimit: null,
+    }
+  }
+
+  return fetchDeveloperApiStatus()
 })
 
 handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, limit: number) => {

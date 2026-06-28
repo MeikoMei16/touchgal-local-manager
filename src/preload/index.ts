@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('api', {
   searchResources: (keyword: string, page: number, limit: number, options?: Record<string, unknown>) =>
     ipcRenderer.invoke('tg-search-resources', keyword, page, limit, options),
 
+  getDeveloperApiStatus: () =>
+    ipcRenderer.invoke('tg-get-developer-api-status'),
+
   getPatchDetail: (uniqueId: string) =>
     ipcRenderer.invoke('tg-get-patch-detail', uniqueId),
 

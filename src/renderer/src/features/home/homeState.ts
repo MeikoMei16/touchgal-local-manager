@@ -98,7 +98,7 @@ export const defaultHomeQuery = (): HomeQueryState => ({
   minRatingScore: 0,
   minCommentCount: 0,
   selectedTags: [],
-  sortField: 'created',
+  sortField: 'resource_update_time',
   sortOrder: 'desc'
 });
 
@@ -107,7 +107,7 @@ export const normalizeSortField = (value: unknown): HomeSortField => {
   if (value === 'resource_update_time' || value === 'created' || value === 'rating' || value === 'view' || value === 'download' || value === 'favorite') {
     return value;
   }
-  return 'created';
+  return 'resource_update_time';
 };
 
 export const normalizeSortOrder = (value: unknown): HomeSortOrder => (value === 'asc' ? 'asc' : 'desc');

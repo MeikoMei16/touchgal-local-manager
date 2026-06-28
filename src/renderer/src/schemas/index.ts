@@ -91,6 +91,7 @@ export const TouchGalDetailSchema = TouchGalResourceSchema.extend({
   contentLimit: z.string().nullable().default(null),
   screenshots: z.array(z.string()).default([]),
   pvUrl: z.string().nullable().default(null),
+  touchgalUrl: z.string().nullable().default(null),
   downloads: z.array(TouchGalDownloadSchema).default([]),
 }).passthrough();
 

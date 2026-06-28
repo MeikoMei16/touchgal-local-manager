@@ -20,6 +20,10 @@ export const TouchGalClient = {
     return TouchGalFeedResponseSchema.parse(raw);
   },
 
+  getDeveloperApiStatus: async () => {
+    return await window.api.getDeveloperApiStatus();
+  },
+
   getPatchDetail: async (uniqueId: string) => {
     const raw = await window.api.getPatchDetail(uniqueId);
     return TouchGalDetailSchema.parse(raw);

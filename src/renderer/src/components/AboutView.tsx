@@ -44,7 +44,7 @@ const AboutView: React.FC = () => {
         <div className="mt-6 flex flex-wrap gap-3">
           <a
             className={linkClassName}
-            href="https://www.touchgal.top/"
+            href="https://www.touchgal.ink/"
             rel="noreferrer"
             target="_blank"
           >
@@ -68,7 +68,7 @@ const AboutView: React.FC = () => {
             原始数据、资源索引、站点生态与相关归属均应以
             <a
               className="mx-1 font-black text-sky-700 underline decoration-sky-200 underline-offset-4"
-              href="https://www.touchgal.top/"
+              href="https://www.touchgal.ink/"
               rel="noreferrer"
               target="_blank"
             >

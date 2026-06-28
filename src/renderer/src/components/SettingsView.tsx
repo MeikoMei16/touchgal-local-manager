@@ -1,8 +1,9 @@
 import React from 'react';
-import { CheckCircle2, Database, Download, FolderSearch, MonitorUp, MousePointer2, RefreshCw, RotateCcw, SquareMousePointer, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Database, Download, FolderSearch, KeyRound, MonitorUp, MousePointer2, RefreshCw, RotateCcw, SquareMousePointer, TriangleAlert } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
+import { TouchGalClient } from '../data/TouchGalClient';
 import type { DetailSecondaryClickAction, LibraryManageOpenMode } from '../store/uiStoreTypes';
-import type { ExtractorStatus } from '../types/electron';
+import type { DeveloperApiStatus, ExtractorStatus } from '../types/electron';
 
 const OPTIONS: Array<{
   value: DetailSecondaryClickAction;
@@ -41,6 +42,15 @@ const LIBRARY_OPEN_OPTIONS: Array<{
   }
 ];
 
+const formatLimit = (value: number | null | undefined) =>
+  typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('zh-CN') : 'N/A';
+
+const getDeveloperApiStatusTone = (status: DeveloperApiStatus | null) => {
+  if (!status?.configured) return 'missing';
+  if (status.applicationStatus === 'approved') return 'ready';
+  return 'pending';
+};
+
 const SettingsView: React.FC = () => {
   const {
     detailSecondaryClickAction,
@@ -58,8 +68,28 @@ const SettingsView: React.FC = () => {
   const [isSavingConcurrency, setIsSavingConcurrency] = React.useState(false);
   const [archiveExtractionDepth, setArchiveExtractionDepth] = React.useState(3);
   const [isSavingArchiveDepth, setIsSavingArchiveDepth] = React.useState(false);
+  const [developerApiStatus, setDeveloperApiStatus] = React.useState<DeveloperApiStatus | null>(null);
+  const [isDeveloperApiStatusLoading, setIsDeveloperApiStatusLoading] = React.useState(true);
   const [isResettingDatabase, setIsResettingDatabase] = React.useState(false);
   const [isClearingCache, setIsClearingCache] = React.useState(false);
+
+  const refreshDeveloperApiStatus = React.useCallback(async () => {
+    setIsDeveloperApiStatusLoading(true);
+    try {
+      const status = await TouchGalClient.getDeveloperApiStatus();
+      setDeveloperApiStatus(status);
+    } catch {
+      setDeveloperApiStatus({
+        configured: true,
+        isDeveloperApiCredential: true,
+        applicationStatus: 'error',
+        dailyLimit: null,
+        minuteLimit: null
+      });
+    } finally {
+      setIsDeveloperApiStatusLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -94,6 +124,38 @@ const SettingsView: React.FC = () => {
     };
   }, []);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadDeveloperApiStatus = async () => {
+      try {
+        const status = await TouchGalClient.getDeveloperApiStatus();
+        if (!cancelled) {
+          setDeveloperApiStatus(status);
+        }
+      } catch {
+        if (!cancelled) {
+          setDeveloperApiStatus({
+            configured: true,
+            isDeveloperApiCredential: true,
+            applicationStatus: 'error',
+            dailyLimit: null,
+            minuteLimit: null
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsDeveloperApiStatusLoading(false);
+        }
+      }
+    };
+
+    void loadDeveloperApiStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handlePickDownloadDirectory = async () => {
     try {
       const selectedPath = await window.api.pickDownloadDirectory();
@@ -106,6 +168,16 @@ const SettingsView: React.FC = () => {
   };
 
   const resolvedDownloadPath = downloadPathOverride || defaultDownloadPath || '读取中...';
+  const developerApiTone = getDeveloperApiStatusTone(developerApiStatus);
+  const developerApiStatusLabel = isDeveloperApiStatusLoading
+    ? '检测中'
+    : developerApiTone === 'ready'
+      ? '已启用'
+      : developerApiTone === 'missing'
+        ? '未配置'
+        : developerApiStatus?.applicationStatus === 'error'
+          ? '连接失败'
+          : developerApiStatus?.applicationStatus || '待确认';
 
   const refreshExtractorStatus = async () => {
     setIsExtractorLoading(true);
@@ -194,6 +266,74 @@ const SettingsView: React.FC = () => {
               控制桌面端在详情弹层里的鼠标交互行为。默认模式会把右键映射为返回。
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6 flex items-start gap-4">
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+            developerApiTone === 'ready'
+              ? 'bg-emerald-100 text-emerald-700'
+              : developerApiTone === 'missing'
+                ? 'bg-slate-100 text-slate-600'
+                : 'bg-amber-100 text-amber-700'
+          }`}>
+            <KeyRound size={22} />
+          </div>
+          <div className="flex flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">TouchGal Developer API</h2>
+                <p className="mt-1 text-sm font-medium leading-7 text-slate-500">
+                  搜索和详情优先使用开发者接口，旧站接口作为兼容回退。
+                </p>
+              </div>
+              <button
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                disabled={isDeveloperApiStatusLoading}
+                onClick={() => void refreshDeveloperApiStatus()}
+                type="button"
+              >
+                <RefreshCw size={17} className={isDeveloperApiStatusLoading ? 'animate-spin' : ''} />
+                刷新状态
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={`rounded-[1.6rem] border p-5 ${
+          developerApiTone === 'ready'
+            ? 'border-emerald-200 bg-emerald-50'
+            : developerApiTone === 'missing'
+              ? 'border-slate-200 bg-slate-50'
+              : 'border-amber-200 bg-amber-50'
+        }`}>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl bg-white/80 p-4">
+              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">状态</div>
+              <div className="mt-2 text-lg font-black text-slate-900">{developerApiStatusLabel}</div>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4">
+              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">应用状态</div>
+              <div className="mt-2 text-lg font-black text-slate-900">
+                {developerApiStatus?.applicationStatus ?? 'N/A'}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4">
+              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">每日额度</div>
+              <div className="mt-2 text-lg font-black text-slate-900">{formatLimit(developerApiStatus?.dailyLimit)}</div>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4">
+              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">每分钟额度</div>
+              <div className="mt-2 text-lg font-black text-slate-900">{formatLimit(developerApiStatus?.minuteLimit)}</div>
+            </div>
+          </div>
+
+          {!developerApiStatus?.configured && !isDeveloperApiStatusLoading && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-bold text-slate-600">
+              未检测到本地开发者 API Key。当前搜索和详情会继续使用旧站兼容接口。
+            </div>
+          )}
         </div>
       </section>
 

@@ -65,7 +65,7 @@ export const LoginModal: React.FC = () => {
   };
 
   const openRegisterPage = () => {
-    window.open('https://www.touchgal.top/register', '_blank', 'noopener,noreferrer');
+    window.open('https://www.touchgal.ink/register', '_blank', 'noopener,noreferrer');
   };
 
   return (

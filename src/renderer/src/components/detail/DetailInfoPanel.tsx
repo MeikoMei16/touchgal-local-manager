@@ -36,6 +36,9 @@ export const DetailInfoPanel: React.FC<DetailInfoPanelProps> = ({
     { icon: RefreshCw, label: '资源更新时间', value: formatDate(resource.resourceUpdateTime) }
   ].filter((item) => item.value);
   const externalRows = [
+    resource.touchgalUrl
+      ? { label: 'TouchGal', href: resource.touchgalUrl, value: '原站页面' }
+      : null,
     resource.vndbId
       ? { label: 'VNDB ID', href: `https://vndb.org/${resource.vndbId}`, value: resource.vndbId }
       : null,

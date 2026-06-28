@@ -15,8 +15,11 @@ export interface HttpConfigState {
   customProfile: HttpProfile | null
 }
 
-const TOUCHGAL_ORIGIN = 'https://www.touchgal.top'
-const TOUCHGAL_REFERER = `${TOUCHGAL_ORIGIN}/`
+export const TOUCHGAL_ORIGIN = 'https://www.touchgal.ink'
+export const TOUCHGAL_API_BASE = `${TOUCHGAL_ORIGIN}/api`
+export const TOUCHGAL_REFERER = `${TOUCHGAL_ORIGIN}/`
+export const TOUCHGAL_CSRF_HEADER = 'X-Requested-With'
+export const TOUCHGAL_CSRF_HEADER_VALUE = 'kun-fetch'
 
 export const HTTP_PROFILES: HttpProfile[] = [
   {
@@ -90,8 +93,10 @@ export const resolveHttpProfile = (
 
 export const buildTouchGalBaseHeaders = (profile: HttpProfile) => ({
   'Content-Type': 'application/json',
+  Accept: 'application/json, text/plain, */*',
   'User-Agent': profile.userAgent,
   'Accept-Language': profile.acceptLanguage,
+  [TOUCHGAL_CSRF_HEADER]: TOUCHGAL_CSRF_HEADER_VALUE,
   Referer: profile.referer,
   Origin: profile.origin
 })

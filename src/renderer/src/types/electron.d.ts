@@ -123,6 +123,15 @@ export interface BrowseHistoryEntry {
   viewed_at: string;
 }
 
+export interface DeveloperApiStatus {
+  configured: boolean;
+  isDeveloperApiCredential: true;
+  applicationId?: string;
+  applicationStatus?: string;
+  dailyLimit?: number | null;
+  minuteLimit?: number | null;
+}
+
 export interface ElectronAPI {
   // Local File System
   scanLocalLibrary: (paths: string[]) => Promise<LocalFolder[]>;
@@ -149,6 +158,7 @@ export interface ElectronAPI {
   // TouchGal API Relay (Bypass CORS)
   fetchResources: (page: number, limit: number, query: any) => Promise<any>;
   searchResources: (keyword: string, page: number, limit: number, options?: any) => Promise<any>;
+  getDeveloperApiStatus: () => Promise<DeveloperApiStatus>;
   getPatchDetail: (uniqueId: string) => Promise<any>;
   getPatchIntroduction: (uniqueId: string) => Promise<any>;
   getPatchComments: (patchId: number, page: number, limit: number) => Promise<any>;

@@ -75,7 +75,7 @@ export const SearchView: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchOptions, setSearchOptions] = useState<SearchScopeOptions>(defaultSearchOptions);
   const [nsfwMode, setNsfwMode] = useState<HomeQueryState['nsfwMode']>('safe');
-  const [sortField, setSortField] = useState<HomeSortField>('created');
+  const [sortField, setSortField] = useState<HomeSortField>('resource_update_time');
   const [sortOrder, setSortOrder] = useState<HomeSortOrder>('desc');
   const [localRatingResults, setLocalRatingResults] = useState<TouchGalResource[] | null>(null);
   const [localRatingProgress, setLocalRatingProgress] = useState<LocalRatingProgress>(idleLocalRatingProgress);

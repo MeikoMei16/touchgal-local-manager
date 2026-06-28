@@ -11,6 +11,7 @@ export const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
   contentLimit: null,
   screenshots: [],
   pvUrl: null,
+  touchgalUrl: null,
   downloads: []
 });
 
@@ -36,6 +37,7 @@ export const mergeDetailResource = (
         : null,
   screenshots: Array.isArray(detail.screenshots) ? detail.screenshots : [],
   pvUrl: detail.pvUrl ?? null,
+  touchgalUrl: detail.touchgalUrl ?? null,
   downloads: Array.isArray(detail.downloads) ? detail.downloads : [],
   alias: Array.isArray(detail.alias) ? detail.alias : [],
   tags: Array.isArray(detail.tags) ? detail.tags : []
