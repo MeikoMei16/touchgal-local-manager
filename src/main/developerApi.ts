@@ -408,6 +408,8 @@ const extractPvUrlFromMarkdown = (markdown: string | null | undefined) => {
 const stripMarkdownMedia = (markdown: string) =>
   markdown
     .replace(/^\s*!\[[^\]]*]\(\s*<?[^)\s>]+>?(?:\s+["'][^"']*["'])?\s*\)\s*$/gm, '')
+    .replace(/^\s*<img[^>]+src=["'][^"']+["'][^>]*>\s*$/gim, '')
+    .replace(/^\s*https?:\/\/[^\s"'<>）)]+\.(?:avif|gif|jpe?g|png|webp)(?:[?#][^\s"'<>）)]*)?\s*$/gim, '')
     .replace(/^\s*(?:#{1,6}\s*)?(?:游戏截图|PV鉴赏|支持正版)\s*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
