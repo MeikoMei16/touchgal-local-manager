@@ -2416,6 +2416,10 @@ handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
         vndbId: detail.vndbId,
         bangumiId: detail.bangumiId,
         steamId: detail.steamId,
+        platform: detail.platform,
+        language: detail.language,
+        type: detail.type,
+        touchgalUrl: detail.touchgalUrl,
       }
     } catch (error) {
       log.warn(`[Developer API] GET /games/${uniqueId} introduction failed, falling back to legacy introduction:`, getSafeErrorMessage(error))

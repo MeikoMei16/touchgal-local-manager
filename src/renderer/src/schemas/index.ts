@@ -402,9 +402,14 @@ export const PatchIntroductionSchema = z.object({
   alias: stringArray,
   tags: stringArray,
   company: companyDisplay,
+  companyAliases: stringArray,
+  platform: stringListDisplay,
+  language: stringListDisplay,
+  type: stringArray,
   vndbId: nullableString,
   bangumiId: nullableNumber,
   steamId: nullableString,
+  touchgalUrl: nullableString,
 }).passthrough();
 
 export const SearchTagSuggestionSchema = z.preprocess(
