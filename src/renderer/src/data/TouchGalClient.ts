@@ -13,7 +13,8 @@ import {
   SearchTagSuggestionListSchema,
   CaptchaResponseSchema,
   CaptchaVerifyResponseSchema,
-  LoginResponseSchema
+  LoginResponseSchema,
+  DeveloperApiStatusSchema
 } from '../schemas';
 
 const asRecord = (value: unknown): Record<string, any> =>
@@ -76,7 +77,8 @@ export const TouchGalClient = {
   },
 
   getDeveloperApiStatus: async () => {
-    return await window.api.getDeveloperApiStatus();
+    const raw = await window.api.getDeveloperApiStatus();
+    return DeveloperApiStatusSchema.parse(unwrapResponseData(raw));
   },
 
   getPatchDetail: async (uniqueId: string) => {

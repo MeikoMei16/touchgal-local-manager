@@ -207,6 +207,20 @@ const normalizeCaptchaVerifyInput = (value: unknown) => {
   };
 };
 
+const normalizeDeveloperApiStatusInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  const quota = objectRecord(raw.quota);
+  const rateLimit = objectRecord(raw.rateLimit ?? raw.rate_limit);
+  return {
+    ...raw,
+    configured: raw.configured ?? true,
+    applicationId: raw.applicationId ?? raw.application_id ?? raw.id,
+    applicationStatus: raw.applicationStatus ?? raw.application_status ?? raw.status ?? 'unknown',
+    dailyLimit: raw.dailyLimit ?? raw.daily_limit ?? quota.daily ?? null,
+    minuteLimit: raw.minuteLimit ?? raw.minute_limit ?? rateLimit.minute ?? quota.minute ?? null,
+  };
+};
+
 const normalizePatchCommentInput = (value: unknown) => {
   const raw = objectRecord(value);
   const user = objectRecord(raw.user);
@@ -427,6 +441,18 @@ export const CaptchaVerifyResponseSchema = z.preprocess(
   normalizeCaptchaVerifyInput,
   z.object({
     code: stringDefault(),
+  }).passthrough()
+);
+
+export const DeveloperApiStatusSchema = z.preprocess(
+  normalizeDeveloperApiStatusInput,
+  z.object({
+    configured: booleanDefault(),
+    isDeveloperApiCredential: z.literal(true).catch(true),
+    applicationId: stringDefault().optional(),
+    applicationStatus: stringDefault('unknown'),
+    dailyLimit: nullableNumber,
+    minuteLimit: nullableNumber,
   }).passthrough()
 );
 

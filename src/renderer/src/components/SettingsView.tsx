@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Database, Download, FolderSearch, KeyRound, MonitorUp, MousePointer2, RefreshCw, RotateCcw, SquareMousePointer, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Database, Download, ExternalLink, FolderSearch, KeyRound, MonitorUp, MousePointer2, RefreshCw, RotateCcw, SquareMousePointer, TriangleAlert } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 import { TouchGalClient } from '../data/TouchGalClient';
 import type { DetailSecondaryClickAction, LibraryManageOpenMode } from '../store/uiStoreTypes';
@@ -44,6 +44,8 @@ const LIBRARY_OPEN_OPTIONS: Array<{
 
 const formatLimit = (value: number | null | undefined) =>
   typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('zh-CN') : 'N/A';
+
+const TOUCHGAL_DEVELOPER_CONSOLE_URL = 'https://developer.touchgal.com/dashboard/console';
 
 const getDeveloperApiStatusTone = (status: DeveloperApiStatus | null) => {
   if (!status?.configured) return 'missing';
@@ -288,15 +290,26 @@ const SettingsView: React.FC = () => {
                   搜索和详情优先使用开发者接口，旧站接口作为兼容回退。
                 </p>
               </div>
-              <button
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
-                disabled={isDeveloperApiStatusLoading}
-                onClick={() => void refreshDeveloperApiStatus()}
-                type="button"
-              >
-                <RefreshCw size={17} className={isDeveloperApiStatusLoading ? 'animate-spin' : ''} />
-                刷新状态
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  className="inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-black text-sky-700 transition-colors hover:bg-sky-100"
+                  href={TOUCHGAL_DEVELOPER_CONSOLE_URL}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <ExternalLink size={17} />
+                  打开控制台
+                </a>
+                <button
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                  disabled={isDeveloperApiStatusLoading}
+                  onClick={() => void refreshDeveloperApiStatus()}
+                  type="button"
+                >
+                  <RefreshCw size={17} className={isDeveloperApiStatusLoading ? 'animate-spin' : ''} />
+                  刷新状态
+                </button>
+              </div>
             </div>
           </div>
         </div>
