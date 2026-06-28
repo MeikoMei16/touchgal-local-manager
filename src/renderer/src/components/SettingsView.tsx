@@ -370,7 +370,7 @@ const SettingsView: React.FC = () => {
             </div>
           )}
           <div className="mt-4 rounded-2xl border border-amber-100 bg-white/80 px-4 py-3 text-sm font-bold leading-7 text-slate-600">
-            Developer API 不提供下载资源。完成旧站访问验证后，详情页会在旧站可访问时自动补齐官方下载链接。
+            Developer API 会提供外部资源入口；可直接加入下载队列的官方直链仍需旧站访问验证可用后自动补齐。
           </div>
         </div>
       </section>

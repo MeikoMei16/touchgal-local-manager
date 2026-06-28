@@ -46,6 +46,7 @@ import { getExtractorStatus } from './extractor'
 import {
   fetchDeveloperApiStatus,
   fetchDeveloperGameDetail,
+  fetchDeveloperGameResources,
   fetchDeveloperGameSearch,
   isTouchGalDeveloperApiConfigured
 } from './developerApi'
@@ -2637,6 +2638,15 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
   }
 
   if (developerDetail) {
+    try {
+      developerDetail = {
+        ...developerDetail,
+        downloads: await fetchDeveloperGameResources(uniqueId)
+      }
+    } catch (error) {
+      log.warn(`[Developer API] GET /games/${uniqueId}/resources failed, using detail without developer resources:`, getSafeErrorMessage(error))
+    }
+
     try {
       const legacyDetail = await fetchLegacyPatchDetailWhenAccessible(uniqueId)
       const mergedDetail = mergeDeveloperAndLegacyDetail(developerDetail, legacyDetail)

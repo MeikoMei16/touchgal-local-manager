@@ -279,7 +279,7 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
         <h2 className="text-xl font-black text-slate-800">资源链接</h2>
         <p className="max-w-xl text-slate-500 font-medium">
           {isDeveloperOnlyDetail
-            ? '当前详情来自 TouchGal Developer API。新 API 暂未提供下载资源，应用会在旧站验证可用时自动补齐下载链接。'
+            ? '当前详情来自 TouchGal Developer API，但该条目暂未返回可展示的资源入口。'
             : '当前条目还没有可用的下载直链。'}
         </p>
         {resource.touchgalUrl && (
@@ -402,8 +402,8 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
               />
             </div>
             <div>
-              <div className="text-xl font-black text-slate-900">TouchGal 社区下载资源</div>
-              <div className="text-sm font-medium text-slate-500">来自 TouchGal 用户自行发布的下载资源，点击下载会打开外部链接</div>
+              <div className="text-xl font-black text-slate-900">TouchGal 外部资源入口</div>
+              <div className="text-sm font-medium text-slate-500">来自 TouchGal 用户或 Developer API 的资源入口，点击会打开外部链接</div>
               {resourceUpdatedAt && (
                 <div className="mt-1 text-xs font-bold text-slate-400">资源更新时间 {resourceUpdatedAt}</div>
               )}

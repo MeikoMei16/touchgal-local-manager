@@ -226,7 +226,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
                 <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
                   <div>
                     {isDeveloperOnlyDetail
-                      ? '当前详情来自 TouchGal Developer API。新 API 暂未提供下载资源，可打开原站查看。'
+                      ? '当前详情来自 TouchGal Developer API。资源入口会在详情页展示；快速下载只支持可直接加入队列的官方直链。'
                       : '当前游戏没有可直接加入队列的 TouchGal 官方本体资源。'}
                   </div>
                   {touchgalUrl && (

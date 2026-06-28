@@ -146,6 +146,21 @@ interface DeveloperGameDetail {
   touchgal_url?: string | null
 }
 
+interface DeveloperGameResource {
+  name?: string | null
+  description?: string | null
+  categories?: string[]
+  sizes?: string[]
+  publishTime?: string | null
+  publish_time?: string | null
+  deepLink?: string | null
+  deep_link?: string | null
+}
+
+interface DeveloperGameResourcesPayload {
+  items?: DeveloperGameResource[]
+}
+
 const sanitizeApiKey = (value: string | undefined) =>
   typeof value === 'string' ? value.replace(/[\r\n\t]/g, '').trim() : ''
 
@@ -660,9 +675,68 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
   }
 }
 
+const normalizeDeveloperGameResource = (resource: DeveloperGameResource, index: number) => {
+  const deepLink = resource.deepLink ?? resource.deep_link ?? null
+  if (!deepLink) return null
+
+  const categories = Array.isArray(resource.categories)
+    ? resource.categories.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+  const sizes = Array.isArray(resource.sizes)
+    ? resource.sizes.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+  const name = typeof resource.name === 'string' && resource.name.trim()
+    ? resource.name.trim()
+    : 'TouchGal Developer 资源'
+  const description = typeof resource.description === 'string' && resource.description.trim()
+    ? resource.description.trim()
+    : null
+  const size = sizes.length > 0 ? sizes.join(', ') : null
+
+  return {
+    id: 0,
+    name,
+    section: 'galgame',
+    size,
+    url: deepLink,
+    content: deepLink,
+    storage: 'developer',
+    type: categories,
+    language: [],
+    code: null,
+    password: null,
+    note: description,
+    hash: null,
+    platform: [],
+    likeCount: 0,
+    downloadCount: 0,
+    created: resource.publishTime ?? resource.publish_time ?? null,
+    links: [{
+      id: null,
+      storage: 'developer',
+      size,
+      code: null,
+      password: null,
+      hash: null,
+      content: deepLink,
+      url: deepLink,
+      sortOrder: index,
+      download: null,
+    }],
+    userId: null,
+    user: null,
+  }
+}
+
+export const normalizeDeveloperGameResources = (items: DeveloperGameResource[]) =>
+  items
+    .map(normalizeDeveloperGameResource)
+    .filter((item): item is NonNullable<ReturnType<typeof normalizeDeveloperGameResource>> => Boolean(item))
+
 const detailCache = new Map<string, Promise<ReturnType<typeof normalizeDeveloperGameDetail>>>()
 const searchCache = new Map<string, { expiresAt: number; value: DeveloperSearchResult }>()
 const searchInFlightCache = new Map<string, Promise<DeveloperSearchResult>>()
+const resourceCache = new Map<string, Promise<ReturnType<typeof normalizeDeveloperGameResources>>>()
 let statusCache: { expiresAt: number; value: Record<string, unknown> } | null = null
 
 const runLimited = async <T, R>(
@@ -789,6 +863,28 @@ export const fetchDeveloperGameDetail = async (uniqueId: string) => {
   })
 
   detailCache.set(uniqueId, request)
+  return request
+}
+
+export const fetchDeveloperGameResources = async (uniqueId: string) => {
+  const cached = resourceCache.get(uniqueId)
+  if (cached) return cached
+
+  const request = (async () => {
+    const client = createDeveloperApiClient()
+    const response = await requestDeveloperApi(() =>
+      client.get<DeveloperApiResponse<DeveloperGameResourcesPayload>>(
+        `/games/${encodeURIComponent(uniqueId)}/resources`
+      )
+    )
+    const data = unwrapDeveloperResponse(response.data)
+    return normalizeDeveloperGameResources(Array.isArray(data.items) ? data.items : [])
+  })().catch((error) => {
+    resourceCache.delete(uniqueId)
+    throw error
+  })
+
+  resourceCache.set(uniqueId, request)
   return request
 }
 
