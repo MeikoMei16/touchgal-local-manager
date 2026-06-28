@@ -1990,6 +1990,7 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
           recommend: mergeRecommend(developerRatingSummary?.recommend, legacyRatingSummary?.recommend)
         }
       : null
+  const downloads = mergeDownloads(legacyDetail.downloads, developerDetail.downloads)
 
   return {
     ...legacyDetail,
@@ -2014,7 +2015,10 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
     viewCount: maxPositiveNumber(legacyDetail.viewCount, developerDetail.viewCount),
     downloadCount: maxPositiveNumber(legacyDetail.downloadCount, developerDetail.downloadCount),
     favoriteCount: maxPositiveNumber(legacyDetail.favoriteCount, developerDetail.favoriteCount),
-    resourceCount: maxPositiveNumber(legacyDetail.resourceCount, developerDetail.resourceCount),
+    resourceCount: Math.max(
+      maxPositiveNumber(legacyDetail.resourceCount, developerDetail.resourceCount),
+      downloads.length
+    ),
     commentCount: maxPositiveNumber(legacyDetail.commentCount, developerDetail.commentCount),
     introduction: developerDetail.introduction || legacyDetail.introduction || null,
     screenshots:
@@ -2022,7 +2026,7 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
         ? legacyDetail.screenshots
         : developerDetail.screenshots,
     pvUrl: legacyDetail.pvUrl || developerDetail.pvUrl || null,
-    downloads: mergeDownloads(legacyDetail.downloads, developerDetail.downloads),
+    downloads,
   }
 }
 
