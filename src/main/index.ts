@@ -1210,6 +1210,64 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
   },
 })
 
+const DEVELOPER_BROWSE_FALLBACK_KEYWORD = '恋'
+
+const getComparableTime = (value: unknown) => {
+  if (typeof value !== 'string' || !value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+const applyHomeQueryToDeveloperBrowseFallback = (list: any[], query: any) => {
+  const selectedPlatform = query?.selectedPlatform ?? 'all'
+  const minRatingCount = Number(query?.minRatingCount ?? 0) || 0
+  const sortField = query?.sortField ?? 'resource_update_time'
+  const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc'
+
+  const filtered = list.filter((game) => {
+    if (selectedPlatform !== 'all') {
+      const platforms = Array.isArray(game.platform) ? game.platform : []
+      if (!platforms.includes(selectedPlatform)) return false
+    }
+
+    const ratingCount = Number(game.ratingCount ?? game.ratingSummary?.count ?? 0) || 0
+    return ratingCount >= minRatingCount
+  })
+
+  const getSortValue = (game: any) => {
+    if (sortField === 'created') return getComparableTime(game.created ?? game.releasedDate)
+    if (sortField === 'rating') return Number(game.averageRating ?? 0) || 0
+    if (sortField === 'view') return Number(game.viewCount ?? 0) || 0
+    if (sortField === 'download') return Number(game.downloadCount ?? 0) || 0
+    if (sortField === 'favorite') return Number(game.favoriteCount ?? 0) || 0
+    return getComparableTime(game.resourceUpdateTime ?? game.updatedAt ?? game.created)
+  }
+
+  return [...filtered].sort((left, right) => {
+    const diff = getSortValue(left) - getSortValue(right)
+    return sortOrder === 'asc' ? diff : -diff
+  })
+}
+
+const fetchDeveloperBrowseFallback = async (page: number, limit: number, query: any) => {
+  const developerResult = await fetchDeveloperGameSearch(
+    DEVELOPER_BROWSE_FALLBACK_KEYWORD,
+    page,
+    clampApiLimit(limit),
+    { hydrateDetails: true }
+  )
+  const list = applyHomeQueryToDeveloperBrowseFallback(developerResult.list, query)
+  upsertNormalizedGames(list)
+
+  return {
+    ...developerResult,
+    list,
+    total: developerResult.total || list.length,
+    source: 'developer-api-browse-fallback',
+    fallbackKeyword: DEVELOPER_BROWSE_FALLBACK_KEYWORD
+  }
+}
+
 const isDefaultSearchOption = (value: unknown) => {
   if (!value || typeof value !== 'object') return true
   const option = value as Record<string, unknown>
@@ -1832,6 +1890,19 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
       log.warn(`[API] GET /galgame failed; returning ${cached.list.length} cached games`)
       return cached
     }
+
+    if (isTouchGalDeveloperApiConfigured()) {
+      try {
+        const fallback = await fetchDeveloperBrowseFallback(page, limit, query)
+        if (fallback.list.length > 0) {
+          log.warn(`[Developer API] Legacy /galgame unavailable; returning ${fallback.list.length} keyword fallback games`)
+          return fallback
+        }
+      } catch (fallbackError) {
+        log.warn('[Developer API] Browse fallback failed after /galgame error:', getSafeErrorMessage(fallbackError))
+      }
+    }
+
     throw err;
   }
 })
