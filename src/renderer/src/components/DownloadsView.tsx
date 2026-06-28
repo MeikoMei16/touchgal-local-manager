@@ -24,37 +24,46 @@ export const DownloadsView: React.FC = () => {
   const [defaultDirectory, setDefaultDirectory] = React.useState('')
   const [tasks, setTasks] = React.useState<DownloadQueueTask[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [actionTaskId, setActionTaskId] = React.useState<number | null>(null)
+  const [actionTaskIds, setActionTaskIds] = React.useState<number[]>([])
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<number[]>([])
   const notifiedTaskWarningsRef = React.useRef<Record<number, string>>({})
+  const queueLoadSeqRef = React.useRef(0)
+  const taskActionSeqRef = React.useRef<Record<number, number>>({})
 
   const resolvedDirectory = downloadPathOverride || defaultDirectory
   const finishedTaskCount = tasks.filter((task) => task.status === 'done').length
   const isAllSelected = tasks.length > 0 && selectedTaskIds.length === tasks.length
   const hasSelection = selectedTaskIds.length > 0
 
+  const applyQueueState = React.useCallback((queue: DownloadQueueTask[]) => {
+    const taskIds = new Set(queue.map((task) => task.id))
+    setTasks(queue)
+    setSelectedTaskIds((current) => current.filter((taskId) => taskIds.has(taskId)))
+    setActionTaskIds((current) => current.filter((taskId) => taskId < 0 || taskIds.has(taskId)))
+  }, [])
+
   const loadQueue = React.useCallback(async () => {
+    const seq = queueLoadSeqRef.current + 1
+    queueLoadSeqRef.current = seq
     const [queue, fallbackDirectory] = await Promise.all([
       window.api.getDownloadQueue(),
       window.api.getDefaultDownloadDirectory()
     ])
-    setTasks(queue)
+    if (queueLoadSeqRef.current !== seq) return
+    applyQueueState(queue)
     setDefaultDirectory(fallbackDirectory)
     setIsLoading(false)
-  }, [])
+  }, [applyQueueState])
 
   React.useEffect(() => {
     void loadQueue()
     const unsubscribe = window.api.onDownloadQueueUpdated((queue) => {
-      setTasks(queue)
+      queueLoadSeqRef.current += 1
+      applyQueueState(queue)
       setIsLoading(false)
     })
     return unsubscribe
-  }, [loadQueue])
-
-  React.useEffect(() => {
-    setSelectedTaskIds((current) => current.filter((taskId) => tasks.some((task) => task.id === taskId)))
-  }, [tasks])
+  }, [applyQueueState, loadQueue])
 
   React.useEffect(() => {
     const activeTaskIds = new Set(tasks.map((task) => task.id))
@@ -75,15 +84,24 @@ export const DownloadsView: React.FC = () => {
   }, [pushToast, tasks])
 
   const runAction = async (taskId: number, action: () => Promise<unknown>, message: string) => {
-    setActionTaskId(taskId)
+    const seq = (taskActionSeqRef.current[taskId] ?? 0) + 1
+    taskActionSeqRef.current[taskId] = seq
+    setActionTaskIds((current) => current.includes(taskId) ? current : [...current, taskId])
     try {
       await action()
-      pushToast(message)
+      if (taskActionSeqRef.current[taskId] === seq) {
+        pushToast(message)
+      }
       await loadQueue()
     } catch (error) {
-      pushToast(error instanceof Error ? error.message : '下载任务操作失败')
+      if (taskActionSeqRef.current[taskId] === seq) {
+        pushToast(error instanceof Error ? error.message : '下载任务操作失败')
+      }
     } finally {
-      setActionTaskId(null)
+      if (taskActionSeqRef.current[taskId] === seq) {
+        delete taskActionSeqRef.current[taskId]
+        setActionTaskIds((current) => current.filter((id) => id !== taskId))
+      }
     }
   }
 
@@ -106,7 +124,7 @@ export const DownloadsView: React.FC = () => {
     const confirmed = window.confirm(`清除全部已完成任务？这只会移除列表中的 ${finishedTaskCount} 条完成记录，不会删除磁盘文件。`)
     if (!confirmed) return
 
-    setActionTaskId(-1)
+    setActionTaskIds((current) => current.includes(-1) ? current : [...current, -1])
     try {
       await window.api.clearFinishedDownloadTasks()
       pushToast('已清除全部完成任务')
@@ -114,7 +132,7 @@ export const DownloadsView: React.FC = () => {
     } catch (error) {
       pushToast(error instanceof Error ? error.message : '清除完成任务失败')
     } finally {
-      setActionTaskId(null)
+      setActionTaskIds((current) => current.filter((id) => id !== -1))
     }
   }
 
@@ -137,7 +155,7 @@ export const DownloadsView: React.FC = () => {
     )
     if (!confirmed) return
 
-    setActionTaskId(-2)
+    setActionTaskIds((current) => current.includes(-2) ? current : [...current, -2])
     try {
       const result = await window.api.deleteDownloadTasksAndFiles(selectedTaskIds, resolvedDirectory)
       setSelectedTaskIds((current) => current.filter((taskId) => !result.deletedTaskIds.includes(taskId)))
@@ -146,7 +164,7 @@ export const DownloadsView: React.FC = () => {
     } catch (error) {
       pushToast(error instanceof Error ? error.message : '批量删除下载文件失败')
     } finally {
-      setActionTaskId(null)
+      setActionTaskIds((current) => current.filter((id) => id !== -2))
     }
   }
 
@@ -168,7 +186,7 @@ export const DownloadsView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <button
               className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
-              disabled={tasks.length === 0 || actionTaskId === -2}
+              disabled={tasks.length === 0 || actionTaskIds.includes(-2)}
               onClick={() => handleToggleSelectAll()}
               type="button"
             >
@@ -184,7 +202,7 @@ export const DownloadsView: React.FC = () => {
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
-              disabled={finishedTaskCount === 0 || actionTaskId === -1}
+              disabled={finishedTaskCount === 0 || actionTaskIds.includes(-1)}
               onClick={() => void handleClearFinished()}
               type="button"
             >
@@ -193,7 +211,7 @@ export const DownloadsView: React.FC = () => {
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
-              disabled={!hasSelection || !resolvedDirectory || actionTaskId === -2}
+              disabled={!hasSelection || !resolvedDirectory || actionTaskIds.includes(-2)}
               onClick={() => void handleBulkDeleteFiles()}
               type="button"
             >
@@ -226,7 +244,7 @@ export const DownloadsView: React.FC = () => {
         <div className="space-y-4">
           {tasks.map((task) => {
             const percent = formatPercent(task)
-            const isBusy = actionTaskId === task.id
+            const isBusy = actionTaskIds.includes(task.id)
             return (
               <article key={task.id} className="rounded-[1.8rem] border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
