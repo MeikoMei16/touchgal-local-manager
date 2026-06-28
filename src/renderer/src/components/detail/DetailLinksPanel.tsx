@@ -272,11 +272,27 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
 };
 
 export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) => {
-  const [selectedBucket, setSelectedBucket] = React.useState<ResourceBucket>('galgame');
+  const [selectedBucketState, setSelectedBucketState] = React.useState<{
+    resourceKey: string | null;
+    bucket: ResourceBucket;
+  }>({
+    resourceKey: null,
+    bucket: 'galgame',
+  });
   const downloads = Array.isArray(resource.downloads)
     ? resource.downloads.filter((item) => getDownloadLinks(item).length > 0)
     : [];
   const isDeveloperOnlyDetail = !resource.id && Boolean(resource.touchgalUrl);
+  const galgameCount = downloads.filter((download) => toBucket(download) === 'galgame').length;
+  const patchCount = downloads.filter((download) => toBucket(download) === 'patch').length;
+  const defaultBucket: ResourceBucket = galgameCount > 0 || patchCount === 0 ? 'galgame' : 'patch';
+  const resourceKey = `${resource.uniqueId}:${downloads.length}:${galgameCount}:${patchCount}`;
+  const selectedBucket = selectedBucketState.resourceKey === resourceKey
+    ? selectedBucketState.bucket
+    : defaultBucket;
+  const handleBucketChange = (bucket: ResourceBucket) => {
+    setSelectedBucketState({ resourceKey, bucket });
+  };
 
   if (downloads.length === 0) {
     return (
@@ -306,8 +322,6 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
   const bucketed = downloads.filter((download) => toBucket(download) === selectedBucket);
   const official = bucketed.filter(isOfficialDownload);
   const community = bucketed.filter((download) => !isOfficialDownload(download));
-  const galgameCount = downloads.filter((download) => toBucket(download) === 'galgame').length;
-  const patchCount = downloads.filter((download) => toBucket(download) === 'patch').length;
   const resourceUpdatedAt = formatDate(resource.resourceUpdateTime ?? null);
   const kunPatchLink = resource.vndbId ? `${KUN_PATCH_WEBSITE_API}?vndb_id=${resource.vndbId}` : KUN_PATCH_WEBSITE_URL;
 
@@ -318,7 +332,7 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
           className={`rounded-xl px-5 py-2.5 text-sm font-black transition-colors ${
             selectedBucket === 'galgame' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
           }`}
-          onClick={() => setSelectedBucket('galgame')}
+          onClick={() => handleBucketChange('galgame')}
         >
           Galgame 资源
         </button>
@@ -326,7 +340,7 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
           className={`rounded-xl px-5 py-2.5 text-sm font-black transition-colors ${
             selectedBucket === 'patch' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
           }`}
-          onClick={() => setSelectedBucket('patch')}
+          onClick={() => handleBucketChange('patch')}
         >
           Galgame 补丁
         </button>

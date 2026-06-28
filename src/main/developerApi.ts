@@ -692,11 +692,14 @@ const normalizeDeveloperGameResource = (resource: DeveloperGameResource, index: 
     ? resource.description.trim()
     : null
   const size = sizes.length > 0 ? sizes.join(', ') : null
+  const section = categories.some((category) => ['patch', 'tool', 'notice'].includes(category))
+    ? 'patch'
+    : 'galgame'
 
   return {
     id: 0,
     name,
-    section: 'galgame',
+    section,
     size,
     url: deepLink,
     content: deepLink,
