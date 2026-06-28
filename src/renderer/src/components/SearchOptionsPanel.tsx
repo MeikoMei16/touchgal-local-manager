@@ -1,8 +1,8 @@
 import React from 'react';
-import { Boxes, Check, Languages, Search as SearchIcon, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Boxes, Check, Languages, Laptop, Search as SearchIcon, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { SortDropdown } from './SortDropdown';
 import type { HomeQueryState, HomeSortField, HomeSortOrder } from '../features/home/homeState';
-import { HOME_LANGUAGE_OPTIONS, HOME_TYPE_OPTIONS } from '../features/home/homeQuery';
+import { HOME_LANGUAGE_OPTIONS, HOME_PLATFORM_OPTIONS, HOME_TYPE_OPTIONS } from '../features/home/homeQuery';
 
 export interface SearchScopeOptions {
   searchInIntroduction: boolean;
@@ -15,6 +15,7 @@ interface SearchOptionsPanelProps {
   nsfwMode: HomeQueryState['nsfwMode'];
   selectedType: string;
   selectedLanguage: string;
+  selectedPlatform: string;
   sortField: HomeSortField;
   sortOrder: HomeSortOrder;
   disabled?: boolean;
@@ -22,6 +23,7 @@ interface SearchOptionsPanelProps {
   onCycleNsfwMode: () => void;
   onSelectType: (value: string) => void;
   onSelectLanguage: (value: string) => void;
+  onSelectPlatform: (value: string) => void;
   onSelectSortField: (field: HomeSortField) => void;
   onToggleSortOrder: () => void;
 }
@@ -55,6 +57,7 @@ export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
   nsfwMode,
   selectedType,
   selectedLanguage,
+  selectedPlatform,
   sortField,
   sortOrder,
   disabled,
@@ -62,6 +65,7 @@ export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
   onCycleNsfwMode,
   onSelectType,
   onSelectLanguage,
+  onSelectPlatform,
   onSelectSortField,
   onToggleSortOrder
 }) => (
@@ -161,6 +165,19 @@ export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
               disabled={disabled}
             >
               {HOME_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+            <Laptop size={16} className="text-slate-400" />
+            <select
+              className="bg-transparent font-bold outline-none disabled:cursor-not-allowed"
+              value={selectedPlatform}
+              onChange={(event) => onSelectPlatform(event.target.value)}
+              disabled={disabled}
+            >
+              {HOME_PLATFORM_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>

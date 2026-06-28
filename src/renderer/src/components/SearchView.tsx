@@ -77,6 +77,7 @@ export const SearchView: React.FC = () => {
   const [nsfwMode, setNsfwMode] = useState<HomeQueryState['nsfwMode']>('safe');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedLanguage, setSelectedLanguage] = useState('all');
+  const [selectedPlatform, setSelectedPlatform] = useState('all');
   const [sortField, setSortField] = useState<HomeSortField>('resource_update_time');
   const [sortOrder, setSortOrder] = useState<HomeSortOrder>('desc');
   const [localRatingResults, setLocalRatingResults] = useState<TouchGalResource[] | null>(null);
@@ -131,6 +132,7 @@ export const SearchView: React.FC = () => {
         nsfwMode,
         selectedType,
         selectedLanguage,
+        selectedPlatform,
         sortField,
         sortOrder
       })
@@ -158,7 +160,7 @@ export const SearchView: React.FC = () => {
         });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeKeyword, currentPage, isLocalRatingMode, nsfwMode, searchOptions, selectedLanguage, selectedType, setSessionError, sortField, sortOrder]);
+  }, [activeKeyword, currentPage, isLocalRatingMode, nsfwMode, searchOptions, selectedLanguage, selectedPlatform, selectedType, setSessionError, sortField, sortOrder]);
 
   useEffect(() => {
     if (!activeKeyword || !isLocalRatingMode) return undefined;
@@ -207,6 +209,7 @@ export const SearchView: React.FC = () => {
           nsfwMode,
           selectedType,
           selectedLanguage,
+          selectedPlatform,
           sortField: 'created',
           sortOrder: 'desc'
         });
@@ -230,6 +233,7 @@ export const SearchView: React.FC = () => {
             nsfwMode,
             selectedType,
             selectedLanguage,
+            selectedPlatform,
             sortField: 'created',
             sortOrder: 'desc'
           });
@@ -281,7 +285,7 @@ export const SearchView: React.FC = () => {
         });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeKeyword, isLocalRatingMode, nsfwMode, searchOptions, selectedLanguage, selectedType, setSessionError, sortOrder]);
+  }, [activeKeyword, isLocalRatingMode, nsfwMode, searchOptions, selectedLanguage, selectedPlatform, selectedType, setSessionError, sortOrder]);
 
   useEffect(() => {
     if (sortField !== 'rating' || !localRatingResults) return undefined;
@@ -344,6 +348,12 @@ export const SearchView: React.FC = () => {
     setCurrentPage(1);
     setJumpPage('1');
     setSelectedLanguage(value);
+  };
+
+  const updateSelectedPlatform = (value: string) => {
+    setCurrentPage(1);
+    setJumpPage('1');
+    setSelectedPlatform(value);
   };
 
   const updateSortField = (value: HomeSortField) => {
@@ -446,6 +456,7 @@ export const SearchView: React.FC = () => {
         nsfwMode={nsfwMode}
         selectedType={selectedType}
         selectedLanguage={selectedLanguage}
+        selectedPlatform={selectedPlatform}
         sortField={sortField}
         sortOrder={sortOrder}
         disabled={isLoading}
@@ -453,6 +464,7 @@ export const SearchView: React.FC = () => {
         onCycleNsfwMode={cycleNsfwMode}
         onSelectType={updateSelectedType}
         onSelectLanguage={updateSelectedLanguage}
+        onSelectPlatform={updateSelectedPlatform}
         onSelectSortField={updateSortField}
         onToggleSortOrder={toggleSortOrder}
       />
