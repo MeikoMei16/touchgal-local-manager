@@ -28,12 +28,15 @@ interface DeveloperSearchItem {
 
 interface DeveloperSearchPayload {
   items?: DeveloperSearchItem[]
-  pagination?: {
-    page?: number
-    limit?: number
-    total?: number
-    hasMore?: boolean
-  }
+  pagination?: DeveloperSearchPagination
+}
+
+interface DeveloperSearchPagination {
+  page?: number | string
+  limit?: number | string
+  total?: number | string
+  hasMore?: boolean
+  has_more?: boolean
 }
 
 interface DeveloperSearchOptions {
@@ -89,7 +92,12 @@ interface DeveloperNormalizedGame {
 interface DeveloperSearchResult {
   list: DeveloperNormalizedGame[]
   total: number
-  pagination: DeveloperSearchPayload['pagination'] | null
+  pagination: {
+    page?: number
+    limit?: number
+    total: number
+    hasMore: boolean
+  } | null
   source: 'developer-api'
 }
 
@@ -472,6 +480,25 @@ const normalizeDeveloperSearchItem = (item: DeveloperSearchItem): DeveloperNorma
   downloads: [],
 })
 
+const normalizeDeveloperNumber = (value: unknown) => {
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+const normalizeDeveloperPagination = (
+  pagination: DeveloperSearchPagination | undefined,
+  fallbackTotal: number
+): DeveloperSearchResult['pagination'] => {
+  if (!pagination) return null
+
+  return {
+    page: normalizeDeveloperNumber(pagination.page) ?? undefined,
+    limit: normalizeDeveloperNumber(pagination.limit) ?? undefined,
+    total: normalizeDeveloperNumber(pagination.total) ?? fallbackTotal,
+    hasMore: Boolean(pagination.hasMore ?? pagination.has_more),
+  }
+}
+
 const normalizeDeveloperRecommend = (recommend?: DeveloperRatingRecommend) => ({
   strong_no: recommend?.strongNo ?? recommend?.strong_no ?? 0,
   no: recommend?.no ?? 0,
@@ -614,6 +641,7 @@ export const fetchDeveloperGameSearch = async (
     )
     const data = unwrapDeveloperResponse(response.data)
     const items = Array.isArray(data.items) ? data.items : []
+    const pagination = normalizeDeveloperPagination(data.pagination, items.length)
     const list = items
       .map(normalizeDeveloperSearchItem)
       .filter((item) => item.uniqueId && item.name)
@@ -636,16 +664,16 @@ export const fetchDeveloperGameSearch = async (
       }
 
       const droppedHydrationCount = Math.max(0, list.length - hydrated.length)
-      const rawTotal = data.pagination?.total ?? items.length
+      const rawTotal = pagination?.total ?? items.length
       const total = Math.max(hydrated.length, rawTotal - droppedHydrationCount)
-      const pagination = data.pagination
-        ? { ...data.pagination, total }
+      const hydratedPagination = pagination
+        ? { ...pagination, total }
         : null
 
       const value = {
         list: hydrated,
         total,
-        pagination,
+        pagination: hydratedPagination,
         source: 'developer-api' as const,
       }
       searchCache.set(cacheKey, { expiresAt: Date.now() + DEVELOPER_SEARCH_CACHE_TTL_MS, value })
@@ -654,8 +682,8 @@ export const fetchDeveloperGameSearch = async (
 
     const value = {
       list,
-      total: data.pagination?.total ?? items.length,
-      pagination: data.pagination ?? null,
+      total: pagination?.total ?? items.length,
+      pagination,
       source: 'developer-api' as const,
     }
     searchCache.set(cacheKey, { expiresAt: Date.now() + DEVELOPER_SEARCH_CACHE_TTL_MS, value })
