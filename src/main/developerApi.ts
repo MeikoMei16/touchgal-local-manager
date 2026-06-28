@@ -271,6 +271,17 @@ const normalizeDeveloperNumber = (value: unknown) => {
   return Number.isFinite(numberValue) ? numberValue : null
 }
 
+const asDeveloperRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+
+const getDeveloperMinuteLimit = (data: Record<string, unknown>) => {
+  const rateLimit = asDeveloperRecord(data.rateLimit ?? data.rate_limit)
+  const quota = asDeveloperRecord(data.quota)
+  return data.minuteLimit ?? data.minute_limit ?? rateLimit.minute ?? quota.minute
+}
+
 const updateDeveloperRequestLimit = (minuteLimit: unknown) => {
   const limit = normalizeDeveloperNumber(minuteLimit)
   if (!limit || limit <= 0) return
@@ -735,9 +746,10 @@ export const fetchDeveloperApiStatus = async () => {
     client.get<DeveloperApiResponse<Record<string, unknown>>>('/me')
   )
   const data = unwrapDeveloperResponse(response.data)
-  updateDeveloperRequestLimit(data.minuteLimit ?? data.minute_limit)
+  updateDeveloperRequestLimit(getDeveloperMinuteLimit(data))
   const safeData = { ...data }
   delete safeData.tokenPrefix
+  delete safeData.token_prefix
 
   const value = {
     ...safeData,
