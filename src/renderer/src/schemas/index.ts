@@ -30,6 +30,19 @@ const nullableNumber = z.preprocess(
   z.coerce.number().nullable().catch(null)
 ).default(null);
 
+const booleanDefault = (fallback = false) =>
+  z.preprocess(
+    (value) => {
+      if (value == null || value === '') return fallback;
+      if (typeof value === 'string') {
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+      }
+      return value;
+    },
+    z.coerce.boolean().catch(fallback)
+  ).default(fallback);
+
 const stringArray = z.preprocess(
   (value) => {
     if (Array.isArray(value)) {
@@ -58,6 +71,9 @@ const arrayOf = <T extends z.ZodType>(schema: T) =>
 const objectInput = (value: unknown) =>
   value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 
+const objectRecord = (value: unknown): Record<string, unknown> =>
+  objectInput(value) as Record<string, unknown>;
+
 const companyDisplay = z.union([z.string(), z.array(z.any())]).nullable().optional().transform(val => {
   if (Array.isArray(val)) return val.map(i => i?.name || i).filter(Boolean).join(', ');
   return val ?? null;
@@ -83,6 +99,67 @@ const UserProfileCountSchema = z.preprocess(
     patch_favorite: numberDefault(),
   }).passthrough()
 );
+
+const normalizeUserProfileInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    id: raw.id ?? raw.uid,
+    follower: raw.follower ?? (raw._count as any)?.follower,
+    following: raw.following,
+  };
+};
+
+const normalizeUserCommentInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  const patch = objectRecord(raw.patch);
+  return {
+    ...raw,
+    createdAt: raw.createdAt ?? raw.created ?? '',
+    patchName: raw.patchName ?? raw.patch_name ?? patch.name ?? '',
+  };
+};
+
+const normalizeUserRatingInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  const patch = objectRecord(raw.patch);
+  return {
+    ...raw,
+    createdAt: raw.createdAt ?? raw.created ?? '',
+    patchName: raw.patchName ?? raw.patch_name ?? patch.name ?? '',
+    shortSummary: raw.shortSummary ?? raw.short_summary ?? '',
+    playStatus: raw.playStatus ?? raw.play_status ?? '',
+  };
+};
+
+const normalizeUserResourceInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    id: raw.patchId ?? raw.id ?? 0,
+    uniqueId: raw.patchUniqueId ?? raw.uniqueId ?? raw.unique_id ?? '',
+    name: raw.patchName ?? raw.name ?? '',
+    banner: raw.patchBanner ?? raw.banner ?? null,
+    created: raw.created ?? null,
+    averageRating: raw.averageRating ?? 0,
+    favoriteCount: raw.favoriteCount ?? 0,
+    resourceCount: raw.resourceCount ?? 0,
+    commentCount: raw.commentCount ?? 0,
+    viewCount: raw.viewCount ?? raw.view ?? 0,
+    downloadCount: raw.downloadCount ?? raw.download ?? 0,
+    ratingSummary: raw.ratingSummary ?? null,
+  };
+};
+
+const normalizeFavoriteFolderInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    is_public: raw.is_public ?? raw.isPublic ?? false,
+    isAdd: raw.isAdd ?? raw.is_add ?? false,
+    _count: raw._count ?? { patch: raw.patchCount ?? raw.count ?? 0 },
+  };
+};
 
 const TouchGalDownloadUserSchema = z.object({
   id: numberDefault(),
@@ -199,36 +276,73 @@ export const PatchIntroductionSchema = z.object({
   steamId: nullableString,
 }).passthrough();
 
-export const UserProfileSchema = z.object({
-  id: numberDefault(),
-  name: stringDefault(),
-  avatar: nullableString,
-  bio: nullableString,
-  moemoepoint: numberDefault(),
-  follower: numberDefault(),
-  following: numberDefault(),
-  _count: UserProfileCountSchema,
-}).passthrough();
+export const UserProfileSchema = z.preprocess(
+  normalizeUserProfileInput,
+  z.object({
+    id: numberDefault(),
+    uid: numberDefault(),
+    name: stringDefault(),
+    avatar: nullableString,
+    bio: nullableString,
+    moemoepoint: numberDefault(),
+    follower: numberDefault(),
+    following: numberDefault(),
+    _count: UserProfileCountSchema,
+  }).passthrough()
+).transform((user) => ({ ...user, uid: user.uid || user.id }));
 
-export const UserActivityCommentSchema = z.object({
-  id: numberDefault(),
-  content: stringDefault(),
-  createdAt: stringDefault(),
-  patchName: stringDefault(),
-}).passthrough();
+export const UserActivityCommentSchema = z.preprocess(
+  normalizeUserCommentInput,
+  z.object({
+    id: numberDefault(),
+    content: stringDefault(),
+    createdAt: stringDefault(),
+    patchName: stringDefault(),
+  }).passthrough()
+);
 
-export const UserActivityRatingSchema = z.object({
-  id: numberDefault(),
-  overall: numberDefault(),
-  recommend: stringDefault(),
-  shortSummary: stringDefault(),
-  playStatus: stringDefault(),
-  patchName: stringDefault(),
-}).passthrough();
+export const UserActivityRatingSchema = z.preprocess(
+  normalizeUserRatingInput,
+  z.object({
+    id: numberDefault(),
+    overall: numberDefault(),
+    recommend: stringDefault(),
+    shortSummary: stringDefault(),
+    playStatus: stringDefault(),
+    patchName: stringDefault(),
+    createdAt: stringDefault(),
+  }).passthrough()
+);
+
+export const UserResourceSchema = z.preprocess(normalizeUserResourceInput, TouchGalResourceSchema);
 
 export const UserActivityResponseSchema = z.object({
   total: numberDefault(),
   comments: arrayOf(UserActivityCommentSchema).optional(),
   ratings: arrayOf(UserActivityRatingSchema).optional(),
-  resources: arrayOf(TouchGalResourceSchema).optional(),
+  resources: arrayOf(UserResourceSchema).optional(),
+}).passthrough();
+
+export const FavoriteFolderSchema = z.preprocess(
+  normalizeFavoriteFolderInput,
+  z.object({
+    id: numberDefault(),
+    name: stringDefault(),
+    description: nullableString,
+    is_public: booleanDefault(),
+    isAdd: booleanDefault(),
+    _count: z.preprocess(
+      objectInput,
+      z.object({
+        patch: numberDefault(),
+      }).passthrough()
+    ),
+  }).passthrough()
+);
+
+export const FavoriteFolderListSchema = arrayOf(FavoriteFolderSchema);
+
+export const FavoriteFolderPatchResponseSchema = z.object({
+  patches: arrayOf(TouchGalResourceSchema),
+  total: numberDefault(),
 }).passthrough();

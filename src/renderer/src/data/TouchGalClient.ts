@@ -1,8 +1,51 @@
 import { 
   TouchGalFeedResponseSchema, 
   TouchGalDetailSchema, 
-  PatchIntroductionSchema 
+  PatchIntroductionSchema,
+  UserProfileSchema,
+  UserActivityResponseSchema,
+  FavoriteFolderListSchema,
+  FavoriteFolderPatchResponseSchema
 } from '../schemas';
+
+const asRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
+
+const normalizeUserActivityResponse = (
+  raw: unknown,
+  key: 'comments' | 'ratings' | 'resources'
+) => {
+  const data = asRecord(raw);
+  const list = Array.isArray(data[key])
+    ? data[key]
+    : Array.isArray(data.list)
+      ? data.list
+      : Array.isArray(data.galgames)
+        ? data.galgames
+        : [];
+
+  return {
+    total: data.total ?? list.length,
+    [key]: list
+  };
+};
+
+const normalizeFavoriteFolderPatchResponse = (raw: unknown) => {
+  const data = asRecord(raw);
+  const patches = Array.isArray(data.patches)
+    ? data.patches
+    : Array.isArray(data.list)
+      ? data.list
+      : Array.isArray(data.resources)
+        ? data.resources
+        : [];
+
+  return {
+    ...data,
+    patches,
+    total: data.total ?? patches.length
+  };
+};
 
 /**
  * TouchGalClient - Renderer Side
@@ -67,27 +110,43 @@ export const TouchGalClient = {
   },
 
   getUserStatus: async (id: number) => {
-    return await window.api.getUserStatus(id);
+    const raw = await window.api.getUserStatus(id);
+    return UserProfileSchema.parse(raw);
   },
 
   getUserStatusSelf: async () => {
-    return await window.api.getUserStatusSelf();
+    const raw = await window.api.getUserStatusSelf();
+    const data = asRecord(raw);
+    if (!data.uid && !data.id) return raw;
+    return UserProfileSchema.parse(raw);
   },
 
   getUserComments: async (uid: number, pageNum: number, limitNum: number) => {
-    return await window.api.getUserComments(uid, pageNum, limitNum);
+    const raw = await window.api.getUserComments(uid, pageNum, limitNum);
+    return UserActivityResponseSchema.parse(normalizeUserActivityResponse(raw, 'comments'));
   },
 
   getUserRatings: async (uid: number, pageNum: number, limitNum: number) => {
-    return await window.api.getUserRatings(uid, pageNum, limitNum);
+    const raw = await window.api.getUserRatings(uid, pageNum, limitNum);
+    return UserActivityResponseSchema.parse(normalizeUserActivityResponse(raw, 'ratings'));
   },
 
   getUserResources: async (uid: number, pageNum: number, limitNum: number) => {
-    return await window.api.getUserResources(uid, pageNum, limitNum);
+    const raw = await window.api.getUserResources(uid, pageNum, limitNum);
+    return UserActivityResponseSchema.parse(normalizeUserActivityResponse(raw, 'resources'));
   },
 
   getFavoriteFolders: async (uid: number, patchId?: number) => {
-    return await window.api.getFavoriteFolders(uid, patchId);
+    const raw = await window.api.getFavoriteFolders(uid, patchId);
+    const data = asRecord(raw);
+    const folders = Array.isArray(raw)
+      ? raw
+      : Array.isArray(data.folders)
+        ? data.folders
+        : Array.isArray(data.list)
+          ? data.list
+          : [];
+    return FavoriteFolderListSchema.parse(folders);
   },
 
   createFavoriteFolder: async (input: { name: string; description?: string; isPublic?: boolean }) => {
@@ -99,7 +158,8 @@ export const TouchGalClient = {
   },
 
   getFavoriteFolderPatches: async (folderId: number, pageNum: number, limitNum: number) => {
-    return await window.api.getFavoriteFolderPatches(folderId, pageNum, limitNum);
+    const raw = await window.api.getFavoriteFolderPatches(folderId, pageNum, limitNum);
+    return FavoriteFolderPatchResponseSchema.parse(normalizeFavoriteFolderPatchResponse(raw));
   },
 
   togglePatchFavorite: async (patchId: number, folderId: number) => {
