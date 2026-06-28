@@ -1245,6 +1245,7 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
 })
 
 const DEVELOPER_BROWSE_FALLBACK_KEYWORD = '恋'
+const DEVELOPER_FALLBACK_MAX_SCAN_PAGES = 6
 
 const getComparableTime = (value: unknown) => {
   if (typeof value !== 'string' || !value) return 0
@@ -1354,23 +1355,95 @@ const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
   })
 }
 
-const fetchDeveloperBrowseFallback = async (page: number, limit: number, query: any) => {
-  const developerResult = await fetchDeveloperGameSearch(
-    DEVELOPER_BROWSE_FALLBACK_KEYWORD,
-    page,
-    clampApiLimit(limit),
-    { hydrateDetails: true }
+const buildDeveloperFallbackTotal = (
+  start: number,
+  pageListLength: number,
+  filteredLength: number,
+  scannedHasMore: boolean,
+  pageSize: number
+) => {
+  const visibleTotal = start + pageListLength
+  if (!scannedHasMore) return Math.max(filteredLength, visibleTotal)
+  return pageListLength >= pageSize ? visibleTotal + 1 : Math.max(filteredLength, visibleTotal)
+}
+
+const fetchDeveloperFilteredFallback = async (input: {
+  keyword: string
+  page: number
+  limit: number
+  query: any
+  source: string
+  fallbackKeyword?: string
+  itemPredicate?: (game: any) => boolean
+}) => {
+  const safePage = Math.max(1, Number(input.page) || 1)
+  const pageSize = clampApiLimit(input.limit)
+  const start = (safePage - 1) * pageSize
+  const targetCount = start + pageSize
+  const collectedById = new Map<string, any>()
+  let lastResult: Awaited<ReturnType<typeof fetchDeveloperGameSearch>> | null = null
+  let hasMore = true
+
+  for (let currentPage = 1; currentPage <= DEVELOPER_FALLBACK_MAX_SCAN_PAGES; currentPage += 1) {
+    lastResult = await fetchDeveloperGameSearch(input.keyword, currentPage, pageSize, {
+      hydrateDetails: true,
+    })
+
+    for (const game of lastResult.list) {
+      if (!game.uniqueId || collectedById.has(game.uniqueId)) continue
+      collectedById.set(game.uniqueId, game)
+    }
+
+    const filtered = applyQueryToDeveloperFallbackList(
+      Array.from(collectedById.values()).filter((game) =>
+        input.itemPredicate ? input.itemPredicate(game) : true
+      ),
+      input.query
+    )
+
+    hasMore = Boolean(lastResult.pagination?.hasMore)
+    if (filtered.length >= targetCount || !hasMore) {
+      const list = filtered.slice(start, start + pageSize)
+      upsertNormalizedGames(filtered)
+      return {
+        list,
+        total: buildDeveloperFallbackTotal(start, list.length, filtered.length, hasMore, pageSize),
+        pagination: lastResult.pagination ?? null,
+        source: input.source,
+        fallbackKeyword: input.fallbackKeyword,
+        scannedPages: currentPage,
+      }
+    }
+  }
+
+  const filtered = applyQueryToDeveloperFallbackList(
+    Array.from(collectedById.values()).filter((game) =>
+      input.itemPredicate ? input.itemPredicate(game) : true
+    ),
+    input.query
   )
-  const list = applyQueryToDeveloperFallbackList(developerResult.list, query)
-  upsertNormalizedGames(list)
+  const list = filtered.slice(start, start + pageSize)
+  upsertNormalizedGames(filtered)
 
   return {
-    ...developerResult,
     list,
-    total: developerResult.total || list.length,
-    source: 'developer-api-browse-fallback',
-    fallbackKeyword: DEVELOPER_BROWSE_FALLBACK_KEYWORD
+    total: buildDeveloperFallbackTotal(start, list.length, filtered.length, hasMore, pageSize),
+    pagination: lastResult?.pagination ?? null,
+    source: input.source,
+    fallbackKeyword: input.fallbackKeyword,
+    scannedPages: DEVELOPER_FALLBACK_MAX_SCAN_PAGES,
   }
+}
+
+const fetchDeveloperBrowseFallback = async (page: number, limit: number, query: any) => {
+  return fetchDeveloperFilteredFallback({
+    keyword: DEVELOPER_BROWSE_FALLBACK_KEYWORD,
+    page,
+    limit,
+    query,
+    source: 'developer-api-browse-fallback',
+    fallbackKeyword: DEVELOPER_BROWSE_FALLBACK_KEYWORD,
+  })
 }
 
 const isDefaultSearchOption = (value: unknown) => {
@@ -2020,23 +2093,24 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
 
   const preferLegacySearch = shouldPreferLegacySearch(options)
   const fetchFromDeveloperApi = async (applyLocalOptions = false) => {
+    if (applyLocalOptions) {
+      return fetchDeveloperFilteredFallback({
+        keyword: normalizedKeyword,
+        page,
+        limit,
+        query: options,
+        source: 'developer-api-search-fallback',
+        itemPredicate: (game) => developerGameMatchesSearchOptions(game, normalizedKeyword, options),
+      })
+    }
+
     const developerResult = await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
       hydrateDetails: clampApiLimit(limit) <= 20,
     })
-    const list = applyLocalOptions
-      ? applyQueryToDeveloperFallbackList(
-          developerResult.list.filter((game) =>
-            developerGameMatchesSearchOptions(game, normalizedKeyword, options)
-          ),
-          options
-        )
-      : developerResult.list
-
-    upsertNormalizedGames(list)
+    upsertNormalizedGames(developerResult.list)
     return {
       ...developerResult,
-      list,
-      source: applyLocalOptions ? 'developer-api-search-fallback' : developerResult.source,
+      list: developerResult.list,
     }
   }
 
