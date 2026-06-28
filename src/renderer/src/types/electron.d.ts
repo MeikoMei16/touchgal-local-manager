@@ -54,6 +54,7 @@ export interface LocalCollectionItem {
   resourceCount?: number;
   commentCount?: number;
   ratingCount?: number;
+  ratingSummary?: unknown;
   introduction?: string | null;
   screenshots?: string[];
   pvUrl?: string | null;
@@ -89,6 +90,7 @@ export interface LocalCollectionGameInput {
   resourceCount?: number;
   commentCount?: number;
   ratingCount?: number;
+  ratingSummary?: unknown;
   introduction?: string | null;
   screenshots?: string[];
   pvUrl?: string | null;
@@ -117,6 +119,7 @@ export interface DownloadQueueGameMetadata {
   resourceCount?: number;
   commentCount?: number;
   ratingCount?: number;
+  ratingSummary?: unknown;
   introduction?: string | null;
   screenshots?: string[];
   pvUrl?: string | null;

@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('api', {
       resourceCount?: number,
       commentCount?: number,
       ratingCount?: number,
+      ratingSummary?: unknown,
       introduction?: string | null,
       screenshots?: string[],
       pvUrl?: string | null,

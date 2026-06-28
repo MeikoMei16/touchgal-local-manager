@@ -200,6 +200,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     resourceCount: resource.resourceCount,
     commentCount: resource.commentCount,
     ratingCount: resource.ratingCount,
+    ratingSummary: resource.ratingSummary,
     introduction: resource.introduction,
     screenshots: resource.screenshots,
     pvUrl: resource.pvUrl,

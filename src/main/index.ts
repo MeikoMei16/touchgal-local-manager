@@ -2998,6 +2998,7 @@ handleWithLog(
       resourceCount?: number
       commentCount?: number
       ratingCount?: number
+      ratingSummary?: unknown
       introduction?: string | null
       screenshots?: string[]
       pvUrl?: string | null
@@ -3423,6 +3424,7 @@ handleWithLog('tg-local-collections-add-item', async (_event, collectionId: numb
   resourceCount?: number
   commentCount?: number
   ratingCount?: number
+  ratingSummary?: unknown
   introduction?: string | null
   screenshots?: string[]
   pvUrl?: string | null

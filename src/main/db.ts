@@ -19,6 +19,7 @@ export interface LocalCollectionGamePayload {
   resourceCount?: number
   commentCount?: number
   ratingCount?: number
+  ratingSummary?: unknown
   introduction?: string | null
   screenshots?: string[]
   pvUrl?: string | null
@@ -48,6 +49,7 @@ export interface LocalCollectionItemRecord {
   resourceCount: number
   commentCount: number
   ratingCount: number
+  ratingSummary: unknown | null
   introduction: string | null
   screenshots: string[]
   pvUrl: string | null
@@ -715,6 +717,7 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
           resourceCount: typeof detail.resourceCount === 'number' ? detail.resourceCount : Number(detail.resourceCount) || 0,
           commentCount: typeof detail.commentCount === 'number' ? detail.commentCount : Number(detail.commentCount) || 0,
           ratingCount: typeof detail.ratingCount === 'number' ? detail.ratingCount : Number(detail.ratingCount) || 0,
+          ratingSummary: detail.ratingSummary && typeof detail.ratingSummary === 'object' ? detail.ratingSummary : null,
           introduction: readString(detail.introduction),
           screenshots: readStrings(detail.screenshots),
           pvUrl: readString(detail.pvUrl),

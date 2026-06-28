@@ -22,6 +22,45 @@ import type { LocalCollection, LocalCollectionGameInput, LocalCollectionItem } f
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 import QuickDownloadPopoverButton from './QuickDownloadPopoverButton';
 
+type TouchGalRatingSummary = NonNullable<TouchGalResource['ratingSummary']>;
+
+const toRatingSummary = (value: unknown): TouchGalResource['ratingSummary'] => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const recommend = record.recommend;
+  if (!recommend || typeof recommend !== 'object' || Array.isArray(recommend)) return null;
+
+  return {
+    average: typeof record.average === 'number' ? record.average : Number(record.average) || 0,
+    count: typeof record.count === 'number' ? record.count : Number(record.count) || 0,
+    histogram: Array.isArray(record.histogram)
+      ? record.histogram
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+        .map((entry) => ({
+          score: typeof entry.score === 'number' ? entry.score : Number(entry.score) || 0,
+          count: typeof entry.count === 'number' ? entry.count : Number(entry.count) || 0
+        }))
+      : [],
+    recommend: {
+      strong_no: typeof (recommend as Record<string, unknown>).strong_no === 'number'
+        ? (recommend as Record<string, unknown>).strong_no as number
+        : Number((recommend as Record<string, unknown>).strong_no) || 0,
+      no: typeof (recommend as Record<string, unknown>).no === 'number'
+        ? (recommend as Record<string, unknown>).no as number
+        : Number((recommend as Record<string, unknown>).no) || 0,
+      neutral: typeof (recommend as Record<string, unknown>).neutral === 'number'
+        ? (recommend as Record<string, unknown>).neutral as number
+        : Number((recommend as Record<string, unknown>).neutral) || 0,
+      yes: typeof (recommend as Record<string, unknown>).yes === 'number'
+        ? (recommend as Record<string, unknown>).yes as number
+        : Number((recommend as Record<string, unknown>).yes) || 0,
+      strong_yes: typeof (recommend as Record<string, unknown>).strong_yes === 'number'
+        ? (recommend as Record<string, unknown>).strong_yes as number
+        : Number((recommend as Record<string, unknown>).strong_yes) || 0
+    }
+  } satisfies TouchGalRatingSummary;
+};
+
 const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
   id: item.resourceId,
   uniqueId: item.uniqueId,
@@ -44,7 +83,7 @@ const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
   introduction: item.introduction ?? null,
   screenshots: item.screenshots ?? [],
   pvUrl: item.pvUrl ?? null,
-  ratingSummary: null,
+  ratingSummary: toRatingSummary(item.ratingSummary),
   company: item.company ?? null,
   companyAliases: item.companyAliases ?? [],
   resourceUpdateTime: item.resourceUpdateTime ?? null,
@@ -63,6 +102,7 @@ const toCollectionGameInput = (item: LocalCollectionItem): LocalCollectionGameIn
   resourceCount: item.resourceCount,
   commentCount: item.commentCount,
   ratingCount: item.ratingCount,
+  ratingSummary: item.ratingSummary,
   introduction: item.introduction,
   screenshots: item.screenshots,
   pvUrl: item.pvUrl,

@@ -59,6 +59,7 @@ interface QueueDownloadInput {
     resourceCount?: number
     commentCount?: number
     ratingCount?: number
+    ratingSummary?: unknown
     introduction?: string | null
     screenshots?: string[]
     pvUrl?: string | null
@@ -858,6 +859,7 @@ class DownloadManager {
         resourceCount: gameMetadata.resourceCount ?? 0,
         commentCount: gameMetadata.commentCount ?? 0,
         ratingCount: gameMetadata.ratingCount ?? 0,
+        ratingSummary: gameMetadata.ratingSummary ?? null,
         introduction: gameMetadata.introduction ?? null,
         screenshots: gameMetadata.screenshots ?? [],
         pvUrl: gameMetadata.pvUrl ?? null,
