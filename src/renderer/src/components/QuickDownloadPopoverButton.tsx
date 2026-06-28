@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Download, HardDrive, Languages, Loader2, X } from 'lucide-react'
+import { Download, ExternalLink, HardDrive, Languages, Loader2, X } from 'lucide-react'
 import type { TouchGalDownload } from '../types'
 import { TouchGalClient } from '../data/TouchGalClient'
 import { getDownloadDisplayName, getDownloadMetadataChips, getOfficialGalgameDownloads } from '../features/downloads/downloadHelpers'
@@ -29,6 +29,8 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [officialDownloads, setOfficialDownloads] = React.useState<TouchGalDownload[]>([])
+  const [touchgalUrl, setTouchgalUrl] = React.useState<string | null>(null)
+  const [isDeveloperOnlyDetail, setIsDeveloperOnlyDetail] = React.useState(false)
   const [activeDownloadIndex, setActiveDownloadIndex] = React.useState<number | null>(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const panelRef = React.useRef<HTMLDivElement>(null)
@@ -81,10 +83,14 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
         const detail = await TouchGalClient.getPatchDetail(uniqueId)
         if (cancelled) return
         setOfficialDownloads(getOfficialGalgameDownloads(detail.downloads ?? []))
+        setTouchgalUrl(detail.touchgalUrl ?? null)
+        setIsDeveloperOnlyDetail(!detail.id && Boolean(detail.touchgalUrl))
       } catch (loadError) {
         if (cancelled) return
         setError(loadError instanceof Error ? loadError.message : '读取官方资源失败')
         setOfficialDownloads([])
+        setTouchgalUrl(null)
+        setIsDeveloperOnlyDetail(false)
       } finally {
         if (!cancelled) {
           setIsLoading(false)
@@ -191,8 +197,23 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
                   正在读取 TouchGal 官方资源...
                 </div>
               ) : officialDownloads.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
-                  当前游戏没有可直接加入队列的 TouchGal 官方本体资源。
+                <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
+                  <div>
+                    {isDeveloperOnlyDetail
+                      ? '当前详情来自 TouchGal Developer API。新 API 暂未提供下载资源，可打开原站查看。'
+                      : '当前游戏没有可直接加入队列的 TouchGal 官方本体资源。'}
+                  </div>
+                  {touchgalUrl && (
+                    <a
+                      href={touchgalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-slate-700 shadow-sm hover:text-sky-700"
+                    >
+                      <span>打开原站</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
                 </div>
               ) : (
                 officialDownloads.map((download, index) => {

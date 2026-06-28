@@ -65,6 +65,10 @@ export const TouchGalResourceSchema = z.object({
     if (Array.isArray(val)) return val.join(', ');
     return val ?? '';
   }),
+  type: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
+    if (Array.isArray(val)) return val.filter(Boolean);
+    return val ? [val] : [];
+  }),
   created: z.string().nullable().default(null),
   releasedDate: z.string().nullable(),
   averageRating: z.number().default(0),

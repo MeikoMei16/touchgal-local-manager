@@ -28,19 +28,19 @@ export const createDetailActions = (set: UISetState, get: UIGetState) => ({
       if (activeDetailRequestKey !== uniqueId) return;
 
       const mergedDetail = mergeDetailResource(detail, basicInfo);
+      const remotePatchId = detail.id || 0;
       // Record browse history (fire-and-forget)
       if (mergedDetail.uniqueId) {
         void window.api.recordHistory({
           uniqueId: mergedDetail.uniqueId,
-          gameId: mergedDetail.id ?? null,
+          gameId: remotePatchId || null,
           name: mergedDetail.name ?? uniqueId,
           bannerUrl: mergedDetail.banner ?? null,
         })
       }
-      const finalId = mergedDetail.id || 0;
       const [comments, ratings] = await Promise.all([
-        finalId ? TouchGalClient.fetchPatchComments(finalId, 1, 50) : Promise.resolve({ list: [] }),
-        finalId ? TouchGalClient.fetchPatchRatings(finalId, 1, 50) : Promise.resolve({ list: [] })
+        remotePatchId ? TouchGalClient.fetchPatchComments(remotePatchId, 1, 50) : Promise.resolve({ list: [] }),
+        remotePatchId ? TouchGalClient.fetchPatchRatings(remotePatchId, 1, 50) : Promise.resolve({ list: [] })
       ]);
       if (activeDetailRequestKey !== uniqueId) return;
 

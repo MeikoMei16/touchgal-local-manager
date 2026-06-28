@@ -261,8 +261,56 @@ const sanitizeHref = (value: string) => {
   }
 }
 
+const uniqueSanitizedUrls = (values: Array<string | null | undefined>) => {
+  const seen = new Set<string>()
+  const urls: string[] = []
+
+  for (const value of values) {
+    if (!value) continue
+    const safeUrl = sanitizeHref(value.trim())
+    if (!safeUrl || seen.has(safeUrl)) continue
+    seen.add(safeUrl)
+    urls.push(safeUrl)
+  }
+
+  return urls
+}
+
+const extractMarkdownImageUrls = (markdown: string | null | undefined) => {
+  if (!markdown) return []
+
+  return uniqueSanitizedUrls(
+    Array.from(
+      markdown.matchAll(/!\[[^\]]*]\(\s*<?([^)\s>]+)>?(?:\s+["'][^"']*["'])?\s*\)/g),
+      (match) => match[1]
+    )
+  )
+}
+
+const isVideoUrl = (value: string) =>
+  /(youtube\.com|youtu\.be|bilibili\.com|player\.bilibili\.com|\.mp4(?:\?|$)|\.webm(?:\?|$)|\.ogg(?:\?|$)|\.mov(?:\?|$)|\.m3u8(?:\?|$)|\.flv(?:\?|$))/i.test(value)
+
+const extractPvUrlFromMarkdown = (markdown: string | null | undefined) => {
+  if (!markdown) return null
+
+  const candidates = uniqueSanitizedUrls([
+    ...Array.from(markdown.matchAll(/!?\[[^\]]+]\(\s*<?([^)\s>]+)>?(?:\s+["'][^"']*["'])?\s*\)/g), (match) => match[1]),
+    ...Array.from(markdown.matchAll(/https?:\/\/[^\s"'<>）)]+/gi), (match) => match[0]),
+  ])
+
+  return candidates.find(isVideoUrl) ?? null
+}
+
+const stripMarkdownMedia = (markdown: string) =>
+  markdown
+    .replace(/^\s*!\[[^\]]*]\(\s*<?[^)\s>]+>?(?:\s+["'][^"']*["'])?\s*\)\s*$/gm, '')
+    .replace(/^\s*(?:#{1,6}\s*)?(?:游戏截图|PV鉴赏|支持正版)\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
 const renderInlineMarkdown = (value: string) => {
   const escaped = escapeHtml(value)
+    .replace(/!\[([^\]]*)]\((https?:\/\/[^)\s]+)\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -276,6 +324,9 @@ const renderInlineMarkdown = (value: string) => {
 
 const markdownToBasicHtml = (markdown: string | null | undefined) => {
   if (!markdown || !markdown.trim()) return null
+
+  const strippedMarkdown = stripMarkdownMedia(markdown)
+  if (!strippedMarkdown) return null
 
   const blocks: string[] = []
   let paragraph: string[] = []
@@ -293,7 +344,7 @@ const markdownToBasicHtml = (markdown: string | null | undefined) => {
     listItems = []
   }
 
-  for (const rawLine of markdown.replace(/\r\n/g, '\n').split('\n')) {
+  for (const rawLine of strippedMarkdown.replace(/\r\n/g, '\n').split('\n')) {
     const line = rawLine.trim()
     if (!line) {
       flushParagraph()
@@ -364,6 +415,7 @@ const normalizeDeveloperSearchItem = (item: DeveloperSearchItem): DeveloperNorma
 export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): DeveloperNormalizedGame => {
   const average = raw.rating?.average ?? 0
   const count = raw.rating?.count ?? 0
+  const introductionMarkdown = raw.introduction ?? null
 
   return {
     id: 0,
@@ -393,12 +445,12 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
     releasedDate: raw.releaseDate ?? null,
     resourceUpdateTime: raw.resourceUpdateTime ?? raw.updatedAt ?? null,
     created: raw.publishTime ?? null,
-    introduction: markdownToBasicHtml(raw.introduction),
+    introduction: markdownToBasicHtml(introductionMarkdown),
     company: Array.isArray(raw.companies)
       ? raw.companies.map((company) => company?.name).filter(Boolean).join(', ') || null
       : null,
-    pvUrl: null,
-    screenshots: [],
+    pvUrl: extractPvUrlFromMarkdown(introductionMarkdown),
+    screenshots: extractMarkdownImageUrls(introductionMarkdown),
     detail: null,
     alias: Array.isArray(raw.aliases) ? raw.aliases.filter(Boolean) : [],
     vndbId: null,

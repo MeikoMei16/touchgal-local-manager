@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchGalDownload, TouchGalResource } from '../types';
-import { Check, Lock, Star, Download, Eye, HardDrive, Heart, Languages, Loader2, MessageSquare, Plus, X } from 'lucide-react';
+import { Check, Lock, Star, Download, Eye, ExternalLink, HardDrive, Heart, Languages, Loader2, MessageSquare, Plus, X } from 'lucide-react';
 import { useUIStore, useAuthStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import { TouchGalClient } from '../data/TouchGalClient';
@@ -38,6 +38,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
     createCollectionAndAdd
   } = useLocalCollectionStore();
   const isClickable = resource.uniqueId && resource.uniqueId.length === 8;
+  const hasRemotePatchId = Boolean(resource.id && resource.id > 0);
   const isDetailLoadingForCard = isDetailLoading && selectedResource?.uniqueId === resource.uniqueId;
   const visibleTags = Array.isArray(resource.tags) ? resource.tags.filter(Boolean).slice(0, 3) : [];
   const [isCollectMenuOpen, setIsCollectMenuOpen] = React.useState(false);
@@ -52,6 +53,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = React.useState(false);
   const [isDownloadMenuLoading, setIsDownloadMenuLoading] = React.useState(false);
   const [officialDownloads, setOfficialDownloads] = React.useState<TouchGalDownload[]>([]);
+  const [downloadTouchGalUrl, setDownloadTouchGalUrl] = React.useState<string | null>(null);
+  const [isDeveloperOnlyDownloadDetail, setIsDeveloperOnlyDownloadDetail] = React.useState(false);
   const [activeDownloadIndex, setActiveDownloadIndex] = React.useState<number | null>(null);
   const [collectMenuSide, setCollectMenuSide] = React.useState<'left' | 'right'>('right');
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -95,9 +98,9 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   const isFavoritedLocally = containingCollections.length > 0;
 
   React.useEffect(() => {
-    if (!hasLoaded) return;
+    if (hasLoaded || isCollectionLoading) return;
     void fetchCollections();
-  }, [fetchCollections, hasLoaded]);
+  }, [fetchCollections, hasLoaded, isCollectionLoading]);
 
   React.useEffect(() => {
     if (!isCollectMenuOpen && !isDownloadMenuOpen) return;
@@ -129,12 +132,12 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   }, [isCollectMenuOpen, isDownloadMenuOpen]);
 
   React.useEffect(() => {
-    if (!isCollectMenuOpen || hasLoaded) return;
+    if (!isCollectMenuOpen || hasLoaded || isCollectionLoading) return;
     void fetchCollections();
-  }, [fetchCollections, hasLoaded, isCollectMenuOpen]);
+  }, [fetchCollections, hasLoaded, isCollectMenuOpen, isCollectionLoading]);
 
   React.useEffect(() => {
-    if (!isCollectMenuOpen || !user || !resource.id) return;
+    if (!isCollectMenuOpen || !user || !hasRemotePatchId) return;
 
     let cancelled = false;
 
@@ -165,7 +168,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
     return () => {
       cancelled = true;
     };
-  }, [isCollectMenuOpen, resource.id, user]);
+  }, [hasRemotePatchId, isCollectMenuOpen, resource.id, user]);
 
   React.useEffect(() => {
     if (!isDownloadMenuOpen || !isClickable) return;
@@ -179,10 +182,14 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         const detail = await TouchGalClient.getPatchDetail(resource.uniqueId);
         if (cancelled) return;
         setOfficialDownloads(getOfficialGalgameDownloads(detail.downloads ?? []));
+        setDownloadTouchGalUrl(detail.touchgalUrl ?? null);
+        setIsDeveloperOnlyDownloadDetail(!detail.id && Boolean(detail.touchgalUrl));
       } catch (error) {
         if (cancelled) return;
         setDownloadQuickError(error instanceof Error ? error.message : '读取官方资源失败');
         setOfficialDownloads([]);
+        setDownloadTouchGalUrl(null);
+        setIsDeveloperOnlyDownloadDetail(false);
       } finally {
         if (!cancelled) {
           setIsDownloadMenuLoading(false);
@@ -230,7 +237,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   };
 
   const handleToggleCloudFolder = async (folderId: number) => {
-    if (!user || !resource.id) return;
+    if (!user || !hasRemotePatchId) return;
 
     setQuickError(null);
     setActiveCloudFolderId(folderId);
@@ -490,7 +497,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
             <section className="space-y-2.5 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">云端收藏</div>
-                {!user && (
+                {hasRemotePatchId && !user && (
                   <button
                     className="text-xs font-black text-primary transition-colors hover:text-primary/80"
                     onClick={() => setIsLoginOpen(true)}
@@ -500,7 +507,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
                   </button>
                 )}
               </div>
-              {!user ? (
+              {!hasRemotePatchId ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
+                  当前条目来自 Developer API 或本地缓存，暂不能直接同步云端收藏。
+                </div>
+              ) : !user ? (
                 <button
                   className="flex w-full items-center justify-between rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-xs font-bold text-slate-500 transition-all hover:border-slate-300 hover:bg-white"
                   onClick={() => setIsLoginOpen(true)}
@@ -604,8 +615,24 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
                   正在读取 TouchGal 官方资源...
                 </div>
               ) : officialDownloads.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
-                  当前游戏没有可直接加入队列的 TouchGal 官方本体资源。
+                <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
+                  <div>
+                    {isDeveloperOnlyDownloadDetail
+                      ? '当前详情来自 TouchGal Developer API。新 API 暂未提供下载资源，可打开原站查看。'
+                      : '当前游戏没有可直接加入队列的 TouchGal 官方本体资源。'}
+                  </div>
+                  {downloadTouchGalUrl && (
+                    <a
+                      href={downloadTouchGalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-slate-700 shadow-sm hover:text-sky-700"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <span>打开原站</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
                 </div>
               ) : (
                 officialDownloads.map((download, index) => {

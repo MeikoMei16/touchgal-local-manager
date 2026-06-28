@@ -23,12 +23,13 @@ import { CloudCollectionOverlay } from './CloudCollectionOverlay';
 import QuickDownloadPopoverButton from './QuickDownloadPopoverButton';
 
 const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
-  id: item.resourceId,
+  id: 0,
   uniqueId: item.uniqueId,
   name: item.name,
   banner: item.banner,
   platform: '',
   language: '',
+  type: [],
   created: null,
   releasedDate: null,
   averageRating: item.averageRating,
@@ -153,13 +154,6 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
   }, []);
 
   React.useEffect(() => {
-    setSelectedIds([]);
-    setSelectionMode(false);
-    setBulkTargetId('');
-    setActiveManageId(null);
-  }, [collection.id]);
-
-  React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
@@ -178,15 +172,15 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
       })
     : collection.items;
   const { totalDownloads, averageRating } = summarizeCollection(collection);
-  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+  const validSelectedIds = React.useMemo(
+    () => selectedIds.filter((uniqueId) => collection.items.some((item) => item.uniqueId === uniqueId)),
+    [collection.items, selectedIds]
+  );
+  const selectedSet = React.useMemo(() => new Set(validSelectedIds), [validSelectedIds]);
   const selectedItems = collection.items.filter((item) => selectedSet.has(item.uniqueId));
   const otherCollections = allCollections.filter((candidate) => candidate.id !== collection.id);
-  const hasSelected = selectedIds.length > 0;
+  const hasSelected = validSelectedIds.length > 0;
   const allVisibleSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedSet.has(item.uniqueId));
-
-  React.useEffect(() => {
-    setSelectedIds((current) => current.filter((uniqueId) => collection.items.some((item) => item.uniqueId === uniqueId)));
-  }, [collection.items]);
 
   const handleOpenResource = async (item: LocalCollectionItem) => {
     setActiveActionKey(`open:${item.uniqueId}`);
@@ -230,7 +224,7 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
       return;
     }
 
-    const merged = new Set(selectedIds);
+    const merged = new Set(validSelectedIds);
     filteredItems.forEach((item) => merged.add(item.uniqueId));
     setSelectedIds(Array.from(merged));
   };
@@ -424,7 +418,7 @@ const CollectionOverlay: React.FC<CollectionOverlayProps> = ({
                       }}
                       type="button"
                     >
-                      {selectionMode || hasSelected ? `批量模式 ${selectedIds.length}` : '开启批量选择'}
+                      {selectionMode || hasSelected ? `批量模式 ${validSelectedIds.length}` : '开启批量选择'}
                     </button>
                     <button
                       className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition-all hover:border-slate-300 hover:text-slate-900"
@@ -740,14 +734,6 @@ export const FavoritesView: React.FC = () => {
       void fetchUserActivity('collections');
     }
   }, [fetchUserActivity, user]);
-
-  React.useEffect(() => {
-    if (selectedCollectionId == null) return;
-    const stillExists = collections.some((collection) => collection.id === selectedCollectionId);
-    if (!stillExists) {
-      setSelectedCollectionId(null);
-    }
-  }, [collections, selectedCollectionId]);
 
   const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId) ?? null;
 
@@ -1175,6 +1161,7 @@ export const FavoritesView: React.FC = () => {
 
       {selectedCollection && (
         <CollectionOverlay
+          key={selectedCollection.id}
           actionError={actionError}
           allCollections={collections}
           collection={selectedCollection}

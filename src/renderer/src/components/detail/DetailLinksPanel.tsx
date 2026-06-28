@@ -244,13 +244,29 @@ export const DetailLinksPanel: React.FC<DetailLinksPanelProps> = ({ resource }) 
   const downloads = Array.isArray(resource.downloads)
     ? resource.downloads.filter((item) => getDownloadLinks(item).length > 0)
     : [];
+  const isDeveloperOnlyDetail = !resource.id && Boolean(resource.touchgalUrl);
 
   if (downloads.length === 0) {
     return (
       <div className="bg-white rounded-[2rem] p-12 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center gap-4">
         <Globe size={64} className="text-slate-200" />
         <h2 className="text-xl font-black text-slate-800">资源链接</h2>
-        <p className="text-slate-500 font-medium">当前条目还没有可用的下载直链。</p>
+        <p className="max-w-xl text-slate-500 font-medium">
+          {isDeveloperOnlyDetail
+            ? '当前详情来自 TouchGal Developer API。新 API 暂未提供下载资源，应用会在旧站验证可用时自动补齐下载链接。'
+            : '当前条目还没有可用的下载直链。'}
+        </p>
+        {resource.touchgalUrl && (
+          <a
+            href={resource.touchgalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-black text-white hover:bg-slate-800"
+          >
+            <span>打开 TouchGal 原站</span>
+            <ExternalLink size={16} />
+          </a>
+        )}
       </div>
     );
   }

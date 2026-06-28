@@ -28,7 +28,8 @@ import {
   removeLibraryRoot,
   removeItemFromLocalCollection,
   resetDatabase,
-  setArchiveExtractionDepthSetting
+  setArchiveExtractionDepthSetting,
+  upsertGame
 } from './db'
 import {
   buildTouchGalBaseHeaders,
@@ -370,6 +371,7 @@ log.info('Active HTTP profile:', {
 
 interface TouchGalAxiosRequestConfig extends AxiosRequestConfig {
   __touchGalChallengeRetried?: boolean
+  __touchGalSkipChallengeVerification?: boolean
 }
 
 const getHeaderValue = (headers: AxiosResponse['headers'] | undefined, key: string) => {
@@ -572,6 +574,10 @@ API_CLIENT.interceptors.response.use((response) => {
   if (isCloudflareChallengeResponse(error.response)) {
     const originalConfig = error.config as TouchGalAxiosRequestConfig | undefined
 
+    if (originalConfig?.__touchGalSkipChallengeVerification) {
+      throw new Error('TouchGal legacy API requires browser verification')
+    }
+
     if (originalConfig && !originalConfig.__touchGalChallengeRetried) {
       originalConfig.__touchGalChallengeRetried = true
       log.warn('[API] TouchGal returned Cloudflare challenge; opening browser verification window')
@@ -690,6 +696,11 @@ const asArray = (value: string[] | string | null | undefined): string[] => {
   if (typeof value === 'string' && value.trim()) return [value]
   return []
 }
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
 
 const uniqueUrls = (values: Array<string | null | undefined>) => {
   const seen = new Set<string>()
@@ -878,8 +889,15 @@ const normalizeResource = (resource: any) => {
     pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
     screenshots,
     detail, // Critical for screenshots
-    alias: raw.alias ?? [],
+    alias: asStringArray(raw.alias),
     vndbId: raw.vndbId ?? raw.vndb_id ?? null,
+    bangumiId: raw.bangumiId ?? raw.bangumi_id ?? null,
+    steamId: raw.steamId != null ? String(raw.steamId) : raw.steam_id != null ? String(raw.steam_id) : null,
+    contentLimit: raw.contentLimit ?? raw.content_limit ?? null,
+    platform: asArray(raw.platform),
+    language: asArray(raw.language),
+    type: asArray(raw.type),
+    touchgalUrl: raw.touchgalUrl ?? raw.touchgal_url ?? null,
   }
 }
 
@@ -935,6 +953,121 @@ const normalizeFeedResponse = (payload: { galgames?: RawResource[]; resources?: 
   return {
     list,
     total: payload.total ?? 0,
+  }
+}
+
+const upsertNormalizedGames = (games: Array<{
+  id: number
+  uniqueId: string
+  name: string
+  banner?: string | null
+  averageRating?: number
+  viewCount?: number
+  downloadCount?: number
+  alias?: string[]
+  tags?: string[]
+  platform?: string[]
+  language?: string[]
+  type?: string[]
+  releasedDate?: string | null
+  resourceUpdateTime?: string | null
+  touchgalUrl?: string | null
+}>) => {
+  for (const game of games) {
+    if (!game.uniqueId || !game.name) continue
+    upsertGame({
+      id: game.id,
+      uniqueId: game.uniqueId,
+      name: game.name,
+      banner: game.banner ?? null,
+      averageRating: game.averageRating ?? 0,
+      viewCount: game.viewCount ?? 0,
+      downloadCount: game.downloadCount ?? 0,
+      alias: Array.isArray(game.alias) ? game.alias : [],
+      tags: Array.isArray(game.tags) ? game.tags : [],
+      platform: Array.isArray(game.platform) ? game.platform : [],
+      language: Array.isArray(game.language) ? game.language : [],
+      type: Array.isArray(game.type) ? game.type : [],
+      releasedDate: game.releasedDate ?? null,
+      resourceUpdateTime: game.resourceUpdateTime ?? null,
+      touchgalUrl: game.touchgalUrl ?? null
+    })
+  }
+}
+
+const parseCachedGameDetail = (value: unknown) => {
+  if (typeof value !== 'string' || !value.trim()) return {}
+  try {
+    return JSON.parse(value) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+const fetchCachedGameFeed = (page: number, limit: number) => {
+  const safePage = Math.max(1, Number(page) || 1)
+  const safeLimit = clampApiLimit(limit)
+  const offset = (safePage - 1) * safeLimit
+  const db = getDb()
+  const total = (db.prepare('SELECT COUNT(*) AS count FROM games').get() as { count: number }).count
+  const rows = db.prepare(`
+    SELECT
+      id,
+      unique_id AS uniqueId,
+      name,
+      banner_url AS banner,
+      avg_rating AS averageRating,
+      view_count AS viewCount,
+      download_count AS downloadCount,
+      detail_json AS detailJson,
+      local_updated_at AS resourceUpdateTime
+    FROM games
+    ORDER BY local_updated_at DESC, id DESC
+    LIMIT ? OFFSET ?
+  `).all(safeLimit, offset)
+
+  return {
+    list: rows.map((row: any) => {
+      const detail = parseCachedGameDetail(row.detailJson)
+      return {
+        id: 0,
+        uniqueId: row.uniqueId ?? '',
+        name: row.name ?? 'Unknown title',
+        banner: row.banner ?? null,
+        averageRating: row.averageRating ?? 0,
+        ratingCount: 0,
+        ratingSummary: null,
+        tags: asStringArray(detail.tags),
+        viewCount: row.viewCount ?? 0,
+        downloadCount: row.downloadCount ?? 0,
+        favoriteCount: 0,
+        resourceCount: 0,
+        commentCount: 0,
+        releasedDate: typeof detail.releasedDate === 'string' ? detail.releasedDate : null,
+        resourceUpdateTime:
+          typeof detail.resourceUpdateTime === 'string'
+            ? detail.resourceUpdateTime
+            : row.resourceUpdateTime ?? null,
+        created: null,
+        company: null,
+        pvUrl: null,
+        screenshots: [],
+        detail: null,
+        alias: asStringArray(detail.alias),
+        vndbId: null,
+        bangumiId: null,
+        steamId: null,
+        contentLimit: null,
+        platform: asStringArray(detail.platform),
+        language: asStringArray(detail.language),
+        type: asStringArray(detail.type),
+        touchgalUrl: typeof detail.touchgalUrl === 'string' ? detail.touchgalUrl : null,
+        downloads: [],
+        source: 'local-cache'
+      }
+    }),
+    total,
+    source: 'local-cache'
   }
 }
 
@@ -1078,10 +1211,17 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
   }
 }
 
-const fetchLegacyPatchDetail = async (uniqueId: string) => {
+const fetchLegacyPatchDetail = async (
+  uniqueId: string,
+  options: { skipChallengeVerification?: boolean } = {}
+) => {
+  const legacyRequestConfig: TouchGalAxiosRequestConfig = options.skipChallengeVerification
+    ? { __touchGalSkipChallengeVerification: true }
+    : {}
+
   const [detailResponse, introResponse] = await Promise.all([
-    API_CLIENT.get('/patch', { params: { uniqueId } }),
-    API_CLIENT.get('/patch/introduction', { params: { uniqueId } }),
+    API_CLIENT.get('/patch', { ...legacyRequestConfig, params: { uniqueId } }),
+    API_CLIENT.get('/patch/introduction', { ...legacyRequestConfig, params: { uniqueId } }),
   ])
 
   const detail = normalizeResource(ensureValidResponse(detailResponse.data))
@@ -1090,7 +1230,10 @@ const fetchLegacyPatchDetail = async (uniqueId: string) => {
   let downloads: any[] = []
   try {
     if (detail.id) {
-      const dlResponse = await API_CLIENT.get('/patch/resource', { params: { patchId: detail.id } })
+      const dlResponse = await API_CLIENT.get('/patch/resource', {
+        ...legacyRequestConfig,
+        params: { patchId: detail.id }
+      })
       downloads = normalizeDownloads(ensureValidResponse(dlResponse.data))
     }
   } catch {
@@ -1098,6 +1241,15 @@ const fetchLegacyPatchDetail = async (uniqueId: string) => {
   }
 
   return { ...detail, ...intro, downloads }
+}
+
+const fetchLegacyPatchDetailWhenAccessible = async (uniqueId: string) => {
+  if (!(await hasTouchGalClearanceCookie())) {
+    log.info(`[API] Skipping legacy detail hydration for ${uniqueId}; TouchGal clearance cookie is not available`)
+    return null
+  }
+
+  return fetchLegacyPatchDetail(uniqueId, { skipChallengeVerification: true })
 }
 
 interface ScannedLibraryFolder {
@@ -1556,12 +1708,16 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     log.info('[API] GET /galgame success, items:', response.data?.galgames?.length);
     const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-      // TODO: decide which resource fields deserve durable SQLite storage before enabling
-      // normalized.list.forEach(upsertGame)
+    upsertNormalizedGames(normalized.list)
 
     return normalized
   } catch (err: any) {
     log.error('[API] GET /galgame error:', err.response?.data || err.message);
+    const cached = fetchCachedGameFeed(page, limit)
+    if (cached.list.length > 0) {
+      log.warn(`[API] GET /galgame failed; returning ${cached.list.length} cached games`)
+      return cached
+    }
     throw err;
   }
 })
@@ -1574,9 +1730,11 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
 
   if (isTouchGalDeveloperApiConfigured()) {
     try {
-      return await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
+      const developerResult = await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
         hydrateDetails: clampApiLimit(limit) <= 20,
       })
+      upsertNormalizedGames(developerResult.list)
+      return developerResult
     } catch (error) {
       log.warn('[Developer API] GET /games/search failed, falling back to legacy /search:', getSafeErrorMessage(error))
     }
@@ -1590,8 +1748,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
   })
   const normalized = normalizeFeedResponse(ensureValidResponse(response.data))
 
-  // TODO: decide which resource fields deserve durable SQLite storage before enabling
-  // normalized.list.forEach(upsertGame)
+  upsertNormalizedGames(normalized.list)
 
   return normalized
 })
@@ -1612,7 +1769,7 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
 
   if (developerDetail) {
     try {
-      const legacyDetail = await fetchLegacyPatchDetail(uniqueId)
+      const legacyDetail = await fetchLegacyPatchDetailWhenAccessible(uniqueId)
       return mergeDeveloperAndLegacyDetail(developerDetail, legacyDetail)
     } catch (error) {
       log.warn(`[API] Legacy detail fallback failed for ${uniqueId}; using developer API detail only:`, getSafeErrorMessage(error))
@@ -1724,7 +1881,7 @@ handleWithLog('tg-match-folder', async (_event, folderName: string) => {
   const cleaned = cleanFolderName(folderName)
   const db = getDb()
 
-  // Search in FTS5 (matches both main title and aliases)
+  // Search titles through FTS5 first; aliases are stored in detail_json and checked below.
   const results = db.prepare(`
     SELECT g.* FROM games g
     JOIN games_fts f ON g.id = f.rowid
@@ -1732,7 +1889,64 @@ handleWithLog('tg-match-folder', async (_event, folderName: string) => {
     LIMIT 10
   `).all(cleaned + '*')
 
-  return results
+  if (results.length > 0 || !cleaned) {
+    return results
+  }
+
+  const normalizedCleaned = cleaned.toLocaleLowerCase()
+  const aliasMatches = (db.prepare(`
+    SELECT g.* FROM games g
+    WHERE g.detail_json IS NOT NULL
+    ORDER BY g.local_updated_at DESC
+  `).all() as Array<any>)
+    .filter((row) => {
+      try {
+        const detail = JSON.parse(row.detail_json) as { alias?: unknown }
+        const aliases = Array.isArray(detail.alias) ? detail.alias : []
+        return aliases.some((alias) =>
+          typeof alias === 'string' &&
+          cleanFolderName(alias).toLocaleLowerCase().startsWith(normalizedCleaned)
+        )
+      } catch {
+        return false
+      }
+    })
+    .slice(0, 10)
+
+  if (aliasMatches.length > 0 || !isTouchGalDeveloperApiConfigured()) {
+    return aliasMatches
+  }
+
+  try {
+    const developerMatches = await fetchDeveloperGameSearch(cleaned, 1, 10, { hydrateDetails: true })
+    const rows = developerMatches.list
+      .map((game) => {
+        const gameId = upsertGame({
+          id: game.id,
+          uniqueId: game.uniqueId,
+          name: game.name,
+          banner: game.banner,
+          averageRating: game.averageRating,
+          viewCount: game.viewCount,
+          downloadCount: game.downloadCount,
+          alias: game.alias,
+          tags: game.tags,
+          platform: game.platform,
+          language: game.language,
+          type: game.type,
+          releasedDate: game.releasedDate,
+          resourceUpdateTime: game.resourceUpdateTime,
+          touchgalUrl: game.touchgalUrl
+        })
+        return db.prepare('SELECT g.* FROM games g WHERE g.id = ?').get(gameId)
+      })
+      .filter(Boolean)
+
+    return rows
+  } catch (error) {
+    log.warn(`[Developer API] Folder match fallback failed for "${cleaned}":`, getSafeErrorMessage(error))
+    return results
+  }
 })
 
 handleWithLog('tg-link-folder', async (_event, folderPath: string, uniqueId: string) => {

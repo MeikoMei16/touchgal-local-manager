@@ -44,6 +44,16 @@ const RESOURCE_PLATFORM_LABELS: Record<string, string> = {
 const mapResourceTypeLabel = (value: string) => RESOURCE_TYPE_LABELS[value] ?? value;
 const mapResourceLanguageLabel = (value: string) => RESOURCE_LANGUAGE_LABELS[value] ?? value;
 const mapResourcePlatformLabel = (value: string) => RESOURCE_PLATFORM_LABELS[value] ?? value;
+const asStringArray = (value: unknown) => {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()));
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
 
 interface DetailHeaderProps {
   autoOpenCollectionMenu?: boolean;
@@ -69,16 +79,32 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     removeFromCollection
   } = useLocalCollectionStore();
   const { user, fetchUserActivity, setIsLoginOpen } = useAuthStore();
-  const [isCollectionMenuOpen, setIsCollectionMenuOpen] = React.useState(false);
+  const autoOpenCollectionKey = autoOpenCollectionMenu ? resource.uniqueId : null;
+  const [isCollectionMenuOpenManual, setIsCollectionMenuOpenManual] = React.useState(false);
+  const [dismissedAutoOpenCollectionKey, setDismissedAutoOpenCollectionKey] = React.useState<string | null>(null);
+  const isCollectionMenuOpen =
+    isCollectionMenuOpenManual ||
+    (autoOpenCollectionKey !== null && dismissedAutoOpenCollectionKey !== autoOpenCollectionKey);
   const [newCollectionName, setNewCollectionName] = React.useState('');
   const [collectionError, setCollectionError] = React.useState<string | null>(null);
   const [isSavingCollection, setIsSavingCollection] = React.useState(false);
   const [isCloudCollectionsLoading, setIsCloudCollectionsLoading] = React.useState(false);
   const [activeCloudFolderId, setActiveCloudFolderId] = React.useState<number | null>(null);
   const [cloudFolders, setCloudFolders] = React.useState<any[]>([]);
+  const hasRemotePatchId = Boolean(resource.id && resource.id > 0);
   const resourceTags = React.useMemo(() => {
     const seen = new Set<string>();
     const tags: string[] = [];
+
+    const addTag = (value: string | null | undefined) => {
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      tags.push(value);
+    };
+
+    for (const value of asStringArray(resource.type).map(mapResourceTypeLabel)) addTag(value);
+    for (const value of asStringArray(resource.language).map(mapResourceLanguageLabel)) addTag(value);
+    for (const value of asStringArray(resource.platform).map(mapResourcePlatformLabel)) addTag(value);
 
     for (const download of resource.downloads ?? []) {
       const values = [
@@ -89,14 +115,12 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
       ].filter((value): value is string => Boolean(value));
 
       for (const value of values) {
-        if (seen.has(value)) continue;
-        seen.add(value);
-        tags.push(value);
+        addTag(value);
       }
     }
 
     return tags;
-  }, [resource.downloads]);
+  }, [resource.downloads, resource.language, resource.platform, resource.type]);
   const containingCollections = React.useMemo(
     () => collections.filter((collection) => collection.items.some((item) => item.uniqueId === resource.uniqueId)),
     [collections, resource.uniqueId]
@@ -104,18 +128,12 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
   const isFavoritedLocally = containingCollections.length > 0;
 
   React.useEffect(() => {
-    if (!hasLoaded) {
-      void fetchCollections();
-    }
-  }, [fetchCollections, hasLoaded]);
+    if (hasLoaded || isCollectionLoading) return;
+    void fetchCollections();
+  }, [fetchCollections, hasLoaded, isCollectionLoading]);
 
   React.useEffect(() => {
-    if (!autoOpenCollectionMenu) return;
-    setIsCollectionMenuOpen(true);
-  }, [autoOpenCollectionMenu, resource.uniqueId]);
-
-  React.useEffect(() => {
-    if (!isCollectionMenuOpen || !user || !resource.id) return;
+    if (!isCollectionMenuOpen || !user || !hasRemotePatchId) return;
 
     let isMounted = true;
 
@@ -146,7 +164,26 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isCollectionMenuOpen, resource.id, user]);
+  }, [hasRemotePatchId, isCollectionMenuOpen, resource.id, user]);
+
+  const closeCollectionMenu = () => {
+    setIsCollectionMenuOpenManual(false);
+    if (autoOpenCollectionKey) {
+      setDismissedAutoOpenCollectionKey(autoOpenCollectionKey);
+    }
+  };
+
+  const toggleCollectionMenu = () => {
+    if (isCollectionMenuOpen) {
+      closeCollectionMenu();
+      return;
+    }
+
+    setIsCollectionMenuOpenManual(true);
+    if (autoOpenCollectionKey) {
+      setDismissedAutoOpenCollectionKey(null);
+    }
+  };
 
   const resourcePayload = React.useMemo(() => ({
     id: resource.id,
@@ -192,7 +229,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
   };
 
   const handleAddToCloudCollection = async (folderId: number) => {
-    if (!user || !resource.id) return;
+    if (!user || !hasRemotePatchId) return;
 
     setCollectionError(null);
     setActiveCloudFolderId(folderId);
@@ -284,7 +321,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                         ? 'border-rose-200 bg-rose-50 text-rose-500'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
-                    onClick={() => setIsCollectionMenuOpen((current) => !current)}
+                    onClick={toggleCollectionMenu}
                     type="button"
                   >
                     <Heart size={20} fill={isFavoritedLocally ? 'currentColor' : 'none'} />
@@ -300,7 +337,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                         </div>
                         <button
                           className="text-xs font-black text-slate-400 hover:text-slate-700"
-                          onClick={() => setIsCollectionMenuOpen(false)}
+                          onClick={closeCollectionMenu}
                           type="button"
                         >
                           关闭
@@ -354,7 +391,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                       <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">云端收藏</div>
-                          {!user && (
+                          {hasRemotePatchId && !user && (
                             <button
                               className="text-xs font-black text-blue-600 hover:text-blue-700"
                               onClick={() => setIsLoginOpen(true)}
@@ -364,22 +401,27 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                             </button>
                           )}
                         </div>
-                        {!user && (
+                        {!hasRemotePatchId && (
+                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
+                            当前详情来自 Developer API 或本地缓存，暂不能直接同步云端收藏。
+                          </div>
+                        )}
+                        {hasRemotePatchId && !user && (
                           <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
                             登录后可查看云端收藏夹。
                           </div>
                         )}
-                        {user && isCloudCollectionsLoading && (
+                        {hasRemotePatchId && user && isCloudCollectionsLoading && (
                           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
                             正在读取云端收藏夹...
                           </div>
                         )}
-                        {user && !isCloudCollectionsLoading && cloudFolders.length === 0 && (
+                        {hasRemotePatchId && user && !isCloudCollectionsLoading && cloudFolders.length === 0 && (
                           <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
                             暂无云端收藏夹。
                           </div>
                         )}
-                        {cloudFolders.map((folder: any) => (
+                        {hasRemotePatchId && cloudFolders.map((folder: any) => (
                           <button
                             key={folder.id}
                             className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-all ${

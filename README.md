@@ -20,12 +20,13 @@
 
 ### 🔍 浏览与搜索
 - 首页高级筛选：标签、年份、评分排序，全部在本地管线完成
-- 独立搜索页：关键词模糊搜索、范围开关、上游排序、NSFW 域切换
+- 独立搜索页：优先使用 TouchGal Developer API，旧站接口仅作为兜底
 - 搜索评分排序在本地候选集上重建，带实时进度与增量渲染
 - 浏览状态持久化 —— 刷新、切页再回来，位置还在
 
 ### 📖 详情与截图
 - 详情弹层集成：介绍、截图 / PV、分组资源链接、评分、评论
+- Developer API 详情可独立展示；旧站通过 Cloudflare 验证后再补充下载与社交数据
 - 全屏截图查看器，支持左右箭头与键盘导航
 - Session 感知门禁 —— 需要登录的社交数据在登录后自动刷新
 - `Esc` 分层关闭：先关截图，再关详情
@@ -54,6 +55,7 @@
 - 主进程统一中转上游 API 与 session / token 规范化
 - 启动时主进程重新验证登录状态，不盲信渲染层缓存
 - 持久化 token + 认证 cookies，失效时自动清理
+- 支持 `TOUCHGAL_DEVELOPER_API_KEY` / `TOUCHGAL_API_KEY` / `TGAL_API_KEY`，也兼容本地 `.env` 裸 `tgal_*` token
 
 ### ⚙️ 设置
 - 可配置：下载目录、详情页右键行为、下载并发数、递归解压层数
@@ -117,7 +119,8 @@ pnpm build:linux
 ## ⚠️ 已知限制
 
 - **评分排序的完整性**受限于上游候选集 —— 本地管线能修复页序漂移与去重，但无法补回上游未返回的资源
-- 首页 feed 卡片目前仅显示 `/api/galgame` 返回的标签子集，更完整标签可能只存在于 `/api/patch/introduction`
+- Developer API 目前没有可用的通用 feed 端点，首页 feed 仍依赖旧站 `/api/galgame`
+- 未完成旧站 Cloudflare 验证时，详情页会先显示 Developer API 可提供的介绍、截图、PV、标签和评分；下载资源、评论、云端收藏等旧站数据会降级为空或等待验证后再补齐
 - `reference_project/` 为参考材料，已被 lint 规则排除
 
 ---
@@ -142,7 +145,7 @@ pnpm build:linux
   </tr>
 </table>
 
-- **原站：** [touchgal.top](https://www.touchgal.top/)
+- **原站：** [touchgal.ink](https://www.touchgal.ink/)
 - **仓库：** [GitHub](https://github.com/MeikoMei16/touchgal-local-manager)
 
 > 本项目是开源且免费的**第三方**桌面工具，非 TouchGal 官方客户端。

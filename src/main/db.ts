@@ -239,50 +239,50 @@ export const initDb = () => {
   // Ensure columns exist for existing DBs
   try {
     db.exec(`ALTER TABLE games ADD COLUMN detail_json TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE games ADD COLUMN last_detailed_at DATETIME;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN source_url TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN remote_path TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN display_name TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN output_path TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN error_message TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
 
   // local_paths schema migrations
   try {
     db.exec(`ALTER TABLE local_paths ADD COLUMN source TEXT CHECK(source IN ('scan','download','manual')) DEFAULT 'scan';`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE local_paths ADD COLUMN status TEXT CHECK(status IN ('discovered','linked','verified','broken')) DEFAULT 'discovered';`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE local_paths ADD COLUMN last_verified_at DATETIME;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`ALTER TABLE local_paths ADD COLUMN last_opened_at DATETIME;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
   try {
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS local_paths_path_uidx ON local_paths(path);`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
 
   // download_tasks: track extracted path after decompression
   try {
     db.exec(`ALTER TABLE download_tasks ADD COLUMN extracted_path TEXT;`)
-  } catch (e) { /* already exists */ }
+  } catch { /* already exists */ }
 
   // Browse history
   db.exec(`
@@ -351,45 +351,113 @@ export const upsertGame = (game: {
   viewCount?: number
   downloadCount?: number
   alias?: string[]
+  tags?: string[]
+  platform?: string[]
+  language?: string[]
+  type?: string[]
+  releasedDate?: string | null
+  resourceUpdateTime?: string | null
+  touchgalUrl?: string | null
 }) => {
   const db = getDb()
-  const insertStmt = db.prepare(`
-    INSERT INTO games (id, unique_id, name, banner_url, avg_rating, view_count, download_count)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(unique_id) DO UPDATE SET
-      name = excluded.name,
-      banner_url = excluded.banner_url,
-      avg_rating = excluded.avg_rating,
-      view_count = excluded.view_count,
-      download_count = excluded.download_count,
-      local_updated_at = CURRENT_TIMESTAMP
-  `)
-
-  insertStmt.run(
-    game.id,
-    game.uniqueId,
-    game.name,
-    game.banner ?? null,
-    game.averageRating ?? 0,
-    game.viewCount ?? 0,
-    game.downloadCount ?? 0
-  )
-
-  // Sync Aliases
-  if (game.alias && game.alias.length > 0) {
-    const insertAlias = db.prepare(`
-        INSERT INTO games_fts(rowid, name) VALUES (?, ?)
+  const hasRemoteNumericId = Number.isInteger(game.id) && game.id > 0
+  const insertStmt = hasRemoteNumericId
+    ? db.prepare(`
+      INSERT INTO games (id, unique_id, name, banner_url, avg_rating, view_count, download_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(unique_id) DO UPDATE SET
+        name = excluded.name,
+        banner_url = excluded.banner_url,
+        avg_rating = excluded.avg_rating,
+        view_count = excluded.view_count,
+        download_count = excluded.download_count,
+        local_updated_at = CURRENT_TIMESTAMP
+    `)
+    : db.prepare(`
+      INSERT INTO games (unique_id, name, banner_url, avg_rating, view_count, download_count)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(unique_id) DO UPDATE SET
+        name = excluded.name,
+        banner_url = excluded.banner_url,
+        avg_rating = excluded.avg_rating,
+        view_count = excluded.view_count,
+        download_count = excluded.download_count,
+        local_updated_at = CURRENT_TIMESTAMP
     `)
 
-    // We also use FTS5 for aliases to improve search coverage
-    for (const altName of game.alias) {
-      if (altName) {
-        try {
-            insertAlias.run(game.id, altName)
-        } catch { /* ignore if rowid exists in FTS, or handle mapping */ }
-      }
-    }
+  if (hasRemoteNumericId) {
+    insertStmt.run(
+      game.id,
+      game.uniqueId,
+      game.name,
+      game.banner ?? null,
+      game.averageRating ?? 0,
+      game.viewCount ?? 0,
+      game.downloadCount ?? 0
+    )
+  } else {
+    insertStmt.run(
+      game.uniqueId,
+      game.name,
+      game.banner ?? null,
+      game.averageRating ?? 0,
+      game.viewCount ?? 0,
+      game.downloadCount ?? 0
+    )
   }
+
+  const row = db
+    .prepare('SELECT id FROM games WHERE unique_id = ?')
+    .get(game.uniqueId) as { id: number } | undefined
+  const gameId = row?.id ?? game.id
+
+  const hasDetailPatch =
+    (game.alias?.length ?? 0) > 0 ||
+    (game.tags?.length ?? 0) > 0 ||
+    (game.platform?.length ?? 0) > 0 ||
+    (game.language?.length ?? 0) > 0 ||
+    (game.type?.length ?? 0) > 0 ||
+    Boolean(game.releasedDate) ||
+    Boolean(game.resourceUpdateTime) ||
+    Boolean(game.touchgalUrl)
+
+  if (gameId > 0 && hasDetailPatch) {
+    const existing = db
+      .prepare('SELECT detail_json FROM games WHERE id = ?')
+      .get(gameId) as { detail_json: string | null } | undefined
+    const detail = (() => {
+      try {
+        return existing?.detail_json ? JSON.parse(existing.detail_json) as Record<string, unknown> : {}
+      } catch {
+        return {}
+      }
+    })()
+
+    const mergeStrings = (previous: unknown, next: string[] | undefined) =>
+      Array.from(new Set([
+        ...(Array.isArray(previous) ? previous : []),
+        ...(Array.isArray(next) ? next : [])
+      ].filter((item): item is string => typeof item === 'string' && item.trim().length > 0)))
+
+    const detailPatch = {
+      ...detail,
+      alias: mergeStrings(detail.alias, game.alias),
+      tags: mergeStrings(detail.tags, game.tags),
+      platform: mergeStrings(detail.platform, game.platform),
+      language: mergeStrings(detail.language, game.language),
+      type: mergeStrings(detail.type, game.type),
+      releasedDate: game.releasedDate ?? detail.releasedDate ?? null,
+      resourceUpdateTime: game.resourceUpdateTime ?? detail.resourceUpdateTime ?? null,
+      touchgalUrl: game.touchgalUrl ?? detail.touchgalUrl ?? null
+    }
+
+    db.prepare('UPDATE games SET detail_json = ? WHERE id = ?').run(
+      JSON.stringify(detailPatch),
+      gameId
+    )
+  }
+
+  return gameId
 }
 
 export const saveGameDetail = (uniqueId: string, detail: any) => {
