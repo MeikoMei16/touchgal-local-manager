@@ -1301,7 +1301,21 @@ const developerGameMatchesSearchOptions = (
   return terms.every((term) => fields.some((field) => field.includes(term)))
 }
 
+const developerResourceValuesInclude = (values: unknown, selectedValue: unknown) => {
+  if (typeof selectedValue !== 'string' || selectedValue === 'all') return true
+  const normalizedValues = Array.isArray(values)
+    ? values.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : typeof values === 'string' && values.length > 0
+      ? [values]
+      : []
+  if (selectedValue === 'raw') return normalizedValues.some((value) => value === 'raw' || value === 'row')
+  if (selectedValue === 'row') return normalizedValues.some((value) => value === 'row' || value === 'raw')
+  return normalizedValues.includes(selectedValue)
+}
+
 const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
+  const selectedType = query?.selectedType ?? 'all'
+  const selectedLanguage = query?.selectedLanguage ?? 'all'
   const selectedPlatform = query?.selectedPlatform ?? 'all'
   const minRatingCount = Number(query?.minRatingCount ?? 0) || 0
   const minRatingScore = Number(query?.minRatingScore ?? 0) || 0
@@ -1316,6 +1330,10 @@ const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
   const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc'
 
   const filtered = list.filter((game) => {
+    if (!developerResourceValuesInclude(game.type, selectedType)) return false
+
+    if (!developerResourceValuesInclude(game.language, selectedLanguage)) return false
+
     if (selectedPlatform !== 'all') {
       const platforms = Array.isArray(game.platform) ? game.platform : []
       if (!platforms.includes(selectedPlatform)) return false
