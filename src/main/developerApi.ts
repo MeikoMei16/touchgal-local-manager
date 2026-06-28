@@ -23,6 +23,7 @@ interface DeveloperApiResponse<T> {
 interface DeveloperSearchItem {
   name?: string
   uniqueId?: string
+  unique_id?: string
 }
 
 interface DeveloperSearchPayload {
@@ -104,21 +105,29 @@ interface DeveloperRatingRecommend {
 
 interface DeveloperGameDetail {
   uniqueId?: string
+  unique_id?: string
   name?: string
   aliases?: string[]
+  alias?: string[]
   introduction?: string | null
   bannerUrl?: string | null
+  banner_url?: string | null
   type?: string[]
   platform?: string[]
   language?: string[]
   tags?: string[]
   publishTime?: string | null
+  publish_time?: string | null
   releaseDate?: string | null
+  release_date?: string | null
   updatedAt?: string | null
+  updated_at?: string | null
   resourceUpdateTime?: string | null
+  resource_update_time?: string | null
   companies?: Array<{
     name?: string
     aliases?: string[]
+    alias?: string[]
   }>
   rating?: {
     average?: number
@@ -126,6 +135,7 @@ interface DeveloperGameDetail {
     recommend?: DeveloperRatingRecommend
   }
   touchgalUrl?: string | null
+  touchgal_url?: string | null
 }
 
 const sanitizeApiKey = (value: string | undefined) =>
@@ -429,7 +439,7 @@ const markdownToBasicHtml = (markdown: string | null | undefined) => {
 
 const normalizeDeveloperSearchItem = (item: DeveloperSearchItem): DeveloperNormalizedGame => ({
   id: 0,
-  uniqueId: item.uniqueId ?? '',
+  uniqueId: item.uniqueId ?? item.unique_id ?? '',
   name: item.name ?? 'Unknown title',
   banner: null,
   averageRating: 0,
@@ -483,6 +493,11 @@ const normalizeDeveloperCompanies = (companies: DeveloperGameDetail['companies']
         aliases.add(alias.trim())
       }
     }
+    for (const alias of Array.isArray(company?.alias) ? company.alias : []) {
+      if (typeof alias === 'string' && alias.trim()) {
+        aliases.add(alias.trim())
+      }
+    }
   }
 
   return {
@@ -496,12 +511,17 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
   const count = raw.rating?.count ?? 0
   const introductionMarkdown = raw.introduction ?? null
   const companies = normalizeDeveloperCompanies(raw.companies)
+  const aliases = Array.isArray(raw.aliases)
+    ? raw.aliases
+    : Array.isArray(raw.alias)
+      ? raw.alias
+      : []
 
   return {
     id: 0,
-    uniqueId: raw.uniqueId ?? '',
+    uniqueId: raw.uniqueId ?? raw.unique_id ?? '',
     name: raw.name ?? 'Unknown title',
-    banner: raw.bannerUrl ?? null,
+    banner: raw.bannerUrl ?? raw.banner_url ?? null,
     averageRating: average,
     ratingCount: count,
     ratingSummary: {
@@ -516,16 +536,16 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
     favoriteCount: 0,
     resourceCount: 0,
     commentCount: 0,
-    releasedDate: raw.releaseDate ?? null,
-    resourceUpdateTime: raw.resourceUpdateTime ?? raw.updatedAt ?? null,
-    created: raw.publishTime ?? null,
+    releasedDate: raw.releaseDate ?? raw.release_date ?? null,
+    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? raw.updatedAt ?? raw.updated_at ?? null,
+    created: raw.publishTime ?? raw.publish_time ?? null,
     introduction: markdownToBasicHtml(introductionMarkdown),
     company: companies.company,
     companyAliases: companies.companyAliases,
     pvUrl: extractPvUrlFromMarkdown(introductionMarkdown),
     screenshots: extractMarkdownImageUrls(introductionMarkdown),
     detail: null,
-    alias: Array.isArray(raw.aliases) ? raw.aliases.filter(Boolean) : [],
+    alias: aliases.filter(Boolean),
     vndbId: null,
     bangumiId: null,
     steamId: null,
@@ -533,7 +553,7 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
     platform: Array.isArray(raw.platform) ? raw.platform : [],
     language: Array.isArray(raw.language) ? raw.language : [],
     type: Array.isArray(raw.type) ? raw.type : [],
-    touchgalUrl: raw.touchgalUrl ?? null,
+    touchgalUrl: raw.touchgalUrl ?? raw.touchgal_url ?? null,
     downloads: [],
   }
 }
