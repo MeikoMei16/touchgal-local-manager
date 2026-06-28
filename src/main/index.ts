@@ -1125,6 +1125,72 @@ const extractCompanyAliases = (companies: unknown): string[] => {
   })
 }
 
+const matchesSuggestionQuery = (value: unknown, terms: string[]) => {
+  if (typeof value !== 'string' || !value.trim()) return false
+  const normalized = value.toLocaleLowerCase()
+  return terms.some((term) => normalized.includes(term))
+}
+
+const buildCachedTagSuggestions = (keyword: string) => {
+  const terms = buildSearchTerms(keyword)
+    .map((term) => term.toLocaleLowerCase())
+    .filter(Boolean)
+  if (terms.length === 0) return []
+
+  const suggestions = new Map<string, { id: number; type: 'tag' | 'company'; mode: 'include'; name: string; count: number }>()
+  const rows = getDb().prepare(`
+    SELECT detail_json AS detailJson
+    FROM games
+    WHERE detail_json IS NOT NULL AND detail_json != ''
+    ORDER BY local_updated_at DESC
+    LIMIT 1000
+  `).all() as Array<{ detailJson: string | null }>
+
+  const addSuggestion = (type: 'tag' | 'company', name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const key = `${type}:${trimmed}`
+    const existing = suggestions.get(key)
+    if (existing) {
+      existing.count += 1
+      return
+    }
+    suggestions.set(key, {
+      id: 0,
+      type,
+      mode: 'include',
+      name: trimmed,
+      count: 1,
+    })
+  }
+
+  for (const row of rows) {
+    const detail = parseCachedGameDetail(row.detailJson)
+    const tags = asStringArray(detail.tags)
+    const company = getCachedString(detail, 'company')
+    const companyNames = typeof company === 'string'
+      ? company.split(',').map((value) => value.trim()).filter(Boolean)
+      : []
+    const companyAliases = asStringArray(detail.companyAliases)
+
+    for (const tag of tags) {
+      if (matchesSuggestionQuery(tag, terms)) addSuggestion('tag', tag)
+    }
+
+    const companyMatched = [
+      ...companyNames,
+      ...companyAliases,
+    ].some((value) => matchesSuggestionQuery(value, terms))
+    if (companyMatched) {
+      for (const companyName of companyNames) addSuggestion('company', companyName)
+    }
+  }
+
+  return Array.from(suggestions.values())
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+    .slice(0, 100)
+}
+
 const fetchCachedGameFeed = (page: number, limit: number) => {
   const safePage = Math.max(1, Number(page) || 1)
   const safeLimit = clampApiLimit(limit)
@@ -2679,8 +2745,17 @@ handleWithLog('tg-search-tags', async (_event, keyword: string) => {
   const query = buildSearchTerms(keyword).slice(0, 10)
   if (query.length === 0) return []
 
-  const response = await API_CLIENT.post('/search/tag', { query })
-  return ensureValidResponse(response.data)
+  try {
+    const response = await API_CLIENT.post('/search/tag', { query })
+    return ensureValidResponse(response.data)
+  } catch (error) {
+    const cachedSuggestions = buildCachedTagSuggestions(keyword)
+    if (cachedSuggestions.length > 0) {
+      log.warn(`[API] Legacy /search/tag failed; returning ${cachedSuggestions.length} cached tag/company suggestions:`, getSafeErrorMessage(error))
+      return cachedSuggestions
+    }
+    throw error
+  }
 })
 
 handleWithLog('tg-get-user-status', async (_event, id: number) => {
