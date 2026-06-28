@@ -16,6 +16,7 @@ import {
   deleteLocalPathsByIds,
   getDownloadConcurrencySetting,
   getBrowseHistory,
+  getCachedDetail,
   getDb,
   getLinkedLocalGameById,
   initDb,
@@ -29,6 +30,7 @@ import {
   removeItemFromLocalCollection,
   resetDatabase,
   setArchiveExtractionDepthSetting,
+  saveGameDetail,
   upsertGame
 } from './db'
 import {
@@ -1319,6 +1321,27 @@ const fetchLegacyPatchDetailWhenAccessible = async (uniqueId: string) => {
   return fetchLegacyPatchDetail(uniqueId, { skipChallengeVerification: true })
 }
 
+const cacheFetchedGameDetail = (uniqueId: string, detail: any) => {
+  if (!detail || typeof detail !== 'object') return
+  const normalizedDetail = {
+    ...detail,
+    uniqueId: detail.uniqueId ?? uniqueId
+  }
+  if (!normalizedDetail.uniqueId || !normalizedDetail.name) return
+
+  upsertNormalizedGames([normalizedDetail])
+  saveGameDetail(normalizedDetail.uniqueId, normalizedDetail)
+}
+
+const getUsableCachedGameDetail = (uniqueId: string) => {
+  const cached = getCachedDetail(uniqueId)
+  if (!cached || typeof cached !== 'object') return null
+  const detail = cached as Record<string, unknown>
+  return typeof detail.name === 'string' && detail.name.trim()
+    ? { ...detail, uniqueId: detail.uniqueId ?? uniqueId }
+    : null
+}
+
 interface ScannedLibraryFolder {
   rootPath: string
   path: string
@@ -1853,17 +1876,27 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
   if (developerDetail) {
     try {
       const legacyDetail = await fetchLegacyPatchDetailWhenAccessible(uniqueId)
-      return mergeDeveloperAndLegacyDetail(developerDetail, legacyDetail)
+      const mergedDetail = mergeDeveloperAndLegacyDetail(developerDetail, legacyDetail)
+      cacheFetchedGameDetail(uniqueId, mergedDetail)
+      return mergedDetail
     } catch (error) {
       log.warn(`[API] Legacy detail fallback failed for ${uniqueId}; using developer API detail only:`, getSafeErrorMessage(error))
+      cacheFetchedGameDetail(uniqueId, developerDetail)
       return developerDetail
     }
   }
 
   try {
-    return await fetchLegacyPatchDetail(uniqueId)
+    const legacyDetail = await fetchLegacyPatchDetail(uniqueId)
+    cacheFetchedGameDetail(uniqueId, legacyDetail)
+    return legacyDetail
   } catch (error) {
     log.error(`[API] Network IO failed for ${uniqueId}:`, error)
+    const cachedDetail = getUsableCachedGameDetail(uniqueId)
+    if (cachedDetail) {
+      log.warn(`[API] Returning cached detail for ${uniqueId} after detail fetch failed`)
+      return cachedDetail
+    }
     throw error
   }
 })
