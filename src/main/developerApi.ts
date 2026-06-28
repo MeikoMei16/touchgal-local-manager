@@ -603,9 +603,13 @@ export const fetchDeveloperGameSearch = async (
           uniqueId: item.uniqueId,
         }
       } catch {
-        return item
+        return null
       }
-    })
+    }).then((results) => results.filter((item): item is DeveloperNormalizedGame => Boolean(item)))
+
+    if (list.length > 0 && hydrated.length === 0) {
+      throw new Error('TouchGal developer API detail hydration failed for every search result')
+    }
 
     const value = {
       list: hydrated,
