@@ -1,4 +1,5 @@
 export { useAuthStore } from './authStore';
+export { useDeveloperApiStore } from './developerApiStore';
 export { useUIStore } from './uiStore';
 export type { AuthState } from './authStore';
 export type { UIState } from './uiStore';

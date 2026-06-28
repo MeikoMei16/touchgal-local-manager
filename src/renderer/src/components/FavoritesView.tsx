@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import type { TouchGalResource } from '../types';
 import { TouchGalClient } from '../data/TouchGalClient';
-import { useAuthStore, useUIStore } from '../store/useTouchGalStore';
+import { useAuthStore, useDeveloperApiStore, useUIStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import type { LocalCollection, LocalCollectionGameInput, LocalCollectionItem } from '../types/electron';
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
@@ -778,6 +778,9 @@ export const FavoritesView: React.FC = () => {
   } = useLocalCollectionStore();
   const { selectResource } = useUIStore();
   const { user, userCollections, isLoading: isAuthLoading, fetchUserActivity, setIsLoginOpen } = useAuthStore();
+  const developerApiStatus = useDeveloperApiStore((state) => state.status);
+  const refreshDeveloperApiStatus = useDeveloperApiStore((state) => state.refreshStatus);
+  const isDeveloperApiMode = developerApiStatus?.configured === true;
   const [newLocalCollectionName, setNewLocalCollectionName] = React.useState('');
   const [newCloudCollectionName, setNewCloudCollectionName] = React.useState('');
   const [isCloudCollectionPublic, setIsCloudCollectionPublic] = React.useState(false);
@@ -796,10 +799,15 @@ export const FavoritesView: React.FC = () => {
   }, [fetchCollections, hasLoaded]);
 
   React.useEffect(() => {
-    if (user) {
+    if (developerApiStatus) return;
+    void refreshDeveloperApiStatus();
+  }, [developerApiStatus, refreshDeveloperApiStatus]);
+
+  React.useEffect(() => {
+    if (user && !isDeveloperApiMode) {
       void fetchUserActivity('collections');
     }
-  }, [fetchUserActivity, user]);
+  }, [fetchUserActivity, isDeveloperApiMode, user]);
 
   const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId) ?? null;
 
@@ -817,7 +825,7 @@ export const FavoritesView: React.FC = () => {
 
   const handleCreateCloudCollection = async () => {
     const trimmedName = newCloudCollectionName.trim();
-    if (!trimmedName || !user) return;
+    if (!trimmedName || !user || isDeveloperApiMode) return;
     setActionError(null);
     setIsCreatingCloudCollection(true);
     try {
@@ -847,6 +855,10 @@ export const FavoritesView: React.FC = () => {
 
   const handleDeleteCloudCollection = async (folderId: number) => {
     setActionError(null);
+    if (isDeveloperApiMode) {
+      setActionError('Developer API 暂不支持旧站云端收藏。');
+      return;
+    }
     try {
       await TouchGalClient.deleteFavoriteFolder(folderId);
       if (selectedCloudCollection?.id === folderId) {
@@ -895,6 +907,10 @@ export const FavoritesView: React.FC = () => {
   };
 
   const requestDeleteCloudCollection = (folder: any) => {
+    if (isDeveloperApiMode) {
+      setActionError('Developer API 暂不支持旧站云端收藏。');
+      return;
+    }
     setConfirmDialog({
       title: `删除云端收藏夹「${folder.name}」`,
       description: '这会向 TouchGal 云端发送删除请求，并移除该文件夹及其中包含的全部游戏关联。这个操作无法撤销。',
@@ -907,6 +923,10 @@ export const FavoritesView: React.FC = () => {
   };
 
   const handleOpenCloudCollection = (folder: any) => {
+    if (isDeveloperApiMode) {
+      setActionError('Developer API 暂不支持旧站云端收藏。');
+      return;
+    }
     setOpeningCloudCollectionId(folder.id);
     setSelectedCloudCollection(folder);
   };
@@ -1089,18 +1109,20 @@ export const FavoritesView: React.FC = () => {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h4 className="text-xl font-black tracking-tight text-slate-900">云端收藏</h4>
-                    <p className="text-sm font-bold text-slate-400">登录后读取你的 TouchGal 收藏夹。</p>
+                  <p className="text-sm font-bold text-slate-400">
+                    {isDeveloperApiMode ? 'Developer API 暂不支持旧站云端收藏。' : '登录后读取你的 TouchGal 收藏夹。'}
+                  </p>
                   </div>
                   <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                    {user ? `${userCollections.length} 个` : '未登录'}
+                    {isDeveloperApiMode ? '本地优先' : user ? `${userCollections.length} 个` : '未登录'}
                   </div>
                 </div>
                 <div className="flex flex-col gap-3">
                   <input
                     className="min-w-0 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition-all focus:border-emerald-300 focus:bg-white"
-                    disabled={!user}
+                    disabled={!user || isDeveloperApiMode}
                     onChange={(event) => setNewCloudCollectionName(event.target.value)}
-                    placeholder={user ? '新建云端收藏夹，例如：待同步、公开推荐' : '登录后可创建云收藏夹'}
+                    placeholder={isDeveloperApiMode ? 'Developer API 不支持创建云收藏夹' : user ? '新建云端收藏夹，例如：待同步、公开推荐' : '登录后可创建云收藏夹'}
                     value={newCloudCollectionName}
                   />
                   <div className="flex flex-wrap items-center gap-3">
@@ -1111,7 +1133,7 @@ export const FavoritesView: React.FC = () => {
                           ? 'bg-emerald-500 text-white'
                           : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-600'
                       }`}
-                      disabled={!user || isCreatingCloudCollection}
+                      disabled={!user || isDeveloperApiMode || isCreatingCloudCollection}
                       onClick={() => setIsCloudCollectionPublic((current) => !current)}
                       type="button"
                     >
@@ -1119,7 +1141,7 @@ export const FavoritesView: React.FC = () => {
                     </button>
                     <button
                       className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!user || !newCloudCollectionName.trim() || isCreatingCloudCollection}
+                      disabled={!user || isDeveloperApiMode || !newCloudCollectionName.trim() || isCreatingCloudCollection}
                       onClick={() => void handleCreateCloudCollection()}
                       type="button"
                     >
@@ -1130,7 +1152,15 @@ export const FavoritesView: React.FC = () => {
                 </div>
               </div>
 
-              {!user && (
+              {isDeveloperApiMode ? (
+                <div className="mt-5 rounded-[1.75rem] border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-white text-slate-400 shadow-sm">
+                    <Cloud size={24} />
+                  </div>
+                  <div className="mt-4 text-base font-black text-slate-800">旧站云收藏暂不可用</div>
+                  <div className="mt-2 text-sm font-bold text-slate-400">当前使用 Developer API 数据，本地收藏夹仍可正常整理和离线保存。</div>
+                </div>
+              ) : !user && (
                 <div className="mt-5 rounded-[1.75rem] border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-white text-slate-400 shadow-sm">
                     <Lock size={24} />
@@ -1148,19 +1178,19 @@ export const FavoritesView: React.FC = () => {
                 </div>
               )}
 
-              {user && isAuthLoading && userCollections.length === 0 && (
+              {!isDeveloperApiMode && user && isAuthLoading && userCollections.length === 0 && (
                 <div className="mt-5 rounded-3xl bg-slate-50 px-5 py-8 text-center text-sm font-bold text-slate-400">
                   正在读取云端收藏夹...
                 </div>
               )}
 
-              {user && !isAuthLoading && userCollections.length === 0 && (
+              {!isDeveloperApiMode && user && !isAuthLoading && userCollections.length === 0 && (
                 <div className="mt-5 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm font-bold text-slate-400">
                   没有读取到云端收藏夹。
                 </div>
               )}
 
-              {user && userCollections.length > 0 && (
+              {!isDeveloperApiMode && user && userCollections.length > 0 && (
                 <div className="mt-5 space-y-3">
                   {userCollections.map((folder: any) => (
                     <article
@@ -1238,7 +1268,7 @@ export const FavoritesView: React.FC = () => {
           onRemoveItem={handleRemoveItem}
         />
       )}
-      {selectedCloudCollection && (
+      {!isDeveloperApiMode && selectedCloudCollection && (
         <CloudCollectionOverlay
           allFolders={userCollections}
           folder={selectedCloudCollection}

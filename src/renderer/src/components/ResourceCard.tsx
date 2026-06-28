@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchGalDownload, TouchGalResource } from '../types';
 import { Check, Lock, Star, Download, Eye, ExternalLink, HardDrive, Heart, Languages, Loader2, MessageSquare, Plus, X } from 'lucide-react';
-import { useUIStore, useAuthStore } from '../store/useTouchGalStore';
+import { useUIStore, useAuthStore, useDeveloperApiStore } from '../store/useTouchGalStore';
 import { useLocalCollectionStore } from '../store/localCollectionStore';
 import { TouchGalClient } from '../data/TouchGalClient';
 import {
@@ -34,6 +34,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   const downloadPathOverride = useUIStore((state) => state.downloadPathOverride);
   const pushToast = useUIStore((state) => state.pushToast);
   const { user, setIsLoginOpen } = useAuthStore();
+  const developerApiStatus = useDeveloperApiStore((state) => state.status);
+  const refreshDeveloperApiStatus = useDeveloperApiStore((state) => state.refreshStatus);
   const {
     collections,
     hasLoaded,
@@ -45,6 +47,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   } = useLocalCollectionStore();
   const isClickable = resource.uniqueId && resource.uniqueId.length === 8;
   const hasRemotePatchId = Boolean(resource.id && resource.id > 0);
+  const isDeveloperApiMode = developerApiStatus?.configured === true;
   const isDetailLoadingForCard = isDetailLoading && selectedResource?.uniqueId === resource.uniqueId;
   const visibleTags = Array.isArray(resource.tags) ? resource.tags.filter(Boolean).slice(0, 3) : [];
   const [isCollectMenuOpen, setIsCollectMenuOpen] = React.useState(false);
@@ -161,7 +164,12 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   }, [fetchCollections, hasLoaded, isCollectMenuOpen, isCollectionLoading]);
 
   React.useEffect(() => {
-    if (!isCollectMenuOpen || !user || !hasRemotePatchId) return;
+    if (!isCollectMenuOpen || developerApiStatus) return;
+    void refreshDeveloperApiStatus();
+  }, [developerApiStatus, isCollectMenuOpen, refreshDeveloperApiStatus]);
+
+  React.useEffect(() => {
+    if (!isCollectMenuOpen || !user || !hasRemotePatchId || isDeveloperApiMode) return;
 
     let cancelled = false;
 
@@ -192,7 +200,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
     return () => {
       cancelled = true;
     };
-  }, [hasRemotePatchId, isCollectMenuOpen, resource.id, user]);
+  }, [hasRemotePatchId, isCollectMenuOpen, isDeveloperApiMode, resource.id, user]);
 
   React.useEffect(() => {
     if (!isDownloadMenuOpen || !isClickable) return;
@@ -537,7 +545,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
             <section className="space-y-2.5 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">云端收藏</div>
-                {hasRemotePatchId && !user && (
+                {hasRemotePatchId && !user && !isDeveloperApiMode && (
                   <button
                     className="text-xs font-black text-primary transition-colors hover:text-primary/80"
                     onClick={() => setIsLoginOpen(true)}
@@ -547,7 +555,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
                   </button>
                 )}
               </div>
-              {!hasRemotePatchId ? (
+              {isDeveloperApiMode ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
+                  Developer API 暂不支持旧站云端收藏，本地收藏夹可正常使用。
+                </div>
+              ) : !hasRemotePatchId ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-400">
                   当前条目来自 Developer API 或本地缓存，暂不能直接同步云端收藏。
                 </div>

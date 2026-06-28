@@ -3,6 +3,7 @@ import { Check, Download, Globe, Heart, Loader2, MessageSquare, Star } from 'luc
 import { TouchGalDetail } from '../../types';
 import { RatingHistogram } from '../RatingHistogram';
 import { useAuthStore } from '../../store/authStore';
+import { useDeveloperApiStore } from '../../store/developerApiStore';
 import { useLocalCollectionStore } from '../../store/localCollectionStore';
 import type { DetailTabType } from './DetailTabs';
 import { TouchGalClient } from '../../data/TouchGalClient';
@@ -82,6 +83,8 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     removeFromCollection
   } = useLocalCollectionStore();
   const { user, fetchUserActivity, setIsLoginOpen } = useAuthStore();
+  const developerApiStatus = useDeveloperApiStore((state) => state.status);
+  const refreshDeveloperApiStatus = useDeveloperApiStore((state) => state.refreshStatus);
   const autoOpenCollectionKey = autoOpenCollectionMenu ? resource.uniqueId : null;
   const [isCollectionMenuOpenManual, setIsCollectionMenuOpenManual] = React.useState(false);
   const [dismissedAutoOpenCollectionKey, setDismissedAutoOpenCollectionKey] = React.useState<string | null>(null);
@@ -95,6 +98,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
   const [activeCloudFolderId, setActiveCloudFolderId] = React.useState<number | null>(null);
   const [cloudFolders, setCloudFolders] = React.useState<any[]>([]);
   const hasRemotePatchId = Boolean(resource.id && resource.id > 0);
+  const isDeveloperApiMode = developerApiStatus?.configured === true;
   const resourceTags = React.useMemo(() => {
     const seen = new Set<string>();
     const tags: string[] = [];
@@ -136,7 +140,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
   }, [fetchCollections, hasLoaded, isCollectionLoading]);
 
   React.useEffect(() => {
-    if (!isCollectionMenuOpen || !user || !hasRemotePatchId) return;
+    if (!isCollectionMenuOpen || !user || !hasRemotePatchId || isDeveloperApiMode) return;
 
     let isMounted = true;
 
@@ -167,7 +171,12 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [hasRemotePatchId, isCollectionMenuOpen, resource.id, user]);
+  }, [hasRemotePatchId, isCollectionMenuOpen, isDeveloperApiMode, resource.id, user]);
+
+  React.useEffect(() => {
+    if (!isCollectionMenuOpen || developerApiStatus) return;
+    void refreshDeveloperApiStatus();
+  }, [developerApiStatus, isCollectionMenuOpen, refreshDeveloperApiStatus]);
 
   const closeCollectionMenu = () => {
     setIsCollectionMenuOpenManual(false);
@@ -412,7 +421,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                       <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">云端收藏</div>
-                          {hasRemotePatchId && !user && (
+                          {hasRemotePatchId && !user && !isDeveloperApiMode && (
                             <button
                               className="text-xs font-black text-blue-600 hover:text-blue-700"
                               onClick={() => setIsLoginOpen(true)}
@@ -422,12 +431,17 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                             </button>
                           )}
                         </div>
-                        {!hasRemotePatchId && (
+                        {isDeveloperApiMode && (
+                          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
+                            Developer API 暂不支持旧站云端收藏，本地收藏夹可正常使用。
+                          </div>
+                        )}
+                        {!isDeveloperApiMode && !hasRemotePatchId && (
                           <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
                             当前详情来自 Developer API 或本地缓存，暂不能直接同步云端收藏。
                           </div>
                         )}
-                        {hasRemotePatchId && !user && (
+                        {!isDeveloperApiMode && hasRemotePatchId && !user && (
                           <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
                             登录后可查看云端收藏夹。
                           </div>
