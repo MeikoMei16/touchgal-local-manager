@@ -37,6 +37,10 @@ export interface LocalCollectionItemRecord {
   averageRating: number
   viewCount: number
   downloadCount: number
+  ratingCount: number
+  introduction: string | null
+  screenshots: string[]
+  pvUrl: string | null
   alias: string[]
   tags: string[]
   company: string | null
@@ -697,6 +701,10 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
           created: readString(detail.created),
           releasedDate: readString(detail.releasedDate),
           resourceUpdateTime: readString(detail.resourceUpdateTime),
+          ratingCount: typeof detail.ratingCount === 'number' ? detail.ratingCount : Number(detail.ratingCount) || 0,
+          introduction: readString(detail.introduction),
+          screenshots: readStrings(detail.screenshots),
+          pvUrl: readString(detail.pvUrl),
           touchgalUrl: readString(detail.touchgalUrl)
         }
       })

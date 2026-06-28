@@ -50,6 +50,10 @@ export interface LocalCollectionItem {
   averageRating: number;
   viewCount: number;
   downloadCount: number;
+  ratingCount?: number;
+  introduction?: string | null;
+  screenshots?: string[];
+  pvUrl?: string | null;
   alias?: string[];
   tags?: string[];
   company?: string | null;
