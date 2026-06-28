@@ -67,6 +67,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     try {
       const upstreamQuery: Record<string, any> = {
         nsfwMode: domain === 'all' ? 'all' : domain === 'nsfw' ? 'nsfw' : 'safe',
+        selectedType: draft.selectedType ?? 'all',
+        selectedLanguage: draft.selectedLanguage ?? 'all',
         selectedPlatform: draft.selectedPlatform ?? 'all'
       };
       if (draft.minRatingCount > 0) upstreamQuery.minRatingCount = draft.minRatingCount;
@@ -434,6 +436,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     const upstreamKey = getAdvancedUpstreamKey(draft, domain);
     const upstreamQuery = {
       nsfwMode: domain === 'all' ? 'all' : domain === 'nsfw' ? 'nsfw' : 'safe',
+      selectedType: draft.selectedType ?? 'all',
+      selectedLanguage: draft.selectedLanguage ?? 'all',
       selectedPlatform: draft.selectedPlatform ?? 'all'
     };
     if (draft.minRatingCount > 0) (upstreamQuery as any).minRatingCount = draft.minRatingCount;
@@ -537,6 +541,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     const resetQuery = {
       ...defaultHomeQuery(),
       nsfwMode: currentQuery.nsfwMode,
+      selectedType: currentQuery.selectedType,
+      selectedLanguage: currentQuery.selectedLanguage,
       selectedPlatform: currentQuery.selectedPlatform,
       minRatingCount: currentQuery.minRatingCount,
       sortField: safeSortField,
@@ -546,6 +552,8 @@ export const createAdvancedActions = (set: UISetState, get: UIGetState) => ({
     const resetDraft = {
       ...defaultAdvancedFilterDraft(),
       nsfwMode: resetDomain,
+      selectedType: currentQuery.selectedType,
+      selectedLanguage: currentQuery.selectedLanguage,
       selectedPlatform: currentQuery.selectedPlatform,
       minRatingCount: currentQuery.minRatingCount
     };

@@ -75,6 +75,8 @@ export const SearchView: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchOptions, setSearchOptions] = useState<SearchScopeOptions>(defaultSearchOptions);
   const [nsfwMode, setNsfwMode] = useState<HomeQueryState['nsfwMode']>('safe');
+  const [selectedType, setSelectedType] = useState('all');
+  const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [sortField, setSortField] = useState<HomeSortField>('resource_update_time');
   const [sortOrder, setSortOrder] = useState<HomeSortOrder>('desc');
   const [localRatingResults, setLocalRatingResults] = useState<TouchGalResource[] | null>(null);
@@ -85,78 +87,84 @@ export const SearchView: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(totalResources / SEARCH_PAGE_SIZE));
 
   useEffect(() => {
-    setJumpPage(String(currentPage));
+    const timer = window.setTimeout(() => setJumpPage(String(currentPage)), 0);
     const scrollArea = document.querySelector('[data-app-scroll-container="true"]') as HTMLElement | null;
     if (scrollArea) {
       scrollArea.scrollTo({ top: 0, behavior: 'auto' });
       scrollArea.focus();
     }
+    return () => window.clearTimeout(timer);
   }, [currentPage]);
 
   useEffect(() => {
     if (!activeKeyword) {
-      setResources([]);
-      setTotalResources(0);
-      setCurrentPage(1);
-      setJumpPage('1');
-      setHasSearched(false);
-      setError(null);
-      setLocalRatingResults(null);
-      setLocalRatingProgress(idleLocalRatingProgress());
+      const timer = window.setTimeout(() => {
+        setResources([]);
+        setTotalResources(0);
+        setCurrentPage(1);
+        setJumpPage('1');
+        setHasSearched(false);
+        setError(null);
+        setLocalRatingResults(null);
+        setLocalRatingProgress(idleLocalRatingProgress());
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
   }, [activeKeyword]);
 
   useEffect(() => {
-    if (!activeKeyword || isLocalRatingMode) return;
+    if (!activeKeyword || isLocalRatingMode) return undefined;
 
     const requestKey = requestKeyRef.current + 1;
     requestKeyRef.current = requestKey;
-    setIsLoading(true);
-    setError(null);
-    setLocalRatingResults(null);
-    setLocalRatingProgress(idleLocalRatingProgress());
 
-    void TouchGalClient.searchResources(activeKeyword, currentPage, SEARCH_PAGE_SIZE, {
-      searchOption: searchOptions,
-      nsfwMode,
-      sortField,
-      sortOrder
-    })
-      .then((data) => {
-        if (requestKeyRef.current !== requestKey) return;
-        setResources(data.list);
-        setTotalResources(data.total);
-        setHasSearched(true);
+    const timer = window.setTimeout(() => {
+      if (requestKeyRef.current !== requestKey) return;
+      setIsLoading(true);
+      setError(null);
+      setLocalRatingResults(null);
+      setLocalRatingProgress(idleLocalRatingProgress());
+
+      void TouchGalClient.searchResources(activeKeyword, currentPage, SEARCH_PAGE_SIZE, {
+        searchOption: searchOptions,
+        nsfwMode,
+        selectedType,
+        selectedLanguage,
+        sortField,
+        sortOrder
       })
-      .catch((err: unknown) => {
-        if (requestKeyRef.current !== requestKey) return;
-        const message =
-          err instanceof Error && err.message ? err.message : '搜索失败';
-        setError(message);
-        setResources([]);
-        setTotalResources(0);
-        setHasSearched(true);
-        if (message.includes('SESSION_EXPIRED')) {
-          setSessionError('SESSION_EXPIRED');
-        }
-      })
-      .finally(() => {
-        if (requestKeyRef.current !== requestKey) return;
-        setIsLoading(false);
-      });
-  }, [activeKeyword, currentPage, isLocalRatingMode, nsfwMode, searchOptions, setSessionError, sortField, sortOrder]);
+        .then((data) => {
+          if (requestKeyRef.current !== requestKey) return;
+          setResources(data.list);
+          setTotalResources(data.total);
+          setHasSearched(true);
+        })
+        .catch((err: unknown) => {
+          if (requestKeyRef.current !== requestKey) return;
+          const message =
+            err instanceof Error && err.message ? err.message : '搜索失败';
+          setError(message);
+          setResources([]);
+          setTotalResources(0);
+          setHasSearched(true);
+          if (message.includes('SESSION_EXPIRED')) {
+            setSessionError('SESSION_EXPIRED');
+          }
+        })
+        .finally(() => {
+          if (requestKeyRef.current !== requestKey) return;
+          setIsLoading(false);
+        });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeKeyword, currentPage, isLocalRatingMode, nsfwMode, searchOptions, selectedLanguage, selectedType, setSessionError, sortField, sortOrder]);
 
   useEffect(() => {
-    if (!activeKeyword || !isLocalRatingMode) return;
+    if (!activeKeyword || !isLocalRatingMode) return undefined;
 
     const requestKey = requestKeyRef.current + 1;
     requestKeyRef.current = requestKey;
-    setIsLoading(true);
-    setError(null);
-    setHasSearched(true);
-    setResources([]);
-    setTotalResources(0);
-    setLocalRatingResults([]);
 
     const updateLocalRatingProgress = (next: LocalRatingProgress) => {
       if (requestKeyRef.current !== requestKey) return;
@@ -176,94 +184,112 @@ export const SearchView: React.FC = () => {
       });
     };
 
-    void (async () => {
-      const collectedById = new Map<string, TouchGalResource>();
-      updateLocalRatingProgress({
-        stage: 'fetching',
-        completed: 0,
-        total: 0,
-        message: '正在拉取评分候选，命中即渐进渲染...'
-      });
+    const timer = window.setTimeout(() => {
+      if (requestKeyRef.current !== requestKey) return;
+      setIsLoading(true);
+      setError(null);
+      setHasSearched(true);
+      setResources([]);
+      setTotalResources(0);
+      setLocalRatingResults([]);
 
-      const firstPage = await TouchGalClient.searchResources(activeKeyword, 1, SEARCH_UPSTREAM_PAGE_SIZE, {
-        searchOption: searchOptions,
-        nsfwMode,
-        sortField: 'created',
-        sortOrder: 'desc'
-      });
+      void (async () => {
+        const collectedById = new Map<string, TouchGalResource>();
+        updateLocalRatingProgress({
+          stage: 'fetching',
+          completed: 0,
+          total: 0,
+          message: '正在拉取评分候选，命中即渐进渲染...'
+        });
 
-      const upstreamTotalPages = Math.max(1, Math.ceil(firstPage.total / SEARCH_UPSTREAM_PAGE_SIZE));
-      for (const resource of firstPage.list) {
-        collectedById.set(resource.uniqueId, resource);
-      }
-      publishPartialResults(
-        Array.from(collectedById.values()),
-        `正在拉取评分候选 (1/${upstreamTotalPages})，已渐进渲染 ${collectedById.size} 条...`,
-        1,
-        upstreamTotalPages
-      );
-
-      let completedPages = 1;
-      const remainingPages = Array.from({ length: upstreamTotalPages - 1 }, (_, index) => index + 2);
-      await runBounded(remainingPages, SEARCH_RATING_CONCURRENCY, async (pageNum) => {
-        const page = await TouchGalClient.searchResources(activeKeyword, pageNum, SEARCH_UPSTREAM_PAGE_SIZE, {
+        const firstPage = await TouchGalClient.searchResources(activeKeyword, 1, SEARCH_UPSTREAM_PAGE_SIZE, {
           searchOption: searchOptions,
           nsfwMode,
+          selectedType,
+          selectedLanguage,
           sortField: 'created',
           sortOrder: 'desc'
         });
-        for (const resource of page.list) {
+
+        const upstreamTotalPages = Math.max(1, Math.ceil(firstPage.total / SEARCH_UPSTREAM_PAGE_SIZE));
+        for (const resource of firstPage.list) {
           collectedById.set(resource.uniqueId, resource);
         }
-        completedPages += 1;
         publishPartialResults(
           Array.from(collectedById.values()),
-          `正在拉取评分候选 (${completedPages}/${upstreamTotalPages})，已渐进渲染 ${collectedById.size} 条...`,
-          completedPages,
+          `正在拉取评分候选 (1/${upstreamTotalPages})，已渐进渲染 ${collectedById.size} 条...`,
+          1,
           upstreamTotalPages
         );
-        return page;
-      });
 
-      if (requestKeyRef.current !== requestKey) return;
-      const finalSorted = sortSearchResultsByRating(Array.from(collectedById.values()), sortOrder);
-      setLocalRatingResults(finalSorted);
-      setTotalResources(finalSorted.length);
-      updateLocalRatingProgress({
-        stage: 'ready',
-        completed: upstreamTotalPages,
-        total: upstreamTotalPages,
-        message: `评分本地重排已完成，共 ${finalSorted.length} 条结果。`
-      });
-    })()
-      .catch((err: unknown) => {
-        if (requestKeyRef.current !== requestKey) return;
-        const message =
-          err instanceof Error && err.message ? err.message : '搜索失败';
-        setError(message);
-        setResources([]);
-        setTotalResources(0);
-        setLocalRatingResults(null);
-        setLocalRatingProgress({
-          stage: 'error',
-          completed: 0,
-          total: 0,
-          message: `评分本地重排失败: ${message}`
+        let completedPages = 1;
+        const remainingPages = Array.from({ length: upstreamTotalPages - 1 }, (_, index) => index + 2);
+        await runBounded(remainingPages, SEARCH_RATING_CONCURRENCY, async (pageNum) => {
+          const page = await TouchGalClient.searchResources(activeKeyword, pageNum, SEARCH_UPSTREAM_PAGE_SIZE, {
+            searchOption: searchOptions,
+            nsfwMode,
+            selectedType,
+            selectedLanguage,
+            sortField: 'created',
+            sortOrder: 'desc'
+          });
+          for (const resource of page.list) {
+            collectedById.set(resource.uniqueId, resource);
+          }
+          completedPages += 1;
+          publishPartialResults(
+            Array.from(collectedById.values()),
+            `正在拉取评分候选 (${completedPages}/${upstreamTotalPages})，已渐进渲染 ${collectedById.size} 条...`,
+            completedPages,
+            upstreamTotalPages
+          );
+          return page;
         });
-        if (message.includes('SESSION_EXPIRED')) {
-          setSessionError('SESSION_EXPIRED');
-        }
-      })
-      .finally(() => {
+
         if (requestKeyRef.current !== requestKey) return;
-        setIsLoading(false);
-      });
-  }, [activeKeyword, isLocalRatingMode, nsfwMode, searchOptions, setSessionError, sortOrder]);
+        const finalSorted = sortSearchResultsByRating(Array.from(collectedById.values()), sortOrder);
+        setLocalRatingResults(finalSorted);
+        setTotalResources(finalSorted.length);
+        updateLocalRatingProgress({
+          stage: 'ready',
+          completed: upstreamTotalPages,
+          total: upstreamTotalPages,
+          message: `评分本地重排已完成，共 ${finalSorted.length} 条结果。`
+        });
+      })()
+        .catch((err: unknown) => {
+          if (requestKeyRef.current !== requestKey) return;
+          const message =
+            err instanceof Error && err.message ? err.message : '搜索失败';
+          setError(message);
+          setResources([]);
+          setTotalResources(0);
+          setLocalRatingResults(null);
+          setLocalRatingProgress({
+            stage: 'error',
+            completed: 0,
+            total: 0,
+            message: `评分本地重排失败: ${message}`
+          });
+          if (message.includes('SESSION_EXPIRED')) {
+            setSessionError('SESSION_EXPIRED');
+          }
+        })
+        .finally(() => {
+          if (requestKeyRef.current !== requestKey) return;
+          setIsLoading(false);
+        });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeKeyword, isLocalRatingMode, nsfwMode, searchOptions, selectedLanguage, selectedType, setSessionError, sortOrder]);
 
   useEffect(() => {
-    if (sortField !== 'rating' || !localRatingResults) return;
-    setResources(paginateSearchResults(localRatingResults, currentPage));
-    setTotalResources(localRatingResults.length);
+    if (sortField !== 'rating' || !localRatingResults) return undefined;
+    const timer = window.setTimeout(() => {
+      setResources(paginateSearchResults(localRatingResults, currentPage));
+      setTotalResources(localRatingResults.length);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [currentPage, localRatingResults, sortField]);
 
   const executeSearch = () => {
@@ -306,6 +332,18 @@ export const SearchView: React.FC = () => {
       if (current === 'nsfw') return 'all';
       return 'safe';
     });
+  };
+
+  const updateSelectedType = (value: string) => {
+    setCurrentPage(1);
+    setJumpPage('1');
+    setSelectedType(value);
+  };
+
+  const updateSelectedLanguage = (value: string) => {
+    setCurrentPage(1);
+    setJumpPage('1');
+    setSelectedLanguage(value);
   };
 
   const updateSortField = (value: HomeSortField) => {
@@ -406,11 +444,15 @@ export const SearchView: React.FC = () => {
       <SearchOptionsPanel
         options={searchOptions}
         nsfwMode={nsfwMode}
+        selectedType={selectedType}
+        selectedLanguage={selectedLanguage}
         sortField={sortField}
         sortOrder={sortOrder}
         disabled={isLoading}
         onToggleOption={updateSearchOptions}
         onCycleNsfwMode={cycleNsfwMode}
+        onSelectType={updateSelectedType}
+        onSelectLanguage={updateSelectedLanguage}
         onSelectSortField={updateSortField}
         onToggleSortOrder={toggleSortOrder}
       />

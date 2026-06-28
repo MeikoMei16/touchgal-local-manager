@@ -5,6 +5,8 @@ export type NsfwDomain = 'sfw' | 'nsfw' | 'all';
 
 export interface AdvancedFilterDraft {
   nsfwMode: NsfwDomain;
+  selectedType: string;
+  selectedLanguage: string;
   selectedPlatform: string;
   yearConstraints: Array<{ op: string; val: number }>;
   minRatingCount: number;
@@ -51,6 +53,8 @@ export type HomeSortOrder = 'asc' | 'desc';
 
 export interface HomeQueryState {
   nsfwMode: 'safe' | 'nsfw' | 'all';
+  selectedType: string;
+  selectedLanguage: string;
   selectedPlatform: string;
   yearConstraints: Array<{ op: string; val: number }>;
   minRatingCount: number;
@@ -63,6 +67,8 @@ export interface HomeQueryState {
 
 export const defaultAdvancedFilterDraft = (): AdvancedFilterDraft => ({
   nsfwMode: 'sfw',
+  selectedType: 'all',
+  selectedLanguage: 'all',
   selectedPlatform: 'all',
   yearConstraints: [],
   minRatingCount: 0,
@@ -92,6 +98,8 @@ export const defaultAdvancedDatasetCache = (): AdvancedDatasetCache => ({
 
 export const defaultHomeQuery = (): HomeQueryState => ({
   nsfwMode: 'safe',
+  selectedType: 'all',
+  selectedLanguage: 'all',
   selectedPlatform: 'all',
   yearConstraints: [],
   minRatingCount: 0,
@@ -121,6 +129,8 @@ export const normalizeHomeQuery = (query: Partial<HomeQueryState> | null | undef
   ...defaultHomeQuery(),
   ...query,
   nsfwMode: query?.nsfwMode === 'nsfw' || query?.nsfwMode === 'all' ? query.nsfwMode : 'safe',
+  selectedType: query?.selectedType ?? 'all',
+  selectedLanguage: query?.selectedLanguage ?? 'all',
   selectedPlatform: query?.selectedPlatform ?? 'all',
   yearConstraints: Array.isArray(query?.yearConstraints) ? query.yearConstraints : [],
   minRatingCount: Number(query?.minRatingCount ?? 0) || 0,

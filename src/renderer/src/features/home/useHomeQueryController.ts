@@ -84,6 +84,8 @@ export const useHomeQueryController = () => {
     // Coarse filters (domain, platform, minRatingCount) or sort field change → rebuild
     const coarseFilterChanged =
       filters.nsfwMode !== undefined ||
+      filters.selectedType !== undefined ||
+      filters.selectedLanguage !== undefined ||
       filters.selectedPlatform !== undefined ||
       filters.minRatingCount !== undefined ||
       filters.sortField !== undefined;

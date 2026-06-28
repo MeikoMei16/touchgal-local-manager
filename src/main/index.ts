@@ -1478,8 +1478,14 @@ const shouldPreferLegacySearch = (options?: Record<string, any>) => {
   const sortField = options.sortField ?? 'resource_update_time'
   const sortOrder = options.sortOrder ?? 'desc'
   const nsfwMode = options.nsfwMode ?? 'safe'
+  const selectedType = options.selectedType ?? 'all'
+  const selectedLanguage = options.selectedLanguage ?? 'all'
+  const selectedPlatform = options.selectedPlatform ?? 'all'
 
   return !isDefaultSearchOption(options.searchOption) ||
+    selectedType !== 'all' ||
+    selectedLanguage !== 'all' ||
+    selectedPlatform !== 'all' ||
     nsfwMode !== 'safe' ||
     sortField !== 'resource_update_time' ||
     sortOrder !== 'desc'

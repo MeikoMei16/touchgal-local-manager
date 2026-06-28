@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  ChevronDown, Calendar, Star, MessageSquare, Tag, X, Plus, Search
+  ChevronDown, Calendar, Star, MessageSquare, Tag, X, Plus, Search, Boxes, Languages
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 import { HomeQueryState } from '../features/home/homeState';
 import { TouchGalClient } from '../data/TouchGalClient';
+import { HOME_LANGUAGE_OPTIONS, HOME_TYPE_OPTIONS } from '../features/home/homeQuery';
 
 // Tag library with usage counts sourced from TouchGal
 const TAG_LIBRARY: { name: string; count: number }[] = [
@@ -153,6 +154,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   const emitChange = (overrides: any = {}) => {
     return {
       nsfwMode: overrides.nsfwMode ?? (advancedFilterDraft.nsfwMode === 'nsfw' ? 'nsfw' : advancedFilterDraft.nsfwMode === 'all' ? 'all' : 'safe'),
+      selectedType: overrides.selectedType ?? advancedFilterDraft.selectedType,
+      selectedLanguage: overrides.selectedLanguage ?? advancedFilterDraft.selectedLanguage,
       selectedPlatform: overrides.selectedPlatform ?? advancedFilterDraft.selectedPlatform,
       yearConstraints: overrides.yearConstraints ?? yearConstraints,
       minRatingCount: overrides.minRatingCount ?? advancedFilterDraft.minRatingCount,
@@ -208,6 +211,40 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
         
         {/* Left Column: Core Filters */}
         <div className="flex flex-col gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="flex flex-col gap-2">
+              <span className="flex items-center gap-2 px-1 text-sm font-extrabold text-slate-500 uppercase tracking-widest">
+                <Boxes size={18} className="text-slate-400" />
+                资源类型
+              </span>
+              <select
+                className="h-12 rounded-2xl border-2 border-slate-200 bg-white px-4 font-bold text-slate-700 outline-none transition-all focus:border-blue-500"
+                value={advancedFilterDraft.selectedType}
+                onChange={(event) => publishChange({ selectedType: event.target.value })}
+              >
+                {HOME_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="flex items-center gap-2 px-1 text-sm font-extrabold text-slate-500 uppercase tracking-widest">
+                <Languages size={18} className="text-slate-400" />
+                资源语言
+              </span>
+              <select
+                className="h-12 rounded-2xl border-2 border-slate-200 bg-white px-4 font-bold text-slate-700 outline-none transition-all focus:border-blue-500"
+                value={advancedFilterDraft.selectedLanguage}
+                onChange={(event) => publishChange({ selectedLanguage: event.target.value })}
+              >
+                {HOME_LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           {/* Year Section */}
           <div className="flex flex-col gap-3">
              <div className="flex items-center gap-2 px-1">
@@ -393,6 +430,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
             setMinRatingScore(0);
             setMinCommentCount(0);
             publishChange({
+              selectedType: 'all',
+              selectedLanguage: 'all',
+              selectedPlatform: 'all',
               yearConstraints: [],
               minRatingScore: 0,
               minCommentCount: 0,

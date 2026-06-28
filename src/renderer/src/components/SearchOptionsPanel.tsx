@@ -1,7 +1,8 @@
 import React from 'react';
-import { Check, Search as SearchIcon, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Boxes, Check, Languages, Search as SearchIcon, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { SortDropdown } from './SortDropdown';
 import type { HomeQueryState, HomeSortField, HomeSortOrder } from '../features/home/homeState';
+import { HOME_LANGUAGE_OPTIONS, HOME_TYPE_OPTIONS } from '../features/home/homeQuery';
 
 export interface SearchScopeOptions {
   searchInIntroduction: boolean;
@@ -12,11 +13,15 @@ export interface SearchScopeOptions {
 interface SearchOptionsPanelProps {
   options: SearchScopeOptions;
   nsfwMode: HomeQueryState['nsfwMode'];
+  selectedType: string;
+  selectedLanguage: string;
   sortField: HomeSortField;
   sortOrder: HomeSortOrder;
   disabled?: boolean;
   onToggleOption: (key: keyof SearchScopeOptions) => void;
   onCycleNsfwMode: () => void;
+  onSelectType: (value: string) => void;
+  onSelectLanguage: (value: string) => void;
   onSelectSortField: (field: HomeSortField) => void;
   onToggleSortOrder: () => void;
 }
@@ -48,11 +53,15 @@ const searchSortOptions: Array<{ label: string; value: HomeSortField }> = [
 export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
   options,
   nsfwMode,
+  selectedType,
+  selectedLanguage,
   sortField,
   sortOrder,
   disabled,
   onToggleOption,
   onCycleNsfwMode,
+  onSelectType,
+  onSelectLanguage,
   onSelectSortField,
   onToggleSortOrder
 }) => (
@@ -130,6 +139,32 @@ export const SearchOptionsPanel: React.FC<SearchOptionsPanelProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+            <Boxes size={16} className="text-slate-400" />
+            <select
+              className="bg-transparent font-bold outline-none disabled:cursor-not-allowed"
+              value={selectedType}
+              onChange={(event) => onSelectType(event.target.value)}
+              disabled={disabled}
+            >
+              {HOME_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+            <Languages size={16} className="text-slate-400" />
+            <select
+              className="bg-transparent font-bold outline-none disabled:cursor-not-allowed"
+              value={selectedLanguage}
+              onChange={(event) => onSelectLanguage(event.target.value)}
+              disabled={disabled}
+            >
+              {HOME_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <button
             className="rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onCycleNsfwMode}

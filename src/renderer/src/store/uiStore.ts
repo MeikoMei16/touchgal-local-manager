@@ -30,6 +30,8 @@ const coerceLegacyHomepageDefaults = (query: Partial<UIState['lastHomeQuery']> |
   const looksLikeLegacyDefault =
     normalized.minRatingCount === 10 &&
     normalized.nsfwMode === 'safe' &&
+    normalized.selectedType === 'all' &&
+    normalized.selectedLanguage === 'all' &&
     normalized.selectedPlatform === 'all' &&
     normalized.yearConstraints.length === 0 &&
     normalized.minRatingScore === 0 &&

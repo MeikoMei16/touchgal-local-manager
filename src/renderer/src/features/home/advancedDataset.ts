@@ -117,6 +117,8 @@ export const createAdvancedSessionId = () => `adv-${Date.now()}-${Math.random().
 export const getAdvancedUpstreamKey = (draft: AdvancedFilterDraft, domain: NsfwDomain) =>
   JSON.stringify({
     domain,
+    selectedType: draft.selectedType ?? 'all',
+    selectedLanguage: draft.selectedLanguage ?? 'all',
     selectedPlatform: draft.selectedPlatform ?? 'all',
     minRatingCount: draft.minRatingCount ?? 0
   });
