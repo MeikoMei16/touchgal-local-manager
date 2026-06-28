@@ -16,6 +16,7 @@ import {
   getDownloadLinks,
   getDownloadMetadataChips,
   isOfficialDownload,
+  recordDownloadLinkStat,
 } from '../../features/downloads/downloadHelpers';
 import { TouchGalDetail, TouchGalDownload } from '../../types';
 
@@ -103,6 +104,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
         });
         added += result.added;
         reused += result.reused;
+        recordDownloadLinkStat(resource.id, download.id, link.id);
       }
 
       pushToast(

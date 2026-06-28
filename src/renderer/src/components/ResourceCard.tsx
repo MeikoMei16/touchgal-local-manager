@@ -8,7 +8,8 @@ import {
   getDownloadDisplayName,
   getDownloadLinkItems,
   getDownloadMetadataChips,
-  getOfficialGalgameDownloads
+  getOfficialGalgameDownloads,
+  recordDownloadLinkStat
 } from '../features/downloads/downloadHelpers';
 
 interface ResourceCardProps {
@@ -283,6 +284,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
         });
         added += result.added;
         reused += result.reused;
+        recordDownloadLinkStat(resource.id, download.id, link.id);
       }
 
       const headline = getDownloadDisplayName(download);

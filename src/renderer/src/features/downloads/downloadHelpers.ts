@@ -94,6 +94,16 @@ export const getDownloadLinkItems = (download: TouchGalDownload): DownloadLinkIt
 export const getDownloadLinks = (download: TouchGalDownload) =>
   getDownloadLinkItems(download).map((link) => link.url)
 
+export const recordDownloadLinkStat = (
+  patchId: number | null | undefined,
+  resourceId: number | null | undefined,
+  linkId: number | null | undefined
+) => {
+  if (!patchId || patchId <= 0 || !resourceId || resourceId <= 0 || !linkId || linkId <= 0) return
+
+  void window.api.recordResourceDownload({ patchId, resourceId, linkId }).catch(() => undefined)
+}
+
 export const isOfficialDownload = (download: TouchGalDownload) =>
   (download.user?.role ?? 0) > 2 ||
   download.storage === 'touchgal' ||

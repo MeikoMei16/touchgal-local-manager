@@ -190,6 +190,7 @@ export interface ElectronAPI {
     reused: number;
     tasks: DownloadQueueTask[];
   }>;
+  recordResourceDownload: (input: { patchId: number; resourceId: number; linkId: number }) => Promise<any>;
   getDownloadQueue: () => Promise<DownloadQueueTask[]>;
   resumeDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;
   retryDownloadTask: (taskId: number) => Promise<DownloadQueueTask | null>;

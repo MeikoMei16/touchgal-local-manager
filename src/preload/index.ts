@@ -84,6 +84,8 @@ contextBridge.exposeInMainWorld('api', {
       alias?: string[]
     }
   ) => ipcRenderer.invoke('tg-queue-download', gameId, sourceUrl, downloadRoot, gameMetadata),
+  recordResourceDownload: (input: { patchId: number; resourceId: number; linkId: number }) =>
+    ipcRenderer.invoke('tg-record-resource-download', input),
   getDownloadQueue: () => ipcRenderer.invoke('tg-get-download-queue'),
   resumeDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-resume-download-task', taskId),
   retryDownloadTask: (taskId: number) => ipcRenderer.invoke('tg-retry-download-task', taskId),

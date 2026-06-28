@@ -7,7 +7,8 @@ import {
   getDownloadDisplayName,
   getDownloadLinkItems,
   getDownloadMetadataChips,
-  getOfficialGalgameDownloads
+  getOfficialGalgameDownloads,
+  recordDownloadLinkStat
 } from '../features/downloads/downloadHelpers'
 import { useUIStore } from '../store/useTouchGalStore'
 
@@ -127,6 +128,7 @@ export const QuickDownloadPopoverButton: React.FC<QuickDownloadPopoverButtonProp
         })
         added += result.added
         reused += result.reused
+        recordDownloadLinkStat(resourceId, download.id, link.id)
       }
 
       const headline = getDownloadDisplayName(download)

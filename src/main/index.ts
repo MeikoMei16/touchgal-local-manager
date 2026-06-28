@@ -2077,6 +2077,34 @@ handleWithLog(
   })
 })
 
+const isPositiveInteger = (value: unknown): value is number =>
+  Number.isInteger(value) && Number(value) > 0
+
+handleWithLog(
+  'tg-record-resource-download',
+  async (_event, input: { patchId?: number; resourceId?: number; linkId?: number }) => {
+    if (
+      !isPositiveInteger(input?.patchId) ||
+      !isPositiveInteger(input?.resourceId) ||
+      !isPositiveInteger(input?.linkId)
+    ) {
+      return { success: false, skipped: true }
+    }
+
+    const response = await API_CLIENT.put(
+      '/patch/resource/download',
+      {
+        patchId: input.patchId,
+        resourceId: input.resourceId,
+        linkId: input.linkId
+      },
+      { __touchGalSkipChallengeVerification: true } as TouchGalAxiosRequestConfig
+    )
+
+    return ensureValidResponse(response.data)
+  }
+)
+
 handleWithLog('tg-get-download-queue', () => {
   return downloadManager.getQueue()
 })
