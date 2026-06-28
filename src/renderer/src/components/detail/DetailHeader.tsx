@@ -446,17 +446,17 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
                             登录后可查看云端收藏夹。
                           </div>
                         )}
-                        {hasRemotePatchId && user && isCloudCollectionsLoading && (
+                        {!isDeveloperApiMode && hasRemotePatchId && user && isCloudCollectionsLoading && (
                           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
                             正在读取云端收藏夹...
                           </div>
                         )}
-                        {hasRemotePatchId && user && !isCloudCollectionsLoading && cloudFolders.length === 0 && (
+                        {!isDeveloperApiMode && hasRemotePatchId && user && !isCloudCollectionsLoading && cloudFolders.length === 0 && (
                           <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm font-bold text-slate-400">
                             暂无云端收藏夹。
                           </div>
                         )}
-                        {hasRemotePatchId && cloudFolders.map((folder: any) => (
+                        {!isDeveloperApiMode && hasRemotePatchId && cloudFolders.map((folder: any) => (
                           <button
                             key={folder.id}
                             className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-all ${

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuthStore } from '../store/useTouchGalStore';
+import { useAuthStore, useDeveloperApiStore } from '../store/useTouchGalStore';
 import { useUIStore } from '../store/uiStore';
 import { Clock, MessageSquare, Star, Package, Heart, Coins, Users, User, Loader2, Trash2 } from 'lucide-react';
 import { CloudCollectionOverlay } from './CloudCollectionOverlay';
@@ -56,6 +56,9 @@ const ProfileView: React.FC = () => {
     userCollections,
     isLoading 
   } = useAuthStore();
+  const developerApiStatus = useDeveloperApiStore((state) => state.status);
+  const refreshDeveloperApiStatus = useDeveloperApiStore((state) => state.refreshStatus);
+  const isDeveloperApiMode = developerApiStatus?.configured === true;
   const { selectResource } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections' | 'history'>('history');
@@ -64,27 +67,9 @@ const ProfileView: React.FC = () => {
   const [history, setHistory] = useState<BrowseHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [clearingHistory, setClearingHistory] = useState(false);
+  const visibleActiveTab = isDeveloperApiMode ? 'history' : activeTab;
 
-  useEffect(() => {
-    if (user && !userProfile) {
-      fetchUserProfile();
-    }
-  }, [user, userProfile, fetchUserProfile]);
-
-  useEffect(() => {
-    if (user && activeTab !== 'history') {
-      fetchUserActivity(activeTab as 'comments' | 'ratings' | 'collections');
-    }
-  }, [user, activeTab, fetchUserActivity]);
-
-  // Always load history (available without login)
-  useEffect(() => {
-    if (activeTab === 'history') {
-      loadHistory();
-    }
-  }, [activeTab]);
-
-  const loadHistory = async () => {
+  const loadHistory = React.useCallback(async () => {
     setHistoryLoading(true);
     try {
       const entries = await window.api.getHistory(100);
@@ -94,7 +79,33 @@ const ProfileView: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (developerApiStatus) return;
+    void refreshDeveloperApiStatus();
+  }, [developerApiStatus, refreshDeveloperApiStatus]);
+
+  useEffect(() => {
+    if (user && !userProfile && !isDeveloperApiMode) {
+      fetchUserProfile();
+    }
+  }, [user, userProfile, fetchUserProfile, isDeveloperApiMode]);
+
+  useEffect(() => {
+    if (user && !isDeveloperApiMode && activeTab !== 'history') {
+      fetchUserActivity(activeTab as 'comments' | 'ratings' | 'collections');
+    }
+  }, [user, activeTab, fetchUserActivity, isDeveloperApiMode]);
+
+  // Always load history (available without login)
+  useEffect(() => {
+    if (visibleActiveTab !== 'history') return;
+    const timer = window.setTimeout(() => {
+      void loadHistory();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadHistory, visibleActiveTab]);
 
   const handleClearHistory = async () => {
     if (!confirm('确定要清除所有浏览历史吗？')) return;
@@ -116,11 +127,12 @@ const ProfileView: React.FC = () => {
   };
 
   const handleOpenCloudCollection = (folder: any) => {
+    if (isDeveloperApiMode) return;
     setOpeningCloudCollectionId(folder.id);
     setSelectedCloudCollection(folder);
   };
 
-  const tabs = user
+  const tabs = user && !isDeveloperApiMode
     ? (['history', 'comments', 'ratings', 'collections'] as const)
     : (['history'] as const);
 
@@ -173,15 +185,23 @@ const ProfileView: React.FC = () => {
                 <div className="w-40 h-40 rounded-full bg-surface-container-low border-4 border-white shadow-xl mb-6 flex items-center justify-center">
                   <Users size={56} className="text-outline opacity-40" />
                 </div>
-                <h1 className="text-2xl font-black text-on-surface mb-2">未登录</h1>
-                <p className="text-on-surface-variant text-sm mb-6">登录后可查看评论、评分和云端收藏</p>
-                <button
-                  onClick={() => useAuthStore.getState().setIsLoginOpen(true)}
-                  className="bg-primary hover:bg-primary/90 text-on-primary font-bold py-3 px-8 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
-                >
-                  <User size={20} />
-                  <span>立即登录</span>
-                </button>
+                <h1 className="text-2xl font-black text-on-surface mb-2">
+                  {isDeveloperApiMode ? 'Developer API 模式' : '未登录'}
+                </h1>
+                <p className="text-on-surface-variant text-sm mb-6">
+                  {isDeveloperApiMode
+                    ? '旧站个人资料和云端收藏暂不可用，本地浏览历史会继续记录。'
+                    : '登录后可查看评论、评分和云端收藏'}
+                </p>
+                {!isDeveloperApiMode && (
+                  <button
+                    onClick={() => useAuthStore.getState().setIsLoginOpen(true)}
+                    className="bg-primary hover:bg-primary/90 text-on-primary font-bold py-3 px-8 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+                  >
+                    <User size={20} />
+                    <span>立即登录</span>
+                  </button>
+                )}
 
                 {/* History summary for logged-out users */}
                 <div className="mt-8 w-full p-4 bg-surface-container-low rounded-2xl border border-outline-variant text-left">
@@ -201,7 +221,7 @@ const ProfileView: React.FC = () => {
         <div className="lg:col-span-2 space-y-8">
           
           {/* Stats Grid — only when logged in */}
-          {user && (
+          {user && !isDeveloperApiMode && (
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-surface rounded-3xl p-6 shadow-sm border border-outline-variant">
                 <div className="p-3 bg-primary-container text-primary rounded-2xl w-fit mb-4">
@@ -235,12 +255,12 @@ const ProfileView: React.FC = () => {
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
                   className={`flex-1 py-5 text-sm font-bold uppercase tracking-wider transition-all duration-300 relative flex items-center justify-center gap-1.5 ${
-                    activeTab === tab ? 'text-primary' : 'text-on-surface-variant hover:text-on-surface'
+                    visibleActiveTab === tab ? 'text-primary' : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
                   {tab === 'history' && <Clock size={14} />}
                   {PROFILE_TAB_LABELS[tab as keyof typeof PROFILE_TAB_LABELS] ?? tab}
-                  {activeTab === tab && (
+                  {visibleActiveTab === tab && (
                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-full" />
                   )}
                 </button>
@@ -249,7 +269,7 @@ const ProfileView: React.FC = () => {
 
             <div className="p-6">
               {/* History Tab */}
-              {activeTab === 'history' && (
+              {visibleActiveTab === 'history' && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">
@@ -312,9 +332,9 @@ const ProfileView: React.FC = () => {
                 </div>
               )}
 
-              {isLoading && activeTab !== 'history' && <LoadingCircle label="正在加载动态..." compact />}
+              {isLoading && visibleActiveTab !== 'history' && <LoadingCircle label="正在加载动态..." compact />}
               
-              {!isLoading && activeTab === 'comments' && (
+              {!isLoading && visibleActiveTab === 'comments' && (
                 <div className="space-y-4">
                   {userComments.length === 0 ? (
                     <div className="py-20 text-center text-outline font-bold">暂无评论</div>
@@ -330,7 +350,7 @@ const ProfileView: React.FC = () => {
                 </div>
               )}
 
-              {!isLoading && activeTab === 'ratings' && (
+              {!isLoading && visibleActiveTab === 'ratings' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {userRatings.length === 0 ? (
                     <div className="col-span-2 py-20 text-center text-outline font-bold">暂无评分记录</div>
@@ -358,7 +378,7 @@ const ProfileView: React.FC = () => {
                 </div>
               )}
 
-              {!isLoading && activeTab === 'collections' && (
+              {!isLoading && visibleActiveTab === 'collections' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {userCollections.length === 0 ? (
                     <div className="col-span-2 py-20 text-center text-outline font-bold">暂无云端收藏夹</div>
@@ -403,7 +423,7 @@ const ProfileView: React.FC = () => {
           </div>
         </div>
       </div>
-      {selectedCloudCollection && (
+      {!isDeveloperApiMode && selectedCloudCollection && (
         <CloudCollectionOverlay
           allFolders={userCollections}
           folder={selectedCloudCollection}
@@ -412,7 +432,9 @@ const ProfileView: React.FC = () => {
             setOpeningCloudCollectionId(null);
           }}
           onCollectionMutated={async () => {
-            await fetchUserActivity('collections');
+            if (!isDeveloperApiMode) {
+              await fetchUserActivity('collections');
+            }
           }}
           onOpenResource={handleOpenCloudResource}
         />
