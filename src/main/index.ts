@@ -1654,10 +1654,36 @@ const getSafeErrorMessage = (error: unknown) => {
 const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any | null) => {
   if (!legacyDetail) return developerDetail
 
+  const developerRatingSummary = developerDetail.ratingSummary
+  const legacyRatingSummary = legacyDetail.ratingSummary
+  const developerHistogram = Array.isArray(developerRatingSummary?.histogram)
+    ? developerRatingSummary.histogram
+    : []
+  const legacyHistogram = Array.isArray(legacyRatingSummary?.histogram)
+    ? legacyRatingSummary.histogram
+    : []
+  const ratingSummary =
+    developerRatingSummary || legacyRatingSummary
+      ? {
+          ...(legacyRatingSummary ?? {}),
+          ...(developerRatingSummary ?? {}),
+          histogram: developerHistogram.length > 0 ? developerHistogram : legacyHistogram,
+          recommend: {
+            ...(legacyRatingSummary?.recommend ?? {}),
+            ...(developerRatingSummary?.recommend ?? {})
+          }
+        }
+      : null
+
   return {
     ...legacyDetail,
     ...developerDetail,
     id: legacyDetail.id || developerDetail.id || 0,
+    vndbId: developerDetail.vndbId ?? legacyDetail.vndbId ?? null,
+    bangumiId: developerDetail.bangumiId ?? legacyDetail.bangumiId ?? null,
+    steamId: developerDetail.steamId ?? legacyDetail.steamId ?? null,
+    contentLimit: developerDetail.contentLimit ?? legacyDetail.contentLimit ?? null,
+    ratingSummary,
     viewCount: legacyDetail.viewCount || developerDetail.viewCount || 0,
     downloadCount: legacyDetail.downloadCount || developerDetail.downloadCount || 0,
     favoriteCount: legacyDetail.favoriteCount || developerDetail.favoriteCount || 0,
