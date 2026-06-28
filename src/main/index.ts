@@ -2949,6 +2949,10 @@ handleWithLog(
       averageRating?: number
       viewCount?: number
       downloadCount?: number
+      ratingCount?: number
+      introduction?: string | null
+      screenshots?: string[]
+      pvUrl?: string | null
       alias?: string[]
       tags?: string[]
       company?: string | null
@@ -3367,6 +3371,10 @@ handleWithLog('tg-local-collections-add-item', async (_event, collectionId: numb
   averageRating?: number
   viewCount?: number
   downloadCount?: number
+  ratingCount?: number
+  introduction?: string | null
+  screenshots?: string[]
+  pvUrl?: string | null
   alias?: string[]
   tags?: string[]
   company?: string | null

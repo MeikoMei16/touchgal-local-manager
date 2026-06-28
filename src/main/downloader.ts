@@ -55,6 +55,10 @@ interface QueueDownloadInput {
     averageRating?: number
     viewCount?: number
     downloadCount?: number
+    ratingCount?: number
+    introduction?: string | null
+    screenshots?: string[]
+    pvUrl?: string | null
     alias?: string[]
     tags?: string[]
     company?: string | null
@@ -847,6 +851,10 @@ class DownloadManager {
         averageRating: gameMetadata.averageRating ?? 0,
         viewCount: gameMetadata.viewCount ?? 0,
         downloadCount: gameMetadata.downloadCount ?? 0,
+        ratingCount: gameMetadata.ratingCount ?? 0,
+        introduction: gameMetadata.introduction ?? null,
+        screenshots: gameMetadata.screenshots ?? [],
+        pvUrl: gameMetadata.pvUrl ?? null,
         alias: gameMetadata.alias ?? [],
         tags: gameMetadata.tags ?? [],
         company: gameMetadata.company ?? null,
