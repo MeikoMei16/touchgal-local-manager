@@ -1910,6 +1910,23 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
     if (Number.isFinite(fallbackNumber) && fallbackNumber > 0) return fallbackNumber
     return Number.isFinite(primaryNumber) ? primaryNumber : 0
   }
+  const preferNonEmptyString = (primary: unknown, fallback: unknown) =>
+    typeof primary === 'string' && primary.trim().length > 0
+      ? primary
+      : typeof fallback === 'string' && fallback.trim().length > 0
+        ? fallback
+        : null
+  const preferNonEmptyArray = (primary: unknown, fallback: unknown) =>
+    Array.isArray(primary) && primary.length > 0
+      ? primary
+      : Array.isArray(fallback) && fallback.length > 0
+        ? fallback
+        : []
+  const mergeStringArrays = (primary: unknown, fallback: unknown) =>
+    Array.from(new Set([
+      ...(Array.isArray(primary) ? primary : []),
+      ...(Array.isArray(fallback) ? fallback : []),
+    ].filter((item): item is string => typeof item === 'string' && item.trim().length > 0)))
   const mergeRecommend = (
     developerRecommend: Record<string, unknown> | undefined,
     legacyRecommend: Record<string, unknown> | undefined
@@ -1940,6 +1957,17 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
     bangumiId: developerDetail.bangumiId ?? legacyDetail.bangumiId ?? null,
     steamId: developerDetail.steamId ?? legacyDetail.steamId ?? null,
     contentLimit: developerDetail.contentLimit ?? legacyDetail.contentLimit ?? null,
+    created: preferNonEmptyString(developerDetail.created, legacyDetail.created),
+    releasedDate: preferNonEmptyString(developerDetail.releasedDate, legacyDetail.releasedDate),
+    resourceUpdateTime: preferNonEmptyString(developerDetail.resourceUpdateTime, legacyDetail.resourceUpdateTime),
+    touchgalUrl: preferNonEmptyString(developerDetail.touchgalUrl, legacyDetail.touchgalUrl),
+    company: preferNonEmptyString(developerDetail.company, legacyDetail.company),
+    companyAliases: mergeStringArrays(developerDetail.companyAliases, legacyDetail.companyAliases),
+    alias: mergeStringArrays(developerDetail.alias, legacyDetail.alias),
+    tags: mergeStringArrays(developerDetail.tags, legacyDetail.tags),
+    platform: preferNonEmptyArray(developerDetail.platform, legacyDetail.platform),
+    language: preferNonEmptyArray(developerDetail.language, legacyDetail.language),
+    type: preferNonEmptyArray(developerDetail.type, legacyDetail.type),
     ratingSummary,
     viewCount: legacyDetail.viewCount || developerDetail.viewCount || 0,
     downloadCount: legacyDetail.downloadCount || developerDetail.downloadCount || 0,
