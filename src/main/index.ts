@@ -1405,7 +1405,9 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
 })
 
 const DEVELOPER_BROWSE_FALLBACK_KEYWORD = '恋'
+const DEVELOPER_BROWSE_FALLBACK_KEYWORDS = ['恋', '夏', '月', '花', '魔', '女']
 const DEVELOPER_FALLBACK_MAX_SCAN_PAGES = 6
+const DEVELOPER_BROAD_BROWSE_MAX_SEARCH_PAGES = 3
 
 const getDeveloperBrowseFallbackKeywords = (query: any) => {
   const selectedTags = Array.isArray(query?.selectedTags)
@@ -1597,6 +1599,96 @@ const buildDeveloperFallbackTotal = (
   return pageListLength >= pageSize ? visibleTotal + 1 : Math.max(filteredLength, visibleTotal)
 }
 
+const canUseDeveloperBroadBrowseFallback = (query: any) => {
+  const hasYearConstraints = Array.isArray(query?.yearConstraints) && query.yearConstraints.length > 0
+  const hasSelectedTags = Array.isArray(query?.selectedTags) && query.selectedTags.length > 0
+  return !hasYearConstraints &&
+    !hasSelectedTags &&
+    (query?.selectedType ?? 'all') === 'all' &&
+    (query?.selectedLanguage ?? 'all') === 'all' &&
+    (query?.selectedPlatform ?? 'all') === 'all' &&
+    Number(query?.minRatingCount ?? 0) <= 0 &&
+    Number(query?.minRatingScore ?? 0) <= 0 &&
+    Number(query?.minCommentCount ?? 0) <= 0 &&
+    (query?.sortField ?? 'resource_update_time') === 'resource_update_time' &&
+    (query?.sortOrder ?? 'desc') === 'desc'
+}
+
+const fetchDeveloperBroadBrowseFallback = async (page: number, limit: number) => {
+  const safePage = Math.max(1, Number(page) || 1)
+  const pageSize = clampApiLimit(limit)
+  const start = (safePage - 1) * pageSize
+  const targetCount = start + pageSize
+  const collectedById = new Map<string, any>()
+  let scannedHasMore = false
+  let successfulSearches = 0
+  let lastResult: Awaited<ReturnType<typeof fetchDeveloperGameSearch>> | null = null
+  let lastError: unknown = null
+
+  for (
+    let currentPage = 1;
+    currentPage <= DEVELOPER_BROAD_BROWSE_MAX_SEARCH_PAGES && collectedById.size < targetCount;
+    currentPage += 1
+  ) {
+    let roundHasMore = false
+
+    for (const keyword of DEVELOPER_BROWSE_FALLBACK_KEYWORDS) {
+      try {
+        const result = await fetchDeveloperGameSearch(keyword, currentPage, pageSize, {
+          hydrateDetails: false,
+        })
+        successfulSearches += 1
+        lastResult = result
+        roundHasMore = roundHasMore || Boolean(result.pagination?.hasMore)
+
+        for (const game of result.list) {
+          if (!game.uniqueId || collectedById.has(game.uniqueId)) continue
+          collectedById.set(game.uniqueId, game)
+        }
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    scannedHasMore = roundHasMore
+    if (!roundHasMore) break
+  }
+
+  if (successfulSearches === 0) {
+    throw lastError instanceof Error ? lastError : new Error('Developer broad browse fallback failed')
+  }
+
+  const candidates = Array.from(collectedById.values())
+  const pageCandidates = candidates.slice(start, start + pageSize)
+  const list = (await Promise.all(pageCandidates.map(async (item) => {
+    try {
+      return {
+        ...item,
+        ...(await fetchDeveloperGameDetail(item.uniqueId)),
+        uniqueId: item.uniqueId,
+      }
+    } catch {
+      return item
+    }
+  }))).filter((item) => item.uniqueId && item.name)
+  upsertNormalizedGames(list)
+
+  return {
+    list,
+    total: buildDeveloperFallbackTotal(
+      start,
+      list.length,
+      candidates.length,
+      scannedHasMore || candidates.length > start + list.length,
+      pageSize
+    ),
+    pagination: lastResult?.pagination ?? null,
+    source: 'developer-api-browse-fallback',
+    fallbackKeyword: DEVELOPER_BROWSE_FALLBACK_KEYWORDS.join(','),
+    scannedPages: DEVELOPER_BROAD_BROWSE_MAX_SEARCH_PAGES,
+  }
+}
+
 const fetchDeveloperFilteredFallback = async (input: {
   keyword: string
   page: number
@@ -1669,6 +1761,15 @@ const fetchDeveloperBrowseFallback = async (page: number, limit: number, query: 
   const keywords = getDeveloperBrowseFallbackKeywords(query)
   let lastResult: Awaited<ReturnType<typeof fetchDeveloperFilteredFallback>> | null = null
   let lastError: unknown = null
+
+  if (canUseDeveloperBroadBrowseFallback(query)) {
+    try {
+      const result = await fetchDeveloperBroadBrowseFallback(page, limit)
+      if (result.list.length > 0) return result
+    } catch (error) {
+      lastError = error
+    }
+  }
 
   for (const keyword of keywords) {
     try {
