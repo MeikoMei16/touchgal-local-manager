@@ -51,13 +51,16 @@ export const compareConstraint = (year: number, op: string, value: number): bool
 
 const getCompanySet = (resource: AdvancedResourceRecord) => {
   const rawCompany = (resource as any).company;
+  const rawCompanyAliases = (resource as any).companyAliases;
   const values = Array.isArray(rawCompany)
     ? rawCompany
     : typeof rawCompany === 'string'
       ? rawCompany.split(',')
       : [];
 
-  return new Set(values.map((value) => String(value).trim()).filter(Boolean));
+  const aliases = Array.isArray(rawCompanyAliases) ? rawCompanyAliases : [];
+
+  return new Set([...values, ...aliases].map((value) => String(value).trim()).filter(Boolean));
 };
 
 export const applyAdvancedPredicate = (resources: AdvancedResourceRecord[], draft: AdvancedFilterDraft): AdvancedResourceRecord[] =>

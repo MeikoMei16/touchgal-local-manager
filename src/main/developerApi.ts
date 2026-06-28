@@ -69,6 +69,7 @@ interface DeveloperNormalizedGame {
   created: string | null
   introduction: string | null
   company: string | null
+  companyAliases: string[]
   pvUrl: string | null
   screenshots: string[]
   detail: null
@@ -445,6 +446,7 @@ const normalizeDeveloperSearchItem = (item: DeveloperSearchItem): DeveloperNorma
   created: null,
   introduction: null,
   company: null,
+  companyAliases: [],
   pvUrl: null,
   screenshots: [],
   detail: null,
@@ -468,10 +470,32 @@ const normalizeDeveloperRecommend = (recommend?: DeveloperRatingRecommend) => ({
   strong_yes: recommend?.strongYes ?? recommend?.strong_yes ?? 0,
 })
 
+const normalizeDeveloperCompanies = (companies: DeveloperGameDetail['companies']) => {
+  const names = new Set<string>()
+  const aliases = new Set<string>()
+
+  for (const company of Array.isArray(companies) ? companies : []) {
+    if (typeof company?.name === 'string' && company.name.trim()) {
+      names.add(company.name.trim())
+    }
+    for (const alias of Array.isArray(company?.aliases) ? company.aliases : []) {
+      if (typeof alias === 'string' && alias.trim()) {
+        aliases.add(alias.trim())
+      }
+    }
+  }
+
+  return {
+    company: names.size > 0 ? Array.from(names).join(', ') : null,
+    companyAliases: Array.from(aliases),
+  }
+}
+
 export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): DeveloperNormalizedGame => {
   const average = raw.rating?.average ?? 0
   const count = raw.rating?.count ?? 0
   const introductionMarkdown = raw.introduction ?? null
+  const companies = normalizeDeveloperCompanies(raw.companies)
 
   return {
     id: 0,
@@ -496,9 +520,8 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
     resourceUpdateTime: raw.resourceUpdateTime ?? raw.updatedAt ?? null,
     created: raw.publishTime ?? null,
     introduction: markdownToBasicHtml(introductionMarkdown),
-    company: Array.isArray(raw.companies)
-      ? raw.companies.map((company) => company?.name).filter(Boolean).join(', ') || null
-      : null,
+    company: companies.company,
+    companyAliases: companies.companyAliases,
     pvUrl: extractPvUrlFromMarkdown(introductionMarkdown),
     screenshots: extractMarkdownImageUrls(introductionMarkdown),
     detail: null,

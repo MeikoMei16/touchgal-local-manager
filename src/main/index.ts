@@ -1045,6 +1045,8 @@ const upsertNormalizedGames = (games: Array<{
   commentCount?: number
   alias?: string[]
   tags?: string[]
+  company?: string | null
+  companyAliases?: string[]
   platform?: string[]
   language?: string[]
   type?: string[]
@@ -1070,6 +1072,8 @@ const upsertNormalizedGames = (games: Array<{
       commentCount: game.commentCount ?? 0,
       alias: Array.isArray(game.alias) ? game.alias : [],
       tags: Array.isArray(game.tags) ? game.tags : [],
+      company: game.company ?? null,
+      companyAliases: Array.isArray(game.companyAliases) ? game.companyAliases : [],
       platform: Array.isArray(game.platform) ? game.platform : [],
       language: Array.isArray(game.language) ? game.language : [],
       type: Array.isArray(game.type) ? game.type : [],
@@ -1106,6 +1110,20 @@ const getCachedNumber = (detail: Record<string, unknown>, key: string, fallback 
 
 const getCachedString = (detail: Record<string, unknown>, key: string) =>
   typeof detail[key] === 'string' ? detail[key] as string : null
+
+const extractCompanyAliases = (companies: unknown): string[] => {
+  if (!Array.isArray(companies)) return []
+  return companies.flatMap((company: any) => {
+    const aliases = Array.isArray(company?.aliases)
+      ? company.aliases
+      : Array.isArray(company?.alias)
+        ? company.alias
+        : []
+    return aliases.filter((alias: unknown): alias is string =>
+      typeof alias === 'string' && alias.trim().length > 0
+    )
+  })
+}
 
 const fetchCachedGameFeed = (page: number, limit: number) => {
   const safePage = Math.max(1, Number(page) || 1)
@@ -1155,7 +1173,8 @@ const fetchCachedGameFeed = (page: number, limit: number) => {
             ? detail.resourceUpdateTime
             : row.resourceUpdateTime ?? null,
         created: getCachedString(detail, 'created'),
-        company: null,
+        company: getCachedString(detail, 'company'),
+        companyAliases: asStringArray(detail.companyAliases),
         pvUrl: null,
         screenshots: [],
         detail: null,
@@ -1197,6 +1216,7 @@ const normalizeIntroduction = (payload: any) => {
         : Array.isArray(payload.company)
           ? payload.company.map((item: any) => item?.name).filter(Boolean).join(', ') || null
           : null,
+    companyAliases: extractCompanyAliases(payload.company),
     vndbId: payload.vndbId ?? null,
     bangumiId: payload.bangumiId ?? null,
     steamId: payload.steamId != null ? String(payload.steamId) : null,
@@ -1313,6 +1333,29 @@ const developerResourceValuesInclude = (values: unknown, selectedValue: unknown)
   return normalizedValues.includes(selectedValue)
 }
 
+const getDeveloperCompanyValues = (game: any) => {
+  const values = new Set<string>()
+  const company = game?.company
+  const companyAliases = game?.companyAliases
+
+  if (typeof company === 'string') {
+    for (const value of company.split(',')) {
+      const trimmed = value.trim()
+      if (trimmed) values.add(trimmed)
+    }
+  }
+
+  if (Array.isArray(companyAliases)) {
+    for (const alias of companyAliases) {
+      if (typeof alias !== 'string') continue
+      const trimmed = alias.trim()
+      if (trimmed) values.add(trimmed)
+    }
+  }
+
+  return values
+}
+
 const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
   const selectedType = query?.selectedType ?? 'all'
   const selectedLanguage = query?.selectedLanguage ?? 'all'
@@ -1352,7 +1395,8 @@ const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
 
     if (selectedTags.length > 0) {
       const tags = Array.isArray(game.tags) ? game.tags : []
-      if (!selectedTags.every((tag) => tags.includes(tag))) return false
+      const companies = getDeveloperCompanyValues(game)
+      if (!selectedTags.every((tag) => tags.includes(tag) || companies.has(tag))) return false
     }
 
     return true
@@ -2300,6 +2344,7 @@ handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
         alias: detail.alias,
         tags: detail.tags,
         company: detail.company,
+        companyAliases: detail.companyAliases,
         vndbId: detail.vndbId,
         bangumiId: detail.bangumiId,
         steamId: detail.steamId,
@@ -2367,6 +2412,8 @@ handleWithLog('tg-match-folder', async (_event, folderName: string) => {
           downloadCount: game.downloadCount,
           alias: game.alias,
           tags: game.tags,
+          company: game.company,
+          companyAliases: game.companyAliases,
           platform: game.platform,
           language: game.language,
           type: game.type,

@@ -356,6 +356,8 @@ export const upsertGame = (game: {
   created?: string | null
   alias?: string[]
   tags?: string[]
+  company?: string | null
+  companyAliases?: string[]
   platform?: string[]
   language?: string[]
   type?: string[]
@@ -395,6 +397,8 @@ export const upsertGame = (game: {
     hasRemoteNumericId ||
     (game.alias?.length ?? 0) > 0 ||
     (game.tags?.length ?? 0) > 0 ||
+    Boolean(game.company) ||
+    (game.companyAliases?.length ?? 0) > 0 ||
     (game.platform?.length ?? 0) > 0 ||
     (game.language?.length ?? 0) > 0 ||
     (game.type?.length ?? 0) > 0 ||
@@ -430,6 +434,8 @@ export const upsertGame = (game: {
       ...detail,
       alias: mergeStrings(detail.alias, game.alias),
       tags: mergeStrings(detail.tags, game.tags),
+      company: game.company ?? detail.company ?? null,
+      companyAliases: mergeStrings(detail.companyAliases, game.companyAliases),
       platform: mergeStrings(detail.platform, game.platform),
       language: mergeStrings(detail.language, game.language),
       type: mergeStrings(detail.type, game.type),
