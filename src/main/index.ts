@@ -1662,16 +1662,32 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
   const legacyHistogram = Array.isArray(legacyRatingSummary?.histogram)
     ? legacyRatingSummary.histogram
     : []
+  const preferPositiveNumber = (primary: unknown, fallback: unknown) => {
+    const primaryNumber = typeof primary === 'number' ? primary : Number(primary)
+    if (Number.isFinite(primaryNumber) && primaryNumber > 0) return primaryNumber
+    const fallbackNumber = typeof fallback === 'number' ? fallback : Number(fallback)
+    if (Number.isFinite(fallbackNumber) && fallbackNumber > 0) return fallbackNumber
+    return Number.isFinite(primaryNumber) ? primaryNumber : 0
+  }
+  const mergeRecommend = (
+    developerRecommend: Record<string, unknown> | undefined,
+    legacyRecommend: Record<string, unknown> | undefined
+  ) => ({
+    strong_no: preferPositiveNumber(developerRecommend?.strong_no, legacyRecommend?.strong_no),
+    no: preferPositiveNumber(developerRecommend?.no, legacyRecommend?.no),
+    neutral: preferPositiveNumber(developerRecommend?.neutral, legacyRecommend?.neutral),
+    yes: preferPositiveNumber(developerRecommend?.yes, legacyRecommend?.yes),
+    strong_yes: preferPositiveNumber(developerRecommend?.strong_yes, legacyRecommend?.strong_yes)
+  })
   const ratingSummary =
     developerRatingSummary || legacyRatingSummary
       ? {
           ...(legacyRatingSummary ?? {}),
           ...(developerRatingSummary ?? {}),
+          average: preferPositiveNumber(developerRatingSummary?.average, legacyRatingSummary?.average),
+          count: preferPositiveNumber(developerRatingSummary?.count, legacyRatingSummary?.count),
           histogram: developerHistogram.length > 0 ? developerHistogram : legacyHistogram,
-          recommend: {
-            ...(legacyRatingSummary?.recommend ?? {}),
-            ...(developerRatingSummary?.recommend ?? {})
-          }
+          recommend: mergeRecommend(developerRatingSummary?.recommend, legacyRatingSummary?.recommend)
         }
       : null
 
