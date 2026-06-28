@@ -393,10 +393,19 @@ export const upsertGame = (game: {
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(unique_id) DO UPDATE SET
       name = excluded.name,
-      banner_url = excluded.banner_url,
-      avg_rating = excluded.avg_rating,
-      view_count = excluded.view_count,
-      download_count = excluded.download_count,
+      banner_url = COALESCE(NULLIF(excluded.banner_url, ''), games.banner_url),
+      avg_rating = CASE
+        WHEN excluded.avg_rating > 0 OR games.avg_rating IS NULL THEN excluded.avg_rating
+        ELSE games.avg_rating
+      END,
+      view_count = CASE
+        WHEN excluded.view_count > 0 OR games.view_count IS NULL THEN excluded.view_count
+        ELSE games.view_count
+      END,
+      download_count = CASE
+        WHEN excluded.download_count > 0 OR games.download_count IS NULL THEN excluded.download_count
+        ELSE games.download_count
+      END,
       local_updated_at = CURRENT_TIMESTAMP
   `)
 
@@ -414,6 +423,29 @@ export const upsertGame = (game: {
     .get(game.uniqueId) as { id: number } | undefined
   const gameId = row?.id ?? game.id
 
+  const isPositiveNumber = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0
+
+  const hasRatingSummaryData = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+    const summary = value as Record<string, unknown>
+    if (isPositiveNumber(summary.average) || isPositiveNumber(summary.count)) return true
+
+    if (Array.isArray(summary.histogram) && summary.histogram.some((entry) =>
+      entry && typeof entry === 'object' && isPositiveNumber((entry as Record<string, unknown>).count)
+    )) {
+      return true
+    }
+
+    const recommend = summary.recommend
+    return Boolean(
+      recommend &&
+      typeof recommend === 'object' &&
+      !Array.isArray(recommend) &&
+      Object.values(recommend).some(isPositiveNumber)
+    )
+  }
+
   const hasDetailPatch =
     hasRemoteNumericId ||
     (game.alias?.length ?? 0) > 0 ||
@@ -427,11 +459,11 @@ export const upsertGame = (game: {
     Boolean(game.resourceUpdateTime) ||
     Boolean(game.touchgalUrl) ||
     Boolean(game.created) ||
-    game.favoriteCount !== undefined ||
-    game.resourceCount !== undefined ||
-    game.commentCount !== undefined ||
-    game.ratingCount !== undefined ||
-    game.ratingSummary !== undefined
+    isPositiveNumber(game.favoriteCount) ||
+    isPositiveNumber(game.resourceCount) ||
+    isPositiveNumber(game.commentCount) ||
+    isPositiveNumber(game.ratingCount) ||
+    hasRatingSummaryData(game.ratingSummary)
 
   if (gameId > 0 && hasDetailPatch) {
     const existing = db
@@ -461,6 +493,12 @@ export const upsertGame = (game: {
         ...toStringList(next)
       ].filter((item): item is string => typeof item === 'string' && item.trim().length > 0)))
 
+    const preserveNumber = (previous: unknown, next: unknown) =>
+      isPositiveNumber(next) || previous == null ? next ?? null : previous
+
+    const preserveRatingSummary = (previous: unknown, next: unknown) =>
+      hasRatingSummaryData(next) || previous == null ? next ?? null : previous
+
     const detailPatch = {
       ...detail,
       alias: mergeStrings(detail.alias, game.alias),
@@ -475,11 +513,11 @@ export const upsertGame = (game: {
       touchgalUrl: game.touchgalUrl ?? detail.touchgalUrl ?? null,
       remotePatchId: hasRemoteNumericId ? game.id : detail.remotePatchId ?? null,
       created: game.created ?? detail.created ?? null,
-      favoriteCount: game.favoriteCount ?? detail.favoriteCount ?? null,
-      resourceCount: game.resourceCount ?? detail.resourceCount ?? null,
-      commentCount: game.commentCount ?? detail.commentCount ?? null,
-      ratingCount: game.ratingCount ?? detail.ratingCount ?? null,
-      ratingSummary: game.ratingSummary ?? detail.ratingSummary ?? null
+      favoriteCount: preserveNumber(detail.favoriteCount, game.favoriteCount),
+      resourceCount: preserveNumber(detail.resourceCount, game.resourceCount),
+      commentCount: preserveNumber(detail.commentCount, game.commentCount),
+      ratingCount: preserveNumber(detail.ratingCount, game.ratingCount),
+      ratingSummary: preserveRatingSummary(detail.ratingSummary, game.ratingSummary)
     }
 
     db.prepare('UPDATE games SET detail_json = ? WHERE id = ?').run(
