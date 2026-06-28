@@ -9,7 +9,8 @@ import {
   PatchCommentResponseSchema,
   PatchRatingResponseSchema,
   FavoriteFolderSchema,
-  FavoriteToggleResponseSchema
+  FavoriteToggleResponseSchema,
+  SearchTagSuggestionListSchema
 } from '../schemas';
 
 const asRecord = (value: unknown): Record<string, any> =>
@@ -116,7 +117,19 @@ export const TouchGalClient = {
   },
 
   searchTags: async (keyword: string) => {
-    return await window.api.searchTags(keyword);
+    const raw = await window.api.searchTags(keyword);
+    const payload = unwrapResponseData(raw);
+    const data = asRecord(payload);
+    const suggestions = Array.isArray(payload)
+      ? payload
+      : Array.isArray(data.suggestions)
+        ? data.suggestions
+        : Array.isArray(data.tags)
+          ? data.tags
+          : Array.isArray(data.list)
+            ? data.list
+            : [];
+    return SearchTagSuggestionListSchema.parse(suggestions);
   },
 
   getUserStatus: async (id: number) => {

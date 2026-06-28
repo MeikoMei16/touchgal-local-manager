@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '../store/useTouchGalStore';
 import { HomeQueryState } from '../features/home/homeState';
+import { TouchGalClient } from '../data/TouchGalClient';
 
 // Tag library with usage counts sourced from TouchGal
 const TAG_LIBRARY: { name: string; count: number }[] = [
@@ -66,6 +67,13 @@ interface FilterBarProps {
 }
 
 type Operator = '=' | '>=' | '<=' | '>' | '<';
+type TagSuggestion = { id?: number; name: string; count: number; type?: string };
+
+const getLocalTagSuggestions = (query: string): TagSuggestion[] =>
+  TAG_LIBRARY
+    .filter(t => t.name.toLowerCase().includes(query))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
 
 export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }) => {
   const { addTagFilter, removeTagFilter, advancedFilterDraft } = useUIStore();
@@ -78,7 +86,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   const [yearConstraints, setYearConstraints] = useState<Array<{op: string, val: number}>>([]);
   
   const [tagSearchInput, setTagSearchInput] = useState('');
-  const [tagSuggestions, setTagSuggestions] = useState<{ name: string; count: number }[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<TagSuggestion[]>([]);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
 
   // Stats
@@ -105,23 +113,40 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
   }, []);
 
   useEffect(() => {
-    setYearConstraints(advancedFilterDraft.yearConstraints);
-    setMinRatingScore(advancedFilterDraft.minRatingScore);
-    setMinCommentCount(advancedFilterDraft.minCommentCount);
+    const timer = window.setTimeout(() => {
+      setYearConstraints(advancedFilterDraft.yearConstraints);
+      setMinRatingScore(advancedFilterDraft.minRatingScore);
+      setMinCommentCount(advancedFilterDraft.minCommentCount);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [advancedFilterDraft]);
 
-  // Tag search — filter TAG_LIBRARY locally, no API call needed
   useEffect(() => {
     const q = tagSearchInput.trim().toLowerCase();
-    if (!q) { setTagSuggestions([]); return; }
+    let cancelled = false;
     const timer = setTimeout(() => {
-      const matches = TAG_LIBRARY
-        .filter(t => t.name.toLowerCase().includes(q))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 12);
-      setTagSuggestions(matches);
+      if (!q) {
+        setTagSuggestions([]);
+        return;
+      }
+      void TouchGalClient.searchTags(q)
+        .then((remoteSuggestions) => {
+          if (cancelled) return;
+          const normalized = remoteSuggestions
+            .filter((item) => item.name)
+            .slice(0, 12);
+          setTagSuggestions(normalized.length > 0 ? normalized : getLocalTagSuggestions(q));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTagSuggestions(getLocalTagSuggestions(q));
+          }
+        });
     }, 150);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [tagSearchInput]);
 
   // --- Helpers ---
@@ -308,7 +333,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange, onSubmit }
                   >
                     <span className="font-bold text-slate-700 group-hover/tip:text-blue-700">{tag.name}</span>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-[10px] font-bold text-slate-400 group-hover/tip:text-blue-400">{tag.count.toLocaleString()} 个</span>
+                      <span className="text-[10px] font-bold text-slate-400 group-hover/tip:text-blue-400">
+                        {tag.count > 0 ? `${tag.count.toLocaleString()} 个` : tag.type === 'company' ? '会社' : '标签'}
+                      </span>
                       <Plus size={14} className="text-slate-300 group-hover/tip:text-blue-500" />
                     </div>
                   </div>

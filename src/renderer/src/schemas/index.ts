@@ -161,6 +161,17 @@ const normalizeFavoriteFolderInput = (value: unknown) => {
   };
 };
 
+const normalizeSearchTagSuggestionInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  return {
+    ...raw,
+    name: raw.name ?? raw.label ?? raw.value ?? '',
+    type: raw.type ?? 'tag',
+    mode: raw.mode ?? 'include',
+    count: raw.count ?? 0,
+  };
+};
+
 const normalizePatchCommentInput = (value: unknown) => {
   const raw = objectRecord(value);
   const user = objectRecord(raw.user);
@@ -345,6 +356,19 @@ export const PatchIntroductionSchema = z.object({
   bangumiId: nullableNumber,
   steamId: nullableString,
 }).passthrough();
+
+export const SearchTagSuggestionSchema = z.preprocess(
+  normalizeSearchTagSuggestionInput,
+  z.object({
+    id: numberDefault(),
+    name: stringDefault(),
+    type: stringDefault('tag'),
+    mode: stringDefault('include'),
+    count: numberDefault(),
+  }).passthrough()
+);
+
+export const SearchTagSuggestionListSchema = arrayOf(SearchTagSuggestionSchema);
 
 export const UserProfileSchema = z.preprocess(
   normalizeUserProfileInput,
