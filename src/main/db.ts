@@ -16,6 +16,16 @@ export interface LocalCollectionGamePayload {
   viewCount?: number
   downloadCount?: number
   alias?: string[]
+  tags?: string[]
+  company?: string | null
+  companyAliases?: string[]
+  platform?: string[] | string
+  language?: string[] | string
+  type?: string[]
+  created?: string | null
+  releasedDate?: string | null
+  resourceUpdateTime?: string | null
+  touchgalUrl?: string | null
 }
 
 export interface LocalCollectionItemRecord {
@@ -27,6 +37,17 @@ export interface LocalCollectionItemRecord {
   averageRating: number
   viewCount: number
   downloadCount: number
+  alias: string[]
+  tags: string[]
+  company: string | null
+  companyAliases: string[]
+  platform: string[]
+  language: string[]
+  type: string[]
+  created: string | null
+  releasedDate: string | null
+  resourceUpdateTime: string | null
+  touchgalUrl: string | null
 }
 
 export interface LocalCollectionRecord {
@@ -358,8 +379,8 @@ export const upsertGame = (game: {
   tags?: string[]
   company?: string | null
   companyAliases?: string[]
-  platform?: string[]
-  language?: string[]
+  platform?: string[] | string
+  language?: string[] | string
   type?: string[]
   releasedDate?: string | null
   resourceUpdateTime?: string | null
@@ -424,10 +445,20 @@ export const upsertGame = (game: {
       }
     })()
 
-    const mergeStrings = (previous: unknown, next: string[] | undefined) =>
+    const toStringList = (value: unknown) => {
+      if (Array.isArray(value)) {
+        return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      }
+      if (typeof value === 'string') {
+        return value.split(',').map((item) => item.trim()).filter(Boolean)
+      }
+      return []
+    }
+
+    const mergeStrings = (previous: unknown, next: string[] | string | undefined) =>
       Array.from(new Set([
-        ...(Array.isArray(previous) ? previous : []),
-        ...(Array.isArray(next) ? next : [])
+        ...toStringList(previous),
+        ...toStringList(next)
       ].filter((item): item is string => typeof item === 'string' && item.trim().length > 0)))
 
     const detailPatch = {
@@ -524,10 +555,36 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
 
   return collections.map((collection) => {
     const items = (itemStmt.all(collection.id) as Array<LocalCollectionItemRecord & { detailJson?: string | null }>)
-      .map(({ detailJson, ...item }) => ({
-        ...item,
-        resourceId: readRemotePatchId(detailJson)
-      }))
+      .map(({ detailJson, ...item }) => {
+        const detail = (() => {
+          try {
+            return detailJson ? JSON.parse(detailJson) as Record<string, unknown> : {}
+          } catch {
+            return {}
+          }
+        })()
+        const readStrings = (value: unknown) =>
+          Array.isArray(value)
+            ? value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+            : []
+        const readString = (value: unknown) => typeof value === 'string' ? value : null
+
+        return {
+          ...item,
+          resourceId: readRemotePatchId(detailJson),
+          alias: readStrings(detail.alias),
+          tags: readStrings(detail.tags),
+          company: readString(detail.company),
+          companyAliases: readStrings(detail.companyAliases),
+          platform: readStrings(detail.platform),
+          language: readStrings(detail.language),
+          type: readStrings(detail.type),
+          created: readString(detail.created),
+          releasedDate: readString(detail.releasedDate),
+          resourceUpdateTime: readString(detail.resourceUpdateTime),
+          touchgalUrl: readString(detail.touchgalUrl)
+        }
+      })
     return {
       ...collection,
       itemCount: items.length,

@@ -92,7 +92,17 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
       averageRating: resource.averageRating ?? 0,
       viewCount: resource.viewCount || (resource as any).view || 0,
       downloadCount: resource.downloadCount || (resource as any).download || 0,
-      alias: resource.alias
+      alias: resource.alias,
+      tags: resource.tags,
+      company: (resource as any).company ?? null,
+      companyAliases: (resource as any).companyAliases,
+      platform: resource.platform,
+      language: resource.language,
+      type: resource.type,
+      created: resource.created,
+      releasedDate: resource.releasedDate,
+      resourceUpdateTime: (resource as any).resourceUpdateTime ?? null,
+      touchgalUrl: (resource as any).touchgalUrl ?? null
     }),
     [resource]
   );

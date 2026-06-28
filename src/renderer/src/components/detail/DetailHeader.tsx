@@ -196,8 +196,18 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
     averageRating: resource.averageRating,
     viewCount: resource.viewCount,
     downloadCount: resource.downloadCount,
-    alias: resource.alias
-  }), [resource.alias, resource.averageRating, resource.banner, resource.downloadCount, resource.id, resource.name, resource.uniqueId, resource.viewCount]);
+    alias: resource.alias,
+    tags: resource.tags,
+    company: resource.company,
+    companyAliases: (resource as any).companyAliases,
+    platform: resource.platform,
+    language: resource.language,
+    type: resource.type,
+    created: resource.created,
+    releasedDate: resource.releasedDate,
+    resourceUpdateTime: resource.resourceUpdateTime,
+    touchgalUrl: resource.touchgalUrl
+  }), [resource]);
 
   const handleCollectionToggle = async (collectionId: number, isSelected: boolean) => {
     setCollectionError(null);

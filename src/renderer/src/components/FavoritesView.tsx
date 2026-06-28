@@ -27,20 +27,24 @@ const toFallbackResource = (item: LocalCollectionItem): TouchGalResource => ({
   uniqueId: item.uniqueId,
   name: item.name,
   banner: item.banner,
-  platform: '',
-  language: '',
-  type: [],
-  created: null,
-  releasedDate: null,
+  platform: item.platform?.join(', ') ?? '',
+  language: item.language?.join(', ') ?? '',
+  type: item.type ?? [],
+  created: item.created ?? null,
+  releasedDate: item.releasedDate ?? null,
   averageRating: item.averageRating,
-  tags: [],
-  alias: [],
+  tags: item.tags ?? [],
+  alias: item.alias ?? [],
   favoriteCount: 0,
   resourceCount: 0,
   commentCount: 0,
   viewCount: item.viewCount,
   downloadCount: item.downloadCount,
-  ratingSummary: null
+  ratingSummary: null,
+  company: item.company ?? null,
+  companyAliases: item.companyAliases ?? [],
+  resourceUpdateTime: item.resourceUpdateTime ?? null,
+  touchgalUrl: item.touchgalUrl ?? null
 });
 
 const toCollectionGameInput = (item: LocalCollectionItem): LocalCollectionGameInput => ({
@@ -50,7 +54,18 @@ const toCollectionGameInput = (item: LocalCollectionItem): LocalCollectionGameIn
   banner: item.banner,
   averageRating: item.averageRating,
   viewCount: item.viewCount,
-  downloadCount: item.downloadCount
+  downloadCount: item.downloadCount,
+  alias: item.alias,
+  tags: item.tags,
+  company: item.company,
+  companyAliases: item.companyAliases,
+  platform: item.platform,
+  language: item.language,
+  type: item.type,
+  created: item.created,
+  releasedDate: item.releasedDate,
+  resourceUpdateTime: item.resourceUpdateTime,
+  touchgalUrl: item.touchgalUrl
 });
 
 const summarizeCollection = (collection: LocalCollection) => {
