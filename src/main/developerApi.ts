@@ -369,15 +369,26 @@ const uniqueSanitizedUrls = (values: Array<string | null | undefined>) => {
   return urls
 }
 
+const isImageUrl = (value: string) =>
+  /\.(?:avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i.test(value)
+
 const extractMarkdownImageUrls = (markdown: string | null | undefined) => {
   if (!markdown) return []
 
-  return uniqueSanitizedUrls(
-    Array.from(
+  return uniqueSanitizedUrls([
+    ...Array.from(
       markdown.matchAll(/!\[[^\]]*]\(\s*<?([^)\s>]+)>?(?:\s+["'][^"']*["'])?\s*\)/g),
       (match) => match[1]
-    )
-  )
+    ),
+    ...Array.from(
+      markdown.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi),
+      (match) => match[1]
+    ),
+    ...Array.from(
+      markdown.matchAll(/https?:\/\/[^\s"'<>）)]+/gi),
+      (match) => match[0]
+    ).filter(isImageUrl),
+  ])
 }
 
 const isVideoUrl = (value: string) =>
