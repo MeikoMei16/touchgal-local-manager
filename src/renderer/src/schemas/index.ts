@@ -151,6 +151,68 @@ const normalizeUserResourceInput = (value: unknown) => {
   };
 };
 
+const buildRatingSummaryFromStat = (stat: Record<string, unknown>) => ({
+  average: stat.avg_overall ?? 0,
+  count: stat.count ?? 0,
+  histogram: [
+    { score: 1, count: stat.o1 ?? 0 },
+    { score: 2, count: stat.o2 ?? 0 },
+    { score: 3, count: stat.o3 ?? 0 },
+    { score: 4, count: stat.o4 ?? 0 },
+    { score: 5, count: stat.o5 ?? 0 },
+    { score: 6, count: stat.o6 ?? 0 },
+    { score: 7, count: stat.o7 ?? 0 },
+    { score: 8, count: stat.o8 ?? 0 },
+    { score: 9, count: stat.o9 ?? 0 },
+    { score: 10, count: stat.o10 ?? 0 }
+  ],
+  recommend: {
+    strong_no: stat.rec_strong_no ?? 0,
+    no: stat.rec_no ?? 0,
+    neutral: stat.rec_neutral ?? 0,
+    yes: stat.rec_yes ?? 0,
+    strong_yes: stat.rec_strong_yes ?? 0
+  }
+});
+
+const normalizeNameList = (value: unknown) =>
+  Array.isArray(value)
+    ? value.map((item) => typeof item === 'string' ? item : objectRecord(item).name).filter(Boolean)
+    : value;
+
+const normalizeTouchGalResourceInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  const counts = objectRecord(raw._count);
+  const ratingStat = objectRecord(raw.rating_stat);
+  const ratingSummary = raw.ratingSummary ?? (
+    Object.keys(ratingStat).length > 0 ? buildRatingSummaryFromStat(ratingStat) : null
+  );
+
+  return {
+    ...raw,
+    id: raw.id ?? raw.patchId ?? raw.patch_id ?? raw.galgameId ?? raw.galgame_id ?? 0,
+    uniqueId: raw.uniqueId ?? raw.unique_id ?? raw.patchUniqueId ?? '',
+    name: raw.name ?? raw.patchName ?? 'Unknown title',
+    banner: raw.banner ?? raw.bannerUrl ?? raw.banner_url ?? raw.patchBanner ?? null,
+    platform: raw.platform ?? [],
+    language: raw.language ?? [],
+    type: raw.type ?? [],
+    created: raw.created ?? null,
+    releasedDate: raw.releasedDate ?? raw.released ?? null,
+    averageRating: raw.averageRating ?? (ratingSummary as any)?.average ?? ratingStat.avg_overall ?? 0,
+    tags: raw.tags ?? normalizeNameList(raw.tag),
+    alias: normalizeNameList(raw.alias),
+    favoriteCount: raw.favoriteCount ?? raw.favorite_count ?? counts.favorite_folder ?? 0,
+    resourceCount: raw.resourceCount ?? raw.resource_count ?? counts.patch_resource ?? counts.resource ?? 0,
+    commentCount: raw.commentCount ?? raw.comment_count ?? counts.patch_comment ?? counts.comment ?? 0,
+    viewCount: raw.viewCount ?? raw.view_count ?? raw.view ?? 0,
+    downloadCount: raw.downloadCount ?? raw.download_count ?? raw.download ?? 0,
+    ratingSummary,
+    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? null,
+    touchgalUrl: raw.touchgalUrl ?? raw.touchgal_url ?? null
+  };
+};
+
 const normalizeFavoriteFolderInput = (value: unknown) => {
   const raw = objectRecord(value);
   return {
@@ -308,7 +370,7 @@ export const RatingSummarySchema = z.object({
   recommend: RatingRecommendSchema,
 }).passthrough();
 
-export const TouchGalResourceSchema = z.object({
+const TouchGalResourceObjectSchema = z.object({
   id: numberDefault(),
   uniqueId: stringDefault(),
   name: stringDefault('Unknown title'),
@@ -333,7 +395,12 @@ export const TouchGalResourceSchema = z.object({
   touchgalUrl: nullableString,
 }).passthrough();
 
-export const TouchGalDetailSchema = TouchGalResourceSchema.extend({
+export const TouchGalResourceSchema = z.preprocess(
+  normalizeTouchGalResourceInput,
+  TouchGalResourceObjectSchema
+);
+
+export const TouchGalDetailSchema = z.preprocess(normalizeTouchGalResourceInput, TouchGalResourceObjectSchema.extend({
   introduction: nullableString,
   vndbId: nullableString,
   bangumiId: nullableNumber,
@@ -342,7 +409,7 @@ export const TouchGalDetailSchema = TouchGalResourceSchema.extend({
   screenshots: stringArray,
   pvUrl: nullableString,
   downloads: arrayOf(TouchGalDownloadSchema),
-}).passthrough();
+}).passthrough());
 
 export const TouchGalCommentSchema = z.object({
   id: numberDefault(),
