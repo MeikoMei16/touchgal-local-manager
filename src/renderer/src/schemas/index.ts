@@ -161,6 +161,39 @@ const normalizeFavoriteFolderInput = (value: unknown) => {
   };
 };
 
+const normalizePatchCommentInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  const user = objectRecord(raw.user);
+  const author = objectRecord(raw.author);
+  return {
+    ...raw,
+    userName: raw.userName ?? raw.user_name ?? user.name ?? author.name ?? 'Anonymous',
+    userAvatar: raw.userAvatar ?? raw.user_avatar ?? user.avatar ?? author.avatar ?? null,
+    createdAt: raw.createdAt ?? raw.created_at ?? raw.created ?? '',
+    likeCount: raw.likeCount ?? raw.like_count ?? (raw._count as any)?.like_by ?? 0,
+    isLike: raw.isLike ?? raw.is_like ?? false,
+    isSpoiler: raw.isSpoiler ?? raw.is_spoiler ?? false,
+  };
+};
+
+const normalizePatchRatingInput = (value: unknown) => {
+  const raw = objectRecord(value);
+  const user = objectRecord(raw.user);
+  const author = objectRecord(raw.author);
+  return {
+    ...raw,
+    overall: raw.overall ?? raw.rating ?? raw.score ?? 0,
+    shortSummary: raw.shortSummary ?? raw.short_summary ?? raw.comment ?? '',
+    playStatus: raw.playStatus ?? raw.play_status ?? 'other',
+    spoilerLevel: raw.spoilerLevel ?? raw.spoiler_level ?? 'none',
+    userName: raw.userName ?? raw.user_name ?? user.name ?? author.name ?? 'Anonymous',
+    userAvatar: raw.userAvatar ?? raw.user_avatar ?? user.avatar ?? author.avatar ?? null,
+    likeCount: raw.likeCount ?? raw.like_count ?? (raw._count as any)?.like ?? 0,
+    isLike: raw.isLike ?? raw.is_like ?? false,
+    createdAt: raw.createdAt ?? raw.created_at ?? raw.created ?? '',
+  };
+};
+
 const TouchGalDownloadUserSchema = z.object({
   id: numberDefault(),
   name: stringDefault('Unknown'),
@@ -256,6 +289,43 @@ export const TouchGalCommentSchema = z.object({
   userName: stringDefault(),
   userAvatar: nullableString,
   createdAt: stringDefault(),
+  likeCount: numberDefault(),
+  isLike: booleanDefault(),
+  isSpoiler: booleanDefault(),
+  reply: arrayOf(z.unknown()),
+}).passthrough();
+
+export const PatchCommentSchema = z.preprocess(normalizePatchCommentInput, TouchGalCommentSchema);
+
+export const PatchCommentResponseSchema = z.object({
+  total: numberDefault(),
+  list: arrayOf(PatchCommentSchema),
+  requiresLogin: booleanDefault(),
+  error: nullableString,
+}).passthrough();
+
+export const PatchRatingSchema = z.preprocess(
+  normalizePatchRatingInput,
+  z.object({
+    id: numberDefault(),
+    overall: numberDefault(),
+    recommend: stringDefault('neutral'),
+    shortSummary: stringDefault(),
+    playStatus: stringDefault('other'),
+    spoilerLevel: stringDefault('none'),
+    userName: stringDefault('Anonymous'),
+    userAvatar: nullableString,
+    likeCount: numberDefault(),
+    isLike: booleanDefault(),
+    createdAt: stringDefault(),
+  }).passthrough()
+);
+
+export const PatchRatingResponseSchema = z.object({
+  total: numberDefault(),
+  list: arrayOf(PatchRatingSchema),
+  requiresLogin: booleanDefault(),
+  error: nullableString,
 }).passthrough();
 
 export const TouchGalFeedResponseSchema = z.object({

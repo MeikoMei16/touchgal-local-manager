@@ -5,45 +5,51 @@ import {
   UserProfileSchema,
   UserActivityResponseSchema,
   FavoriteFolderListSchema,
-  FavoriteFolderPatchResponseSchema
+  FavoriteFolderPatchResponseSchema,
+  PatchCommentResponseSchema,
+  PatchRatingResponseSchema
 } from '../schemas';
 
 const asRecord = (value: unknown): Record<string, any> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
 
+const unwrapResponseData = (raw: unknown) => {
+  const data = asRecord(raw);
+  return data.data && typeof data.data === 'object' && !Array.isArray(data.data) ? data.data : raw;
+};
+
+const normalizeListResponse = (
+  raw: unknown,
+  keys: string[]
+) => {
+  const payload = unwrapResponseData(raw);
+  const data = asRecord(payload);
+  const list = keys.reduce<unknown[]>((found, key) => {
+    if (found.length > 0) return found;
+    return Array.isArray(data[key]) ? data[key] : [];
+  }, []);
+
+  return {
+    ...data,
+    total: data.total ?? list.length,
+    list,
+  };
+};
+
 const normalizeUserActivityResponse = (
   raw: unknown,
   key: 'comments' | 'ratings' | 'resources'
 ) => {
-  const data = asRecord(raw);
-  const list = Array.isArray(data[key])
-    ? data[key]
-    : Array.isArray(data.list)
-      ? data.list
-      : Array.isArray(data.galgames)
-        ? data.galgames
-        : [];
-
-  return {
-    total: data.total ?? list.length,
-    [key]: list
-  };
+  const normalized = normalizeListResponse(raw, [key, 'list', 'galgames']);
+  return { total: normalized.total, [key]: normalized.list };
 };
 
 const normalizeFavoriteFolderPatchResponse = (raw: unknown) => {
-  const data = asRecord(raw);
-  const patches = Array.isArray(data.patches)
-    ? data.patches
-    : Array.isArray(data.list)
-      ? data.list
-      : Array.isArray(data.resources)
-        ? data.resources
-        : [];
+  const normalized = normalizeListResponse(raw, ['patches', 'list', 'resources']);
 
   return {
-    ...data,
-    patches,
-    total: data.total ?? patches.length
+    ...normalized,
+    patches: normalized.list
   };
 };
 
@@ -78,11 +84,13 @@ export const TouchGalClient = {
   },
 
   fetchPatchComments: async (patchId: number, page = 1, limit = 20) => {
-    return await window.api.getPatchComments(patchId, page, limit);
+    const raw = await window.api.getPatchComments(patchId, page, limit);
+    return PatchCommentResponseSchema.parse(normalizeListResponse(raw, ['list', 'comments']));
   },
 
   fetchPatchRatings: async (patchId: number, page = 1, limit = 20) => {
-    return await window.api.getPatchRatings(patchId, page, limit);
+    const raw = await window.api.getPatchRatings(patchId, page, limit);
+    return PatchRatingResponseSchema.parse(normalizeListResponse(raw, ['list', 'ratings']));
   },
 
   fetchCaptcha: async () => {
@@ -138,9 +146,10 @@ export const TouchGalClient = {
 
   getFavoriteFolders: async (uid: number, patchId?: number) => {
     const raw = await window.api.getFavoriteFolders(uid, patchId);
-    const data = asRecord(raw);
-    const folders = Array.isArray(raw)
-      ? raw
+    const payload = unwrapResponseData(raw);
+    const data = asRecord(payload);
+    const folders = Array.isArray(payload)
+      ? payload
       : Array.isArray(data.folders)
         ? data.folders
         : Array.isArray(data.list)
