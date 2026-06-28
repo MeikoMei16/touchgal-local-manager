@@ -27,7 +27,7 @@ export const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
   screenshots: preserveStringArray((resource as Partial<TouchGalDetail>).screenshots, []),
   pvUrl: readDetailFallbackString(resource, 'pvUrl'),
   touchgalUrl: resource.touchgalUrl ?? null,
-  downloads: []
+  downloads: (resource as Partial<TouchGalDetail>).downloads ?? []
 });
 
 export const mergeDetailResource = (
