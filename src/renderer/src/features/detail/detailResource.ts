@@ -9,6 +9,12 @@ const readDetailFallbackString = (
   return typeof value === 'string' ? value : null;
 };
 
+const preserveString = (primary: string | null | undefined, fallback: string | null | undefined) =>
+  primary && primary.trim().length > 0 ? primary : fallback ?? '';
+
+const preserveStringArray = (primary: string[] | undefined, fallback: string[] | undefined) =>
+  Array.isArray(primary) && primary.length > 0 ? primary : fallback ?? [];
+
 export const toDetailShell = (resource: TouchGalResource): TouchGalDetail => ({
   ...resource,
   introduction: null,
@@ -47,7 +53,12 @@ export const mergeDetailResource = (
   screenshots: Array.isArray(detail.screenshots) ? detail.screenshots : [],
   pvUrl: detail.pvUrl ?? readDetailFallbackString(fallback, 'pvUrl'),
   touchgalUrl: detail.touchgalUrl ?? fallback?.touchgalUrl ?? null,
-  downloads: Array.isArray(detail.downloads) ? detail.downloads : [],
-  alias: Array.isArray(detail.alias) ? detail.alias : [],
-  tags: Array.isArray(detail.tags) ? detail.tags : []
+  downloads: Array.isArray(detail.downloads) && detail.downloads.length > 0
+    ? detail.downloads
+    : (fallback as Partial<TouchGalDetail> | null | undefined)?.downloads ?? [],
+  platform: preserveString(detail.platform, fallback?.platform),
+  language: preserveString(detail.language, fallback?.language),
+  type: preserveStringArray(detail.type, fallback?.type),
+  alias: preserveStringArray(detail.alias, fallback?.alias),
+  tags: preserveStringArray(detail.tags, fallback?.tags)
 });
