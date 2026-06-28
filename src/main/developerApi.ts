@@ -611,10 +611,17 @@ export const fetchDeveloperGameSearch = async (
       throw new Error('TouchGal developer API detail hydration failed for every search result')
     }
 
+    const droppedHydrationCount = Math.max(0, list.length - hydrated.length)
+    const rawTotal = data.pagination?.total ?? items.length
+    const total = Math.max(hydrated.length, rawTotal - droppedHydrationCount)
+    const pagination = data.pagination
+      ? { ...data.pagination, total }
+      : null
+
     const value = {
       list: hydrated,
-      total: data.pagination?.total ?? items.length,
-      pagination: data.pagination ?? null,
+      total,
+      pagination,
       source: 'developer-api' as const,
     }
     searchCache.set(cacheKey, { expiresAt: Date.now() + DEVELOPER_SEARCH_CACHE_TTL_MS, value })
