@@ -560,6 +560,7 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
 
 const detailCache = new Map<string, Promise<ReturnType<typeof normalizeDeveloperGameDetail>>>()
 const searchCache = new Map<string, { expiresAt: number; value: DeveloperSearchResult }>()
+const searchInFlightCache = new Map<string, Promise<DeveloperSearchResult>>()
 let statusCache: { expiresAt: number; value: Record<string, unknown> } | null = null
 
 const runLimited = async <T, R>(
@@ -597,65 +598,74 @@ export const fetchDeveloperGameSearch = async (
   })
   const cached = searchCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.value
+  const inFlight = searchInFlightCache.get(cacheKey)
+  if (inFlight) return inFlight
 
-  const client = createDeveloperApiClient()
-  const response = await requestDeveloperApi(() =>
-    client.get<DeveloperApiResponse<DeveloperSearchPayload>>('/games/search', {
-      params: {
-        keyword: normalizedKeyword,
-        page,
-        limit,
-      },
-    })
-  )
-  const data = unwrapDeveloperResponse(response.data)
-  const items = Array.isArray(data.items) ? data.items : []
-  const list = items
-    .map(normalizeDeveloperSearchItem)
-    .filter((item) => item.uniqueId && item.name)
+  const request = (async () => {
+    const client = createDeveloperApiClient()
+    const response = await requestDeveloperApi(() =>
+      client.get<DeveloperApiResponse<DeveloperSearchPayload>>('/games/search', {
+        params: {
+          keyword: normalizedKeyword,
+          page,
+          limit,
+        },
+      })
+    )
+    const data = unwrapDeveloperResponse(response.data)
+    const items = Array.isArray(data.items) ? data.items : []
+    const list = items
+      .map(normalizeDeveloperSearchItem)
+      .filter((item) => item.uniqueId && item.name)
 
-  if (options.hydrateDetails) {
-    const hydrated = await runLimited(list, 4, async (item) => {
-      try {
-        return {
-          ...item,
-          ...(await fetchDeveloperGameDetail(item.uniqueId)),
-          uniqueId: item.uniqueId,
+    if (options.hydrateDetails) {
+      const hydrated = await runLimited(list, 4, async (item) => {
+        try {
+          return {
+            ...item,
+            ...(await fetchDeveloperGameDetail(item.uniqueId)),
+            uniqueId: item.uniqueId,
+          }
+        } catch {
+          return null
         }
-      } catch {
-        return null
-      }
-    }).then((results) => results.filter((item): item is DeveloperNormalizedGame => Boolean(item)))
+      }).then((results) => results.filter((item): item is DeveloperNormalizedGame => Boolean(item)))
 
-    if (list.length > 0 && hydrated.length === 0) {
-      throw new Error('TouchGal developer API detail hydration failed for every search result')
+      if (list.length > 0 && hydrated.length === 0) {
+        throw new Error('TouchGal developer API detail hydration failed for every search result')
+      }
+
+      const droppedHydrationCount = Math.max(0, list.length - hydrated.length)
+      const rawTotal = data.pagination?.total ?? items.length
+      const total = Math.max(hydrated.length, rawTotal - droppedHydrationCount)
+      const pagination = data.pagination
+        ? { ...data.pagination, total }
+        : null
+
+      const value = {
+        list: hydrated,
+        total,
+        pagination,
+        source: 'developer-api' as const,
+      }
+      searchCache.set(cacheKey, { expiresAt: Date.now() + DEVELOPER_SEARCH_CACHE_TTL_MS, value })
+      return value
     }
 
-    const droppedHydrationCount = Math.max(0, list.length - hydrated.length)
-    const rawTotal = data.pagination?.total ?? items.length
-    const total = Math.max(hydrated.length, rawTotal - droppedHydrationCount)
-    const pagination = data.pagination
-      ? { ...data.pagination, total }
-      : null
-
     const value = {
-      list: hydrated,
-      total,
-      pagination,
+      list,
+      total: data.pagination?.total ?? items.length,
+      pagination: data.pagination ?? null,
       source: 'developer-api' as const,
     }
     searchCache.set(cacheKey, { expiresAt: Date.now() + DEVELOPER_SEARCH_CACHE_TTL_MS, value })
     return value
-  }
+  })().finally(() => {
+    searchInFlightCache.delete(cacheKey)
+  })
 
-  const value = {
-    list,
-    total: data.pagination?.total ?? items.length,
-    pagination: data.pagination ?? null,
-    source: 'developer-api' as const,
-  }
-  searchCache.set(cacheKey, { expiresAt: Date.now() + DEVELOPER_SEARCH_CACHE_TTL_MS, value })
-  return value
+  searchInFlightCache.set(cacheKey, request)
+  return request
 }
 
 export const fetchDeveloperGameDetail = async (uniqueId: string) => {
