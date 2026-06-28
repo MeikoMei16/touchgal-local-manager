@@ -14,9 +14,10 @@ interface Rating {
 interface EvaluationSectionProps {
   ratings: Rating[];
   isLoading: boolean;
+  emptyLabel?: string;
 }
 
-export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ ratings, isLoading }) => {
+export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ ratings, isLoading, emptyLabel = '暂无详细评价' }) => {
   const getRecommendStyle = (recommend: string) => {
     switch (recommend) {
       case 'strong_yes': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -54,7 +55,7 @@ export const EvaluationSection: React.FC<EvaluationSectionProps> = ({ ratings, i
         </div>
       ) : ratings.length === 0 ? (
         <div className="bg-slate-50 rounded-2xl p-8 text-center text-slate-400 font-bold border border-slate-100">
-          暂无详细评价
+          {emptyLabel}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -58,6 +58,7 @@ export const useUIStore = create<UIState>()(
       selectedResource: null,
       patchComments: [],
       patchRatings: [],
+      detailSocialLegacyUnavailable: false,
       detailSecondaryClickAction: 'back',
       detailOpenIntent: 'default',
       homeMode: 'normal',

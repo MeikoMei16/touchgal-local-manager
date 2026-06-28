@@ -465,6 +465,7 @@ export const PatchCommentResponseSchema = z.object({
   total: numberDefault(),
   list: arrayOf(PatchCommentSchema),
   requiresLogin: booleanDefault(),
+  legacyUnavailable: booleanDefault(),
   error: nullableString,
 }).passthrough();
 
@@ -489,6 +490,7 @@ export const PatchRatingResponseSchema = z.object({
   total: numberDefault(),
   list: arrayOf(PatchRatingSchema),
   requiresLogin: booleanDefault(),
+  legacyUnavailable: booleanDefault(),
   error: nullableString,
 }).passthrough();
 
@@ -616,6 +618,8 @@ export const UserActivityResponseSchema = z.object({
   comments: arrayOf(UserActivityCommentSchema).optional(),
   ratings: arrayOf(UserActivityRatingSchema).optional(),
   resources: arrayOf(UserResourceSchema).optional(),
+  requiresLogin: booleanDefault(),
+  legacyUnavailable: booleanDefault(),
 }).passthrough();
 
 export const FavoriteFolderSchema = z.preprocess(
@@ -644,4 +648,6 @@ export const FavoriteToggleResponseSchema = z.object({
 export const FavoriteFolderPatchResponseSchema = z.object({
   patches: arrayOf(TouchGalResourceSchema),
   total: numberDefault(),
+  requiresLogin: booleanDefault(),
+  legacyUnavailable: booleanDefault(),
 }).passthrough();

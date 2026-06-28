@@ -446,6 +446,12 @@ const isLegacySessionUnavailableError = (error: unknown) => {
 const shouldReturnDeveloperOnlyEmptyLegacyRead = (error: unknown) =>
   isTouchGalDeveloperApiConfigured() && isLegacySessionUnavailableError(error)
 
+const buildDeveloperOnlyLegacyReadFallback = <T extends Record<string, unknown>>(fallback: T) => ({
+  ...fallback,
+  legacyUnavailable: true,
+  requiresLogin: false,
+})
+
 const getDeveloperModeLegacyRequestConfig = (): TouchGalAxiosRequestConfig =>
   isTouchGalDeveloperApiConfigured()
     ? { __touchGalSkipChallengeVerification: true }
@@ -2783,7 +2789,10 @@ handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: num
     }
   } catch (error: any) {
     log.error(`[API] Failed to fetch comments for patch ${patchId}:`, error.message)
-    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401) || shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      return buildDeveloperOnlyLegacyReadFallback({ total: 0, list: [] })
+    }
+    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401)) {
       return { total: 0, list: [], requiresLogin: true }
     }
     // Return empty list instead of crashing renderer
@@ -2805,7 +2814,10 @@ handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: numb
     }
   } catch (error: any) {
     log.error(`[API] Failed to fetch ratings for patch ${patchId}:`, error.message)
-    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401) || shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+    if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+      return buildDeveloperOnlyLegacyReadFallback({ total: 0, list: [] })
+    }
+    if (error.message === 'SESSION_EXPIRED' || (error.response && error.response.status === 401)) {
       return { total: 0, list: [], requiresLogin: true }
     }
     return { total: 0, list: [], error: error.message }
@@ -3268,7 +3280,7 @@ handleWithLog('tg-get-user-comments', async (_event, uid: number, page: number, 
   } catch (error) {
     if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
       log.warn('[API] Legacy user comments unavailable in Developer API mode; returning empty activity:', getSafeErrorMessage(error))
-      return { comments: [], total: 0, requiresLogin: true }
+      return buildDeveloperOnlyLegacyReadFallback({ comments: [], total: 0 })
     }
     throw error
   }
@@ -3288,7 +3300,7 @@ handleWithLog('tg-get-user-ratings', async (_event, uid: number, page: number, l
   } catch (error) {
     if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
       log.warn('[API] Legacy user ratings unavailable in Developer API mode; returning empty activity:', getSafeErrorMessage(error))
-      return { ratings: [], total: 0, requiresLogin: true }
+      return buildDeveloperOnlyLegacyReadFallback({ ratings: [], total: 0 })
     }
     throw error
   }
@@ -3304,7 +3316,7 @@ handleWithLog('tg-get-user-resources', async (_event, uid: number, page: number,
   } catch (error) {
     if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
       log.warn('[API] Legacy user resources unavailable in Developer API mode; returning empty activity:', getSafeErrorMessage(error))
-      return { resources: [], total: 0, requiresLogin: true }
+      return buildDeveloperOnlyLegacyReadFallback({ resources: [], total: 0 })
     }
     throw error
   }
@@ -3369,7 +3381,7 @@ handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number,
   } catch (error) {
     if (shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
       log.warn('[API] Legacy favorite folder patches unavailable in Developer API mode; returning empty folder:', getSafeErrorMessage(error))
-      return { patches: [], total: 0, requiresLogin: true }
+      return buildDeveloperOnlyLegacyReadFallback({ patches: [], total: 0 })
     }
     throw error
   }

@@ -48,7 +48,7 @@ const normalizeUserActivityResponse = (
   key: 'comments' | 'ratings' | 'resources'
 ) => {
   const normalized = normalizeListResponse(raw, [key, 'list', 'galgames']);
-  return { total: normalized.total, [key]: normalized.list };
+  return { ...normalized, [key]: normalized.list };
 };
 
 const normalizeFavoriteFolderPatchResponse = (raw: unknown) => {

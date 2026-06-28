@@ -16,11 +16,12 @@ export const createDetailActions = (set: UISetState, get: UIGetState) => ({
         selectedResource: toDetailShell(basicInfo),
         patchComments: [],
         patchRatings: [],
+        detailSocialLegacyUnavailable: false,
         isDetailLoading: true,
         error: null
       });
     } else {
-      set({ patchComments: [], patchRatings: [], isDetailLoading: true, error: null });
+      set({ patchComments: [], patchRatings: [], detailSocialLegacyUnavailable: false, isDetailLoading: true, error: null });
     }
 
     try {
@@ -49,6 +50,7 @@ export const createDetailActions = (set: UISetState, get: UIGetState) => ({
         selectedResource: mergedDetail,
         patchComments: comments.list || [],
         patchRatings: ratings.list || [],
+        detailSocialLegacyUnavailable: Boolean((comments as any).legacyUnavailable || (ratings as any).legacyUnavailable),
         isDetailLoading: false
       });
       useAuthStore.getState().setSessionError(hasSessError ? 'SESSION_EXPIRED' : null);
@@ -77,6 +79,7 @@ export const createDetailActions = (set: UISetState, get: UIGetState) => ({
       set({
         patchComments: comments.list || [],
         patchRatings: ratings.list || [],
+        detailSocialLegacyUnavailable: Boolean((comments as any).legacyUnavailable || (ratings as any).legacyUnavailable),
         isDetailLoading: false
       });
       useAuthStore.getState().setSessionError(hasSessError ? 'SESSION_EXPIRED' : null);
@@ -91,6 +94,6 @@ export const createDetailActions = (set: UISetState, get: UIGetState) => ({
   clearSelected: () => {
     activeDetailRequestKey = null;
     activeSocialRequestKey = null;
-    set({ selectedResource: null, patchComments: [], patchRatings: [], detailOpenIntent: 'default' });
+    set({ selectedResource: null, patchComments: [], patchRatings: [], detailSocialLegacyUnavailable: false, detailOpenIntent: 'default' });
   }
 });

@@ -12,9 +12,10 @@ interface Comment {
 interface CommentSectionProps {
   comments: Comment[];
   isLoading: boolean;
+  emptyLabel?: string;
 }
 
-export const CommentSection: React.FC<CommentSectionProps> = ({ comments, isLoading }) => {
+export const CommentSection: React.FC<CommentSectionProps> = ({ comments, isLoading, emptyLabel = '暂无讨论内容' }) => {
   const formatDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
@@ -46,7 +47,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ comments, isLoad
         </div>
       ) : comments.length === 0 ? (
         <div className="bg-slate-50 rounded-2xl p-8 text-center text-slate-400 font-bold border border-slate-100">
-          暂无讨论内容
+          {emptyLabel}
         </div>
       ) : (
         <div className="flex flex-col gap-4">

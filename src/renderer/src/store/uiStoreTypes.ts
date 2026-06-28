@@ -29,6 +29,7 @@ export interface UIState {
   selectedResource: TouchGalDetail | null;
   patchComments: any[];
   patchRatings: any[];
+  detailSocialLegacyUnavailable: boolean;
   detailSecondaryClickAction: DetailSecondaryClickAction;
   detailOpenIntent: DetailOpenIntent;
   homeMode: HomeMode;

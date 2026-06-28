@@ -18,36 +18,27 @@ const shouldIgnoreSecondaryBack = (target: EventTarget | null) => {
 export const DetailOverlay: React.FC = () => {
   const {
     selectedResource, clearSelected, addTagFilter, refreshSelectedResourceSocial,
-    isDetailLoading, patchComments, patchRatings, detailSecondaryClickAction, detailOpenIntent, setDetailOpenIntent
+    isDetailLoading, patchComments, patchRatings, detailSocialLegacyUnavailable,
+    detailSecondaryClickAction, detailOpenIntent
   } = useUIStore();
   const { user, sessionError, setIsLoginOpen } = useAuthStore();
   const [imageViewerState, setImageViewerState] = useState<{ images: string[]; index: number } | null>(null);
-  const [activeTab, setActiveTab] = useState<DetailTabType>('info');
+  const [manualTabState, setManualTabState] = useState<{ resourceKey: string | null; tab: DetailTabType }>({
+    resourceKey: null,
+    tab: 'info'
+  });
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const socialRefreshKeyRef = React.useRef<string | null>(null);
   const wasLoggedInRef = React.useRef(false);
+  const selectedResourceKey = selectedResource?.uniqueId ?? null;
+  const intentInitialTab: DetailTabType = detailOpenIntent === 'links' ? 'links' : 'info';
+  const activeTab = manualTabState.resourceKey === selectedResourceKey ? manualTabState.tab : intentInitialTab;
 
   React.useEffect(() => {
     if (selectedResource && scrollRef.current) {
       scrollRef.current.focus();
     }
   }, [selectedResource]);
-
-  React.useEffect(() => {
-    if (!selectedResource?.uniqueId) return;
-
-    if (detailOpenIntent === 'links') {
-      setActiveTab('links');
-    } else {
-      setActiveTab('info');
-    }
-  }, [detailOpenIntent, selectedResource?.uniqueId]);
-
-  React.useEffect(() => {
-    if (!selectedResource?.uniqueId) return;
-    if (detailOpenIntent === 'default') return;
-    setDetailOpenIntent('default');
-  }, [detailOpenIntent, selectedResource?.uniqueId, setDetailOpenIntent]);
 
   React.useEffect(() => {
     const isLoggedIn = !!user;
@@ -88,6 +79,10 @@ export const DetailOverlay: React.FC = () => {
   const handleTagClick = (tag: string) => {
     addTagFilter(tag);
     clearSelected();
+  };
+
+  const handleActiveTabChange = (tab: DetailTabType) => {
+    setManualTabState({ resourceKey: selectedResourceKey, tab });
   };
 
   const openBannerViewer = (url: string) => {
@@ -157,9 +152,9 @@ export const DetailOverlay: React.FC = () => {
               autoOpenCollectionMenu={detailOpenIntent === 'favorite'}
               resource={selectedResource}
               onImageClick={openBannerViewer}
-              onNavigateTab={setActiveTab}
+              onNavigateTab={handleActiveTabChange}
             />
-            <DetailTabs activeTab={activeTab} onChange={setActiveTab} />
+            <DetailTabs activeTab={activeTab} onChange={handleActiveTabChange} />
 
             {/* Tab Content */}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -177,6 +172,7 @@ export const DetailOverlay: React.FC = () => {
                 <DetailBoardPanel
                   isLoggedIn={isLoggedIn}
                   sessionError={sessionError}
+                  legacyUnavailable={detailSocialLegacyUnavailable}
                   comments={patchComments}
                   isLoading={isDetailLoading}
                 />
@@ -185,6 +181,7 @@ export const DetailOverlay: React.FC = () => {
               {activeTab === 'evaluation' && (
                 <DetailEvaluationPanel
                   sessionError={sessionError}
+                  legacyUnavailable={detailSocialLegacyUnavailable}
                   ratings={patchRatings}
                   isLoading={isDetailLoading}
                   isLoggedIn={isLoggedIn}
