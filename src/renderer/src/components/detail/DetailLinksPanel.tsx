@@ -29,6 +29,7 @@ const STORAGE_LABELS: Record<string, string> = {
   s3: 'TouchGal 官方',
   onedrive: 'OneDrive',
   user: '社区资源',
+  developer: 'Developer API',
 };
 
 type ResourceBucket = 'galgame' | 'patch';
@@ -77,6 +78,7 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
   const created = formatRelative(download.created);
   const metadataChips = getDownloadMetadataChips(download);
   const isOfficial = isOfficialDownload(download);
+  const sourceLabel = STORAGE_LABELS[download.storage ?? linkItems[0]?.storage ?? ''] ?? (isOfficial ? 'TouchGal 官方' : '社区用户');
   const [isQueueing, setIsQueueing] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
 
@@ -167,14 +169,14 @@ const ResourceCard: React.FC<{ download: TouchGalDownload; resource: TouchGalDet
                 <img src={download.user.avatar} alt={download.user.name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-lg font-black text-slate-500">
-                  {(download.user?.name ?? STORAGE_LABELS[download.storage ?? ''] ?? 'R').slice(0, 1).toUpperCase()}
+                  {(download.user?.name ?? sourceLabel ?? 'R').slice(0, 1).toUpperCase()}
                 </div>
               )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[1.05rem] font-black text-slate-900">{displayName}</div>
               <div className="mt-1 text-sm font-semibold text-slate-500">
-                {download.user?.name ?? (isOfficial ? 'TouchGal 官方' : '社区用户')}
+                {download.user?.name ?? sourceLabel}
               </div>
               <div className="text-xs font-bold text-slate-400">
                 {[created, download.user?.patchCount != null ? `已发布资源 ${download.user.patchCount} 个` : null]
