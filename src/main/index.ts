@@ -1334,6 +1334,18 @@ const buildSearchBody = (keyword: string, page: number, limit: number) => ({
 const DEVELOPER_BROWSE_FALLBACK_KEYWORD = '恋'
 const DEVELOPER_FALLBACK_MAX_SCAN_PAGES = 6
 
+const getDeveloperBrowseFallbackKeyword = (query: any) => {
+  const selectedTags = Array.isArray(query?.selectedTags)
+    ? query.selectedTags
+    : []
+  const tagKeyword = selectedTags.find((tag: unknown) =>
+    typeof tag === 'string' && tag.trim().length > 0
+  )
+  return typeof tagKeyword === 'string'
+    ? tagKeyword.trim()
+    : DEVELOPER_BROWSE_FALLBACK_KEYWORD
+}
+
 const getComparableTime = (value: unknown) => {
   if (typeof value !== 'string' || !value) return 0
   const time = new Date(value).getTime()
@@ -1565,13 +1577,14 @@ const fetchDeveloperFilteredFallback = async (input: {
 }
 
 const fetchDeveloperBrowseFallback = async (page: number, limit: number, query: any) => {
+  const keyword = getDeveloperBrowseFallbackKeyword(query)
   return fetchDeveloperFilteredFallback({
-    keyword: DEVELOPER_BROWSE_FALLBACK_KEYWORD,
+    keyword,
     page,
     limit,
     query,
     source: 'developer-api-browse-fallback',
-    fallbackKeyword: DEVELOPER_BROWSE_FALLBACK_KEYWORD,
+    fallbackKeyword: keyword,
   })
 }
 
