@@ -327,19 +327,20 @@ export const TouchGalResourceSchema = z.object({
   viewCount: numberDefault(),
   downloadCount: numberDefault(),
   ratingSummary: RatingSummarySchema.nullable().optional(),
+  company: companyDisplay,
+  companyAliases: stringArray,
+  resourceUpdateTime: nullableString,
+  touchgalUrl: nullableString,
 }).passthrough();
 
 export const TouchGalDetailSchema = TouchGalResourceSchema.extend({
   introduction: nullableString,
-  company: companyDisplay,
   vndbId: nullableString,
   bangumiId: nullableNumber,
   steamId: nullableString,
-  resourceUpdateTime: nullableString,
   contentLimit: nullableString,
   screenshots: stringArray,
   pvUrl: nullableString,
-  touchgalUrl: nullableString,
   downloads: arrayOf(TouchGalDownloadSchema),
 }).passthrough();
 
