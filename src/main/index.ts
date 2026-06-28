@@ -1042,6 +1042,14 @@ const parseCachedGameDetail = (value: unknown) => {
   }
 }
 
+const getCachedRemotePatchId = (detail: Record<string, unknown>) => {
+  for (const value of [detail.remotePatchId, detail.patchId, detail.id]) {
+    const remotePatchId = typeof value === 'number' ? value : Number(value)
+    if (Number.isInteger(remotePatchId) && remotePatchId > 0) return remotePatchId
+  }
+  return 0
+}
+
 const fetchCachedGameFeed = (page: number, limit: number) => {
   const safePage = Math.max(1, Number(page) || 1)
   const safeLimit = clampApiLimit(limit)
@@ -1068,7 +1076,7 @@ const fetchCachedGameFeed = (page: number, limit: number) => {
     list: rows.map((row: any) => {
       const detail = parseCachedGameDetail(row.detailJson)
       return {
-        id: 0,
+        id: getCachedRemotePatchId(detail),
         uniqueId: row.uniqueId ?? '',
         name: row.name ?? 'Unknown title',
         banner: row.banner ?? null,

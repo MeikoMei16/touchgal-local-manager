@@ -361,50 +361,26 @@ export const upsertGame = (game: {
 }) => {
   const db = getDb()
   const hasRemoteNumericId = Number.isInteger(game.id) && game.id > 0
-  const insertStmt = hasRemoteNumericId
-    ? db.prepare(`
-      INSERT INTO games (id, unique_id, name, banner_url, avg_rating, view_count, download_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(unique_id) DO UPDATE SET
-        name = excluded.name,
-        banner_url = excluded.banner_url,
-        avg_rating = excluded.avg_rating,
-        view_count = excluded.view_count,
-        download_count = excluded.download_count,
-        local_updated_at = CURRENT_TIMESTAMP
-    `)
-    : db.prepare(`
-      INSERT INTO games (unique_id, name, banner_url, avg_rating, view_count, download_count)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(unique_id) DO UPDATE SET
-        name = excluded.name,
-        banner_url = excluded.banner_url,
-        avg_rating = excluded.avg_rating,
-        view_count = excluded.view_count,
-        download_count = excluded.download_count,
-        local_updated_at = CURRENT_TIMESTAMP
-    `)
+  const insertStmt = db.prepare(`
+    INSERT INTO games (unique_id, name, banner_url, avg_rating, view_count, download_count)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(unique_id) DO UPDATE SET
+      name = excluded.name,
+      banner_url = excluded.banner_url,
+      avg_rating = excluded.avg_rating,
+      view_count = excluded.view_count,
+      download_count = excluded.download_count,
+      local_updated_at = CURRENT_TIMESTAMP
+  `)
 
-  if (hasRemoteNumericId) {
-    insertStmt.run(
-      game.id,
-      game.uniqueId,
-      game.name,
-      game.banner ?? null,
-      game.averageRating ?? 0,
-      game.viewCount ?? 0,
-      game.downloadCount ?? 0
-    )
-  } else {
-    insertStmt.run(
-      game.uniqueId,
-      game.name,
-      game.banner ?? null,
-      game.averageRating ?? 0,
-      game.viewCount ?? 0,
-      game.downloadCount ?? 0
-    )
-  }
+  insertStmt.run(
+    game.uniqueId,
+    game.name,
+    game.banner ?? null,
+    game.averageRating ?? 0,
+    game.viewCount ?? 0,
+    game.downloadCount ?? 0
+  )
 
   const row = db
     .prepare('SELECT id FROM games WHERE unique_id = ?')
@@ -412,6 +388,7 @@ export const upsertGame = (game: {
   const gameId = row?.id ?? game.id
 
   const hasDetailPatch =
+    hasRemoteNumericId ||
     (game.alias?.length ?? 0) > 0 ||
     (game.tags?.length ?? 0) > 0 ||
     (game.platform?.length ?? 0) > 0 ||
@@ -448,7 +425,8 @@ export const upsertGame = (game: {
       type: mergeStrings(detail.type, game.type),
       releasedDate: game.releasedDate ?? detail.releasedDate ?? null,
       resourceUpdateTime: game.resourceUpdateTime ?? detail.resourceUpdateTime ?? null,
-      touchgalUrl: game.touchgalUrl ?? detail.touchgalUrl ?? null
+      touchgalUrl: game.touchgalUrl ?? detail.touchgalUrl ?? null,
+      remotePatchId: hasRemoteNumericId ? game.id : detail.remotePatchId ?? null
     }
 
     db.prepare('UPDATE games SET detail_json = ? WHERE id = ?').run(
@@ -462,19 +440,39 @@ export const upsertGame = (game: {
 
 export const saveGameDetail = (uniqueId: string, detail: any) => {
   const db = getDb()
+  const existing = getCachedDetail(uniqueId) as Record<string, unknown> | null
+  const detailRecord = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {}
+  const detailId = typeof detailRecord.id === 'number' ? detailRecord.id : Number(detailRecord.id)
+  const remotePatchId = Number.isInteger(detailId) && detailId > 0
+    ? detailId
+    : existing?.remotePatchId ?? null
   const stmt = db.prepare(`
     UPDATE games SET 
       detail_json = ?, 
       last_detailed_at = CURRENT_TIMESTAMP 
     WHERE unique_id = ?
   `)
-  stmt.run(JSON.stringify(detail), uniqueId)
+  stmt.run(JSON.stringify({ ...detailRecord, remotePatchId }), uniqueId)
 }
 
 export const getCachedDetail = (uniqueId: string) => {
   const db = getDb()
   const row = db.prepare('SELECT detail_json FROM games WHERE unique_id = ?').get(uniqueId) as { detail_json: string | null } | undefined
   return row?.detail_json ? JSON.parse(row.detail_json) : null
+}
+
+const readRemotePatchId = (detailJson: string | null | undefined) => {
+  if (!detailJson) return 0
+  try {
+    const detail = JSON.parse(detailJson) as Record<string, unknown>
+    for (const value of [detail.remotePatchId, detail.patchId, detail.id]) {
+      const remotePatchId = typeof value === 'number' ? value : Number(value)
+      if (Number.isInteger(remotePatchId) && remotePatchId > 0) return remotePatchId
+    }
+    return 0
+  } catch {
+    return 0
+  }
 }
 
 export const listLocalCollections = (): LocalCollectionRecord[] => {
@@ -494,7 +492,8 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
       g.banner_url AS banner,
       g.avg_rating AS averageRating,
       g.view_count AS viewCount,
-      g.download_count AS downloadCount
+      g.download_count AS downloadCount,
+      g.detail_json AS detailJson
     FROM collection_items ci
     JOIN games g ON g.id = ci.game_id
     WHERE ci.collection_id = ?
@@ -502,7 +501,11 @@ export const listLocalCollections = (): LocalCollectionRecord[] => {
   `)
 
   return collections.map((collection) => {
-    const items = itemStmt.all(collection.id) as LocalCollectionItemRecord[]
+    const items = (itemStmt.all(collection.id) as Array<LocalCollectionItemRecord & { detailJson?: string | null }>)
+      .map(({ detailJson, ...item }) => ({
+        ...item,
+        resourceId: readRemotePatchId(detailJson)
+      }))
     return {
       ...collection,
       itemCount: items.length,
