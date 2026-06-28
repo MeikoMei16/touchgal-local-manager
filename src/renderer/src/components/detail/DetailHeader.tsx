@@ -22,6 +22,7 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
   mobile: '手机游戏',
   app: '直装资源',
   raw: '生肉资源',
+  row: '生肉资源',
   tool: '游戏工具',
   other: '其它',
 };
@@ -30,12 +31,14 @@ const RESOURCE_LANGUAGE_LABELS: Record<string, string> = {
   'zh-Hans': '简体中文',
   'zh-Hant': '繁體中文',
   ja: '日本語',
+  en: 'English',
   other: '其它',
 };
 
 const RESOURCE_PLATFORM_LABELS: Record<string, string> = {
   android: 'Android',
   windows: 'Windows',
+  macos: 'MacOS',
   ios: 'iOS',
   linux: 'Linux',
   other: '其它',

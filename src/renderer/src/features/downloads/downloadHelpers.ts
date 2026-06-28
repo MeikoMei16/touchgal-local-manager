@@ -24,12 +24,14 @@ const LANGUAGE_LABELS: Record<string, string> = {
   'zh-Hans': '简体中文',
   'zh-Hant': '繁體中文',
   ja: '日本語',
+  en: 'English',
   other: '其它',
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
   android: 'Android',
   windows: 'Windows',
+  macos: 'MacOS',
   ios: 'iOS',
   linux: 'Linux',
   other: '其它',
