@@ -2625,8 +2625,8 @@ handleWithLog('tg-get-user-status-self', async () => {
     if (!isTouchGalDeveloperApiConfigured()) {
       throw error
     }
-    log.warn('[API] Legacy /user/status failed; returning developer API credential status:', getSafeErrorMessage(error))
-    return fetchDeveloperApiStatus()
+    log.warn('[API] Legacy /user/status failed; treating TouchGal user session as unavailable:', getSafeErrorMessage(error))
+    return null
   }
 })
 

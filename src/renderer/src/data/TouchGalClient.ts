@@ -148,6 +148,7 @@ export const TouchGalClient = {
   getUserStatusSelf: async () => {
     const raw = await window.api.getUserStatusSelf();
     const data = asRecord(raw);
+    if (data.isDeveloperApiCredential) return null;
     if (!data.uid && !data.id) return raw;
     return UserProfileSchema.parse(raw);
   },
