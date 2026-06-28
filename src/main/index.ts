@@ -1928,6 +1928,39 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
       ...(Array.isArray(primary) ? primary : []),
       ...(Array.isArray(fallback) ? fallback : []),
     ].filter((item): item is string => typeof item === 'string' && item.trim().length > 0)))
+  const getDownloadSignature = (download: unknown) => {
+    if (!download || typeof download !== 'object') return ''
+    const record = download as Record<string, unknown>
+    const links = Array.isArray(record.links) ? record.links : []
+    const linkKeys = links
+      .map((link) => {
+        if (!link || typeof link !== 'object') return ''
+        const linkRecord = link as Record<string, unknown>
+        return String(linkRecord.url ?? linkRecord.content ?? '').trim().toLowerCase()
+      })
+      .filter(Boolean)
+
+    const url = String(record.url ?? record.content ?? '').trim().toLowerCase()
+    const name = String(record.name ?? '').trim().toLowerCase()
+    const storage = String(record.storage ?? '').trim().toLowerCase()
+    return linkKeys[0] || url || `${storage}:${name}`
+  }
+  const mergeDownloads = (legacyDownloads: unknown, developerDownloads: unknown) => {
+    const merged: unknown[] = []
+    const seen = new Set<string>()
+
+    for (const download of [
+      ...(Array.isArray(legacyDownloads) ? legacyDownloads : []),
+      ...(Array.isArray(developerDownloads) ? developerDownloads : []),
+    ]) {
+      const signature = getDownloadSignature(download)
+      if (signature && seen.has(signature)) continue
+      if (signature) seen.add(signature)
+      merged.push(download)
+    }
+
+    return merged
+  }
   const mergeRecommend = (
     developerRecommend: Record<string, unknown> | undefined,
     legacyRecommend: Record<string, unknown> | undefined
@@ -1981,10 +2014,7 @@ const mergeDeveloperAndLegacyDetail = (developerDetail: any, legacyDetail: any |
         ? legacyDetail.screenshots
         : developerDetail.screenshots,
     pvUrl: legacyDetail.pvUrl || developerDetail.pvUrl || null,
-    downloads:
-      Array.isArray(legacyDetail.downloads) && legacyDetail.downloads.length > 0
-        ? legacyDetail.downloads
-        : developerDetail.downloads,
+    downloads: mergeDownloads(legacyDetail.downloads, developerDetail.downloads),
   }
 }
 
