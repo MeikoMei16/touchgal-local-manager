@@ -1252,9 +1252,65 @@ const getComparableTime = (value: unknown) => {
   return Number.isFinite(time) ? time : 0
 }
 
-const applyHomeQueryToDeveloperBrowseFallback = (list: any[], query: any) => {
+const getDeveloperFallbackYear = (game: any) => {
+  const date = game.releasedDate ?? game.created
+  if (typeof date !== 'string' || !date) return null
+  const year = new Date(date).getFullYear()
+  return Number.isInteger(year) ? year : null
+}
+
+const matchesYearConstraints = (
+  year: number | null,
+  constraints: Array<{ op: string; val: number }>
+) => {
+  if (constraints.length === 0) return true
+  if (year == null) return false
+
+  return constraints.every((constraint) => {
+    if (constraint.op === '=') return year === constraint.val
+    if (constraint.op === '>=') return year >= constraint.val
+    if (constraint.op === '<=') return year <= constraint.val
+    if (constraint.op === '>') return year > constraint.val
+    if (constraint.op === '<') return year < constraint.val
+    return true
+  })
+}
+
+const normalizeSearchText = (value: unknown) =>
+  typeof value === 'string'
+    ? value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLocaleLowerCase()
+    : ''
+
+const developerGameMatchesSearchOptions = (
+  game: any,
+  keyword: string,
+  options?: Record<string, any>
+) => {
+  const terms = buildSearchTerms(keyword).map((term) => term.toLocaleLowerCase())
+  if (terms.length === 0) return true
+
+  const searchOption = options?.searchOption ?? {}
+  const fields = [
+    game.name,
+    ...(searchOption.searchInAlias !== false && Array.isArray(game.alias) ? game.alias : []),
+    ...(searchOption.searchInTag !== false && Array.isArray(game.tags) ? game.tags : []),
+    searchOption.searchInIntroduction !== false ? game.introduction : '',
+  ].map(normalizeSearchText).filter(Boolean)
+
+  return terms.every((term) => fields.some((field) => field.includes(term)))
+}
+
+const applyQueryToDeveloperFallbackList = (list: any[], query: any) => {
   const selectedPlatform = query?.selectedPlatform ?? 'all'
   const minRatingCount = Number(query?.minRatingCount ?? 0) || 0
+  const minRatingScore = Number(query?.minRatingScore ?? 0) || 0
+  const minCommentCount = Number(query?.minCommentCount ?? 0) || 0
+  const yearConstraints: Array<{ op: string; val: number }> = Array.isArray(query?.yearConstraints)
+    ? query.yearConstraints
+    : []
+  const selectedTags: string[] = Array.isArray(query?.selectedTags)
+    ? query.selectedTags.filter((tag: unknown): tag is string => typeof tag === 'string' && tag.length > 0)
+    : []
   const sortField = query?.sortField ?? 'resource_update_time'
   const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc'
 
@@ -1265,7 +1321,22 @@ const applyHomeQueryToDeveloperBrowseFallback = (list: any[], query: any) => {
     }
 
     const ratingCount = Number(game.ratingCount ?? game.ratingSummary?.count ?? 0) || 0
-    return ratingCount >= minRatingCount
+    if (ratingCount < minRatingCount) return false
+
+    const averageRating = Number(game.averageRating ?? 0) || 0
+    if (averageRating < minRatingScore) return false
+
+    const commentCount = Number(game.commentCount ?? 0) || 0
+    if (commentCount < minCommentCount) return false
+
+    if (!matchesYearConstraints(getDeveloperFallbackYear(game), yearConstraints)) return false
+
+    if (selectedTags.length > 0) {
+      const tags = Array.isArray(game.tags) ? game.tags : []
+      if (!selectedTags.every((tag) => tags.includes(tag))) return false
+    }
+
+    return true
   })
 
   const getSortValue = (game: any) => {
@@ -1290,7 +1361,7 @@ const fetchDeveloperBrowseFallback = async (page: number, limit: number, query: 
     clampApiLimit(limit),
     { hydrateDetails: true }
   )
-  const list = applyHomeQueryToDeveloperBrowseFallback(developerResult.list, query)
+  const list = applyQueryToDeveloperFallbackList(developerResult.list, query)
   upsertNormalizedGames(list)
 
   return {
@@ -1948,12 +2019,25 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
   }
 
   const preferLegacySearch = shouldPreferLegacySearch(options)
-  const fetchFromDeveloperApi = async () => {
+  const fetchFromDeveloperApi = async (applyLocalOptions = false) => {
     const developerResult = await fetchDeveloperGameSearch(normalizedKeyword, page, clampApiLimit(limit), {
       hydrateDetails: clampApiLimit(limit) <= 20,
     })
-    upsertNormalizedGames(developerResult.list)
-    return developerResult
+    const list = applyLocalOptions
+      ? applyQueryToDeveloperFallbackList(
+          developerResult.list.filter((game) =>
+            developerGameMatchesSearchOptions(game, normalizedKeyword, options)
+          ),
+          options
+        )
+      : developerResult.list
+
+    upsertNormalizedGames(list)
+    return {
+      ...developerResult,
+      list,
+      source: applyLocalOptions ? 'developer-api-search-fallback' : developerResult.source,
+    }
   }
 
   if (isTouchGalDeveloperApiConfigured() && !preferLegacySearch) {
@@ -1984,7 +2068,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
     }
 
     log.warn('[API] Legacy /search failed for optioned search; returning Developer API keyword results:', getSafeErrorMessage(error))
-    return fetchFromDeveloperApi()
+    return fetchFromDeveloperApi(true)
   }
 })
 
