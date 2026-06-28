@@ -445,6 +445,18 @@ const isLegacySessionUnavailableError = (error: unknown) => {
 const shouldReturnDeveloperOnlyEmptyLegacyRead = (error: unknown) =>
   isTouchGalDeveloperApiConfigured() && isLegacySessionUnavailableError(error)
 
+const LEGACY_CLOUD_COLLECTION_LOGIN_REQUIRED_MESSAGE =
+  '云端收藏需要旧站登录；TouchGal Developer API 暂不支持云端收藏写入。'
+
+const throwDeveloperOnlyCloudCollectionLoginRequired = (error: unknown) => {
+  if (!shouldReturnDeveloperOnlyEmptyLegacyRead(error)) {
+    throw error
+  }
+
+  log.warn('[API] Legacy cloud collection write unavailable in Developer API mode:', getSafeErrorMessage(error))
+  throw new Error(LEGACY_CLOUD_COLLECTION_LOGIN_REQUIRED_MESSAGE)
+}
+
 let cloudflareVerificationPromise: Promise<void> | null = null
 
 const probeTouchGalAccess = async (verificationWindow: BrowserWindow) => {
@@ -3007,20 +3019,28 @@ handleWithLog('tg-get-favorite-folders', async (_event, uid: number, patchId?: n
 handleWithLog(
   'tg-create-favorite-folder',
   async (_event, input: { name: string; description?: string; isPublic?: boolean }) => {
-    const response = await API_CLIENT.post('/user/profile/favorite/folder', {
-      name: input.name,
-      description: input.description ?? '',
-      isPublic: Boolean(input.isPublic)
-    })
-    return ensureValidResponse(response.data)
+    try {
+      const response = await API_CLIENT.post('/user/profile/favorite/folder', {
+        name: input.name,
+        description: input.description ?? '',
+        isPublic: Boolean(input.isPublic)
+      })
+      return ensureValidResponse(response.data)
+    } catch (error) {
+      throwDeveloperOnlyCloudCollectionLoginRequired(error)
+    }
   }
 )
 
 handleWithLog('tg-delete-favorite-folder', async (_event, folderId: number) => {
-  const response = await API_CLIENT.delete('/user/profile/favorite/folder', {
-    params: { folderId }
-  })
-  return ensureValidResponse(response.data)
+  try {
+    const response = await API_CLIENT.delete('/user/profile/favorite/folder', {
+      params: { folderId }
+    })
+    return ensureValidResponse(response.data)
+  } catch (error) {
+    throwDeveloperOnlyCloudCollectionLoginRequired(error)
+  }
 })
 
 handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number, page: number, limit: number) => {
@@ -3067,8 +3087,12 @@ handleWithLog('tg-get-favorite-folder-patches', async (_event, folderId: number,
 })
 
 handleWithLog('tg-toggle-patch-favorite', async (_event, patchId: number, folderId: number) => {
-  const response = await API_CLIENT.put('/patch/favorite', { patchId, folderId })
-  return ensureValidResponse(response.data)
+  try {
+    const response = await API_CLIENT.put('/patch/favorite', { patchId, folderId })
+    return ensureValidResponse(response.data)
+  } catch (error) {
+    throwDeveloperOnlyCloudCollectionLoginRequired(error)
+  }
 })
 
 handleWithLog('tg-local-collections-list', async () => {
