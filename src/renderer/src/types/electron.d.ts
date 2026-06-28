@@ -221,6 +221,7 @@ export interface ElectronAPI {
   // Maintenance
   resetDatabase: () => Promise<{ success: boolean; deletedPaths: string[] }>;
   clearAppCache: () => Promise<{ success: boolean; deletedPaths: string[] }>;
+  verifyTouchGalAccess: () => Promise<{ success: boolean; hasClearance: boolean }>;
 }
 
 declare global {

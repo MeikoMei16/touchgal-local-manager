@@ -72,6 +72,7 @@ const SettingsView: React.FC = () => {
   const [isSavingArchiveDepth, setIsSavingArchiveDepth] = React.useState(false);
   const [developerApiStatus, setDeveloperApiStatus] = React.useState<DeveloperApiStatus | null>(null);
   const [isDeveloperApiStatusLoading, setIsDeveloperApiStatusLoading] = React.useState(true);
+  const [isVerifyingTouchGalAccess, setIsVerifyingTouchGalAccess] = React.useState(false);
   const [isResettingDatabase, setIsResettingDatabase] = React.useState(false);
   const [isClearingCache, setIsClearingCache] = React.useState(false);
 
@@ -166,6 +167,18 @@ const SettingsView: React.FC = () => {
       pushToast('下载目录已更新');
     } catch (error) {
       pushToast(error instanceof Error ? error.message : '无法选择下载目录');
+    }
+  };
+
+  const handleVerifyTouchGalAccess = async () => {
+    setIsVerifyingTouchGalAccess(true);
+    try {
+      const result = await window.api.verifyTouchGalAccess();
+      pushToast(result.hasClearance ? '旧站访问验证已完成' : '旧站验证窗口已关闭，但未检测到访问凭据');
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : '旧站访问验证失败');
+    } finally {
+      setIsVerifyingTouchGalAccess(false);
     }
   };
 
@@ -309,6 +322,15 @@ const SettingsView: React.FC = () => {
                   <RefreshCw size={17} className={isDeveloperApiStatusLoading ? 'animate-spin' : ''} />
                   刷新状态
                 </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                  disabled={isVerifyingTouchGalAccess}
+                  onClick={() => void handleVerifyTouchGalAccess()}
+                  type="button"
+                >
+                  <MonitorUp size={17} className={isVerifyingTouchGalAccess ? 'animate-pulse' : ''} />
+                  验证旧站访问
+                </button>
               </div>
             </div>
           </div>
@@ -347,6 +369,9 @@ const SettingsView: React.FC = () => {
               未检测到本地开发者 API Key。当前搜索和详情会继续使用旧站兼容接口。
             </div>
           )}
+          <div className="mt-4 rounded-2xl border border-amber-100 bg-white/80 px-4 py-3 text-sm font-bold leading-7 text-slate-600">
+            Developer API 不提供下载资源。完成旧站访问验证后，详情页会在旧站可访问时自动补齐官方下载链接。
+          </div>
         </div>
       </section>
 

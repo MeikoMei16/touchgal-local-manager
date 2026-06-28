@@ -1989,6 +1989,15 @@ handleWithLog('tg-maintenance-clear-cache', () => {
   return clearAppCacheData()
 })
 
+handleWithLog('tg-verify-touchgal-access', async () => {
+  await ensureTouchGalBrowserAccess()
+  await syncTouchGalSessionCookies()
+  return {
+    success: true,
+    hasClearance: await hasTouchGalClearanceCookie()
+  }
+})
+
 handleWithLog('tag-folder', (_event, folderPath: string, id: string) => {
   const tgIdPath = path.join(folderPath, '.tg_id')
   try {

@@ -123,4 +123,5 @@ contextBridge.exposeInMainWorld('api', {
   // Maintenance
   resetDatabase: () => ipcRenderer.invoke('tg-maintenance-reset-database'),
   clearAppCache: () => ipcRenderer.invoke('tg-maintenance-clear-cache'),
+  verifyTouchGalAccess: () => ipcRenderer.invoke('tg-verify-touchgal-access'),
 })
