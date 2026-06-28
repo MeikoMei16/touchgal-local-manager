@@ -925,8 +925,14 @@ const normalizeResource = (resource: any) => {
         : Array.isArray(raw.companies)
           ? raw.companies.map((item: any) => item?.name).filter(Boolean).join(', ') || null
           : null
+  const companyAliases = [
+    ...asStringArray(raw.companyAliases),
+    ...asStringArray(raw.company_aliases),
+    ...extractCompanyAliases(raw.company),
+    ...extractCompanyAliases(raw.companies),
+  ]
 
-  const releasedDate = raw.releasedDate ?? raw.released ?? null
+  const releasedDate = raw.releasedDate ?? raw.releaseDate ?? raw.release_date ?? raw.released ?? null
 
   // Preserve detail structure if present (e.g. from /patch)
   const detail = raw.detail ?? null
@@ -950,9 +956,10 @@ const normalizeResource = (resource: any) => {
     resourceCount,
     commentCount,
     releasedDate,
-    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? null,
-    created: raw.created ?? null,
+    resourceUpdateTime: raw.resourceUpdateTime ?? raw.resource_update_time ?? raw.updatedAt ?? raw.updated_at ?? null,
+    created: raw.created ?? raw.publishTime ?? raw.publish_time ?? null,
     company,
+    companyAliases: Array.from(new Set(companyAliases)),
     pvUrl: raw.pvVideoUrl ?? raw.pv_video_url ?? raw.pvUrl ?? raw.pv_url ?? null,
     screenshots,
     detail, // Critical for screenshots
@@ -1347,18 +1354,27 @@ const normalizeIntroduction = (payload: any) => {
 
   return {
     introduction: introductionHtml ? stripEmbeddedMediaFromIntroduction(introductionHtml) : null,
-    created: payload.created ?? null,
-    releasedDate: payload.released ?? null,
-    resourceUpdateTime: payload.resourceUpdateTime ?? null,
-    alias: payload.alias ?? [],
-    tags: (payload.tag ?? []).map((item: any) => item?.tag?.name ?? item?.name).filter((tag: any): tag is string => Boolean(tag)),
+    created: payload.created ?? payload.publishTime ?? payload.publish_time ?? null,
+    releasedDate: payload.releasedDate ?? payload.releaseDate ?? payload.release_date ?? payload.released ?? null,
+    resourceUpdateTime: payload.resourceUpdateTime ?? payload.resource_update_time ?? payload.updatedAt ?? payload.updated_at ?? null,
+    alias: asStringArray(payload.alias).length > 0 ? asStringArray(payload.alias) : asStringArray(payload.aliases),
+    tags: Array.isArray(payload.tags)
+      ? payload.tags.filter((tag: any): tag is string => typeof tag === 'string' && tag.length > 0)
+      : (payload.tag ?? []).map((item: any) => item?.tag?.name ?? item?.name).filter((tag: any): tag is string => Boolean(tag)),
     company:
       typeof payload.company === 'string'
         ? payload.company
         : Array.isArray(payload.company)
           ? payload.company.map((item: any) => item?.name).filter(Boolean).join(', ') || null
+          : Array.isArray(payload.companies)
+            ? payload.companies.map((item: any) => item?.name).filter(Boolean).join(', ') || null
           : null,
-    companyAliases: extractCompanyAliases(payload.company),
+    companyAliases: Array.from(new Set([
+      ...asStringArray(payload.companyAliases),
+      ...asStringArray(payload.company_aliases),
+      ...extractCompanyAliases(payload.company),
+      ...extractCompanyAliases(payload.companies),
+    ])),
     vndbId: payload.vndbId ?? null,
     bangumiId: payload.bangumiId ?? null,
     steamId: payload.steamId != null ? String(payload.steamId) : null,
