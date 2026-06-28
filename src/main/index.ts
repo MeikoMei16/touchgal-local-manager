@@ -1143,13 +1143,42 @@ const matchesSuggestionQuery = (value: unknown, terms: string[]) => {
   return terms.some((term) => normalized.includes(term))
 }
 
+type TagSuggestion = { id: number; type: 'tag' | 'company'; mode: 'include'; name: string; count: number }
+
+const addTagSuggestion = (
+  suggestions: Map<string, TagSuggestion>,
+  type: 'tag' | 'company',
+  name: string
+) => {
+  const trimmed = name.trim()
+  if (!trimmed) return
+  const key = `${type}:${trimmed}`
+  const existing = suggestions.get(key)
+  if (existing) {
+    existing.count += 1
+    return
+  }
+  suggestions.set(key, {
+    id: 0,
+    type,
+    mode: 'include',
+    name: trimmed,
+    count: 1,
+  })
+}
+
+const sortTagSuggestions = (suggestions: Map<string, TagSuggestion>) =>
+  Array.from(suggestions.values())
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+    .slice(0, 100)
+
 const buildCachedTagSuggestions = (keyword: string) => {
   const terms = buildSearchTerms(keyword)
     .map((term) => term.toLocaleLowerCase())
     .filter(Boolean)
   if (terms.length === 0) return []
 
-  const suggestions = new Map<string, { id: number; type: 'tag' | 'company'; mode: 'include'; name: string; count: number }>()
+  const suggestions = new Map<string, TagSuggestion>()
   const rows = getDb().prepare(`
     SELECT detail_json AS detailJson
     FROM games
@@ -1157,24 +1186,6 @@ const buildCachedTagSuggestions = (keyword: string) => {
     ORDER BY local_updated_at DESC
     LIMIT 1000
   `).all() as Array<{ detailJson: string | null }>
-
-  const addSuggestion = (type: 'tag' | 'company', name: string) => {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    const key = `${type}:${trimmed}`
-    const existing = suggestions.get(key)
-    if (existing) {
-      existing.count += 1
-      return
-    }
-    suggestions.set(key, {
-      id: 0,
-      type,
-      mode: 'include',
-      name: trimmed,
-      count: 1,
-    })
-  }
 
   for (const row of rows) {
     const detail = parseCachedGameDetail(row.detailJson)
@@ -1186,7 +1197,7 @@ const buildCachedTagSuggestions = (keyword: string) => {
     const companyAliases = asStringArray(detail.companyAliases)
 
     for (const tag of tags) {
-      if (matchesSuggestionQuery(tag, terms)) addSuggestion('tag', tag)
+      if (matchesSuggestionQuery(tag, terms)) addTagSuggestion(suggestions, 'tag', tag)
     }
 
     const companyMatched = [
@@ -1194,13 +1205,41 @@ const buildCachedTagSuggestions = (keyword: string) => {
       ...companyAliases,
     ].some((value) => matchesSuggestionQuery(value, terms))
     if (companyMatched) {
-      for (const companyName of companyNames) addSuggestion('company', companyName)
+      for (const companyName of companyNames) addTagSuggestion(suggestions, 'company', companyName)
     }
   }
 
-  return Array.from(suggestions.values())
-    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
-    .slice(0, 100)
+  return sortTagSuggestions(suggestions)
+}
+
+const fetchDeveloperTagSuggestions = async (keyword: string) => {
+  const terms = buildSearchTerms(keyword)
+    .map((term) => term.toLocaleLowerCase())
+    .filter(Boolean)
+  if (terms.length === 0) return []
+
+  const result = await fetchDeveloperGameSearch(keyword.trim(), 1, 10, { hydrateDetails: true })
+  const suggestions = new Map<string, TagSuggestion>()
+
+  for (const game of result.list) {
+    for (const tag of asStringArray(game.tags)) {
+      if (matchesSuggestionQuery(tag, terms)) addTagSuggestion(suggestions, 'tag', tag)
+    }
+
+    const companyNames = typeof game.company === 'string'
+      ? game.company.split(',').map((value) => value.trim()).filter(Boolean)
+      : []
+    const companyAliases = asStringArray(game.companyAliases)
+    const companyMatched = [
+      ...companyNames,
+      ...companyAliases,
+    ].some((value) => matchesSuggestionQuery(value, terms))
+    if (companyMatched) {
+      for (const companyName of companyNames) addTagSuggestion(suggestions, 'company', companyName)
+    }
+  }
+
+  return sortTagSuggestions(suggestions)
 }
 
 const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
@@ -2841,11 +2880,25 @@ handleWithLog('tg-search-tags', async (_event, keyword: string) => {
   const query = buildSearchTerms(keyword).slice(0, 10)
   if (query.length === 0) return []
 
+  const cachedSuggestions = buildCachedTagSuggestions(keyword)
+  if (isTouchGalDeveloperApiConfigured()) {
+    if (cachedSuggestions.length > 0) return cachedSuggestions
+
+    try {
+      const developerSuggestions = await fetchDeveloperTagSuggestions(keyword)
+      if (developerSuggestions.length > 0) {
+        log.warn(`[Developer API] Returning ${developerSuggestions.length} hydrated tag/company suggestions`)
+        return developerSuggestions
+      }
+    } catch (error) {
+      log.warn('[Developer API] Tag suggestion fallback failed; trying legacy /search/tag:', getSafeErrorMessage(error))
+    }
+  }
+
   try {
     const response = await API_CLIENT.post('/search/tag', { query })
     return ensureValidResponse(response.data)
   } catch (error) {
-    const cachedSuggestions = buildCachedTagSuggestions(keyword)
     if (cachedSuggestions.length > 0) {
       log.warn(`[API] Legacy /search/tag failed; returning ${cachedSuggestions.length} cached tag/company suggestions:`, getSafeErrorMessage(error))
       return cachedSuggestions
