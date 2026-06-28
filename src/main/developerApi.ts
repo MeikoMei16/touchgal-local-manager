@@ -264,6 +264,21 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const developerRequestTimestamps: number[] = []
 let developerRequestQueue = Promise.resolve()
+let developerRequestSafeLimit = DEVELOPER_REQUEST_SAFE_LIMIT
+
+const normalizeDeveloperNumber = (value: unknown) => {
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+const updateDeveloperRequestLimit = (minuteLimit: unknown) => {
+  const limit = normalizeDeveloperNumber(minuteLimit)
+  if (!limit || limit <= 0) return
+  developerRequestSafeLimit = Math.max(
+    1,
+    Math.min(DEVELOPER_REQUEST_SAFE_LIMIT, Math.floor(limit * 0.8))
+  )
+}
 
 const acquireDeveloperRequestSlot = async () => {
   while (true) {
@@ -275,7 +290,7 @@ const acquireDeveloperRequestSlot = async () => {
       developerRequestTimestamps.shift()
     }
 
-    if (developerRequestTimestamps.length < DEVELOPER_REQUEST_SAFE_LIMIT) {
+    if (developerRequestTimestamps.length < developerRequestSafeLimit) {
       developerRequestTimestamps.push(now)
       return
     }
@@ -479,11 +494,6 @@ const normalizeDeveloperSearchItem = (item: DeveloperSearchItem): DeveloperNorma
   touchgalUrl: null,
   downloads: [],
 })
-
-const normalizeDeveloperNumber = (value: unknown) => {
-  const numberValue = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(numberValue) ? numberValue : null
-}
 
 const normalizeDeveloperPagination = (
   pagination: DeveloperSearchPagination | undefined,
@@ -725,6 +735,7 @@ export const fetchDeveloperApiStatus = async () => {
     client.get<DeveloperApiResponse<Record<string, unknown>>>('/me')
   )
   const data = unwrapDeveloperResponse(response.data)
+  updateDeveloperRequestLimit(data.minuteLimit ?? data.minute_limit)
   const safeData = { ...data }
   delete safeData.tokenPrefix
 
