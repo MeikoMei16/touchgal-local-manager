@@ -587,6 +587,8 @@ export const saveGameDetail = (uniqueId: string, detail: any) => {
     isNonEmptyString(detailRecord[key]) ? detailRecord[key] : existing?.[key] ?? detailRecord[key] ?? null
   const preserveArray = (key: string) =>
     isNonEmptyArray(detailRecord[key]) ? detailRecord[key] : existing?.[key] ?? detailRecord[key] ?? []
+  const preserveNumber = (key: string) =>
+    isPositiveNumber(detailRecord[key]) ? detailRecord[key] : existing?.[key] ?? detailRecord[key] ?? null
 
   const detailId = typeof detailRecord.id === 'number' ? detailRecord.id : Number(detailRecord.id)
   const existingId = typeof existing?.id === 'number' ? existing.id : Number(existing?.id)
@@ -625,6 +627,9 @@ export const saveGameDetail = (uniqueId: string, detail: any) => {
     ratingSummary: hasRatingSummaryData(detailRecord.ratingSummary)
       ? detailRecord.ratingSummary
       : existing?.ratingSummary ?? detailRecord.ratingSummary ?? null,
+    favoriteCount: preserveNumber('favoriteCount'),
+    resourceCount: preserveNumber('resourceCount'),
+    commentCount: preserveNumber('commentCount'),
     ratingCount: isPositiveNumber(detailRecord.ratingCount)
       ? detailRecord.ratingCount
       : existing?.ratingCount ?? detailRecord.ratingCount ?? null,
