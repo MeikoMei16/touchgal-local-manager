@@ -2539,6 +2539,24 @@ function normalizeRating(raw: any) {
   }
 }
 
+const buildPatchIntroductionFromDetail = (detail: any) => ({
+  introduction: detail.introduction ?? null,
+  created: detail.created ?? null,
+  releasedDate: detail.releasedDate ?? null,
+  resourceUpdateTime: detail.resourceUpdateTime ?? null,
+  alias: Array.isArray(detail.alias) ? detail.alias : [],
+  tags: Array.isArray(detail.tags) ? detail.tags : [],
+  company: detail.company ?? null,
+  companyAliases: Array.isArray(detail.companyAliases) ? detail.companyAliases : [],
+  vndbId: detail.vndbId ?? null,
+  bangumiId: detail.bangumiId ?? null,
+  steamId: detail.steamId ?? null,
+  platform: detail.platform ?? [],
+  language: detail.language ?? [],
+  type: Array.isArray(detail.type) ? detail.type : [],
+  touchgalUrl: detail.touchgalUrl ?? null,
+})
+
 handleWithLog('tg-get-patch-comments', async (_event, patchId: number, page: number, limit: number) => {
   try {
     if (!patchId) return { total: 0, list: [] }
@@ -2586,33 +2604,26 @@ handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
   if (isTouchGalDeveloperApiConfigured()) {
     try {
       const detail = await fetchDeveloperGameDetail(uniqueId)
-      return {
-        introduction: detail.introduction,
-        created: detail.created,
-        releasedDate: detail.releasedDate,
-        resourceUpdateTime: detail.resourceUpdateTime,
-        alias: detail.alias,
-        tags: detail.tags,
-        company: detail.company,
-        companyAliases: detail.companyAliases,
-        vndbId: detail.vndbId,
-        bangumiId: detail.bangumiId,
-        steamId: detail.steamId,
-        platform: detail.platform,
-        language: detail.language,
-        type: detail.type,
-        touchgalUrl: detail.touchgalUrl,
-      }
+      return buildPatchIntroductionFromDetail(detail)
     } catch (error) {
       log.warn(`[Developer API] GET /games/${uniqueId} introduction failed, falling back to legacy introduction:`, getSafeErrorMessage(error))
     }
   }
 
-  const response = await API_CLIENT.get('/patch/introduction', {
-    ...getDeveloperModeLegacyRequestConfig(),
-    params: { uniqueId }
-  })
-  return normalizeIntroduction(ensureValidResponse(response.data))
+  try {
+    const response = await API_CLIENT.get('/patch/introduction', {
+      ...getDeveloperModeLegacyRequestConfig(),
+      params: { uniqueId }
+    })
+    return normalizeIntroduction(ensureValidResponse(response.data))
+  } catch (error) {
+    const cachedDetail = getUsableCachedGameDetail(uniqueId)
+    if (cachedDetail) {
+      log.warn(`[API] Returning cached introduction for ${uniqueId} after introduction fetch failed:`, getSafeErrorMessage(error))
+      return buildPatchIntroductionFromDetail(cachedDetail)
+    }
+    throw error
+  }
 })
 
 handleWithLog('tg-match-folder', async (_event, folderName: string) => {
