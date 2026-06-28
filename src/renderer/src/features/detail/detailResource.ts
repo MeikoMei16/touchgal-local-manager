@@ -50,7 +50,10 @@ export const mergeDetailResource = (
       : typeof (fallback as TouchGalDetail | null | undefined)?.contentLimit === 'string'
         ? (fallback as TouchGalDetail | null | undefined)?.contentLimit ?? null
         : null,
-  screenshots: Array.isArray(detail.screenshots) ? detail.screenshots : [],
+  screenshots: preserveStringArray(
+    detail.screenshots,
+    (fallback as Partial<TouchGalDetail> | null | undefined)?.screenshots
+  ),
   pvUrl: detail.pvUrl ?? readDetailFallbackString(fallback, 'pvUrl'),
   touchgalUrl: detail.touchgalUrl ?? fallback?.touchgalUrl ?? null,
   downloads: Array.isArray(detail.downloads) && detail.downloads.length > 0
