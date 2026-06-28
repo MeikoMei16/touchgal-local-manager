@@ -91,6 +91,16 @@ interface DeveloperSearchResult {
   source: 'developer-api'
 }
 
+interface DeveloperRatingRecommend {
+  strongNo?: number
+  strong_no?: number
+  no?: number
+  neutral?: number
+  yes?: number
+  strongYes?: number
+  strong_yes?: number
+}
+
 interface DeveloperGameDetail {
   uniqueId?: string
   name?: string
@@ -112,13 +122,7 @@ interface DeveloperGameDetail {
   rating?: {
     average?: number
     count?: number
-    recommend?: {
-      strong_no?: number
-      no?: number
-      neutral?: number
-      yes?: number
-      strong_yes?: number
-    }
+    recommend?: DeveloperRatingRecommend
   }
   touchgalUrl?: string | null
 }
@@ -456,6 +460,14 @@ const normalizeDeveloperSearchItem = (item: DeveloperSearchItem): DeveloperNorma
   downloads: [],
 })
 
+const normalizeDeveloperRecommend = (recommend?: DeveloperRatingRecommend) => ({
+  strong_no: recommend?.strongNo ?? recommend?.strong_no ?? 0,
+  no: recommend?.no ?? 0,
+  neutral: recommend?.neutral ?? 0,
+  yes: recommend?.yes ?? 0,
+  strong_yes: recommend?.strongYes ?? recommend?.strong_yes ?? 0,
+})
+
 export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): DeveloperNormalizedGame => {
   const average = raw.rating?.average ?? 0
   const count = raw.rating?.count ?? 0
@@ -472,13 +484,7 @@ export const normalizeDeveloperGameDetail = (raw: DeveloperGameDetail): Develope
       average,
       count,
       histogram: [],
-      recommend: {
-        strong_no: raw.rating?.recommend?.strong_no ?? 0,
-        no: raw.rating?.recommend?.no ?? 0,
-        neutral: raw.rating?.recommend?.neutral ?? 0,
-        yes: raw.rating?.recommend?.yes ?? 0,
-        strong_yes: raw.rating?.recommend?.strong_yes ?? 0,
-      },
+      recommend: normalizeDeveloperRecommend(raw.rating?.recommend),
     },
     tags: Array.isArray(raw.tags) ? raw.tags.filter(Boolean) : [],
     viewCount: 0,
