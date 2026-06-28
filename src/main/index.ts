@@ -1191,12 +1191,11 @@ const buildCachedTagSuggestions = (keyword: string) => {
     .slice(0, 100)
 }
 
-const fetchCachedGameFeed = (page: number, limit: number) => {
+const fetchCachedGameFeed = (page: number, limit: number, query?: any) => {
   const safePage = Math.max(1, Number(page) || 1)
   const safeLimit = clampApiLimit(limit)
   const offset = (safePage - 1) * safeLimit
   const db = getDb()
-  const total = (db.prepare('SELECT COUNT(*) AS count FROM games').get() as { count: number }).count
   const rows = db.prepare(`
     SELECT
       id,
@@ -1210,11 +1209,9 @@ const fetchCachedGameFeed = (page: number, limit: number) => {
       local_updated_at AS resourceUpdateTime
     FROM games
     ORDER BY local_updated_at DESC, id DESC
-    LIMIT ? OFFSET ?
-  `).all(safeLimit, offset)
+  `).all()
 
-  return {
-    list: rows.map((row: any) => {
+  const list = rows.map((row: any) => {
       const detail = parseCachedGameDetail(row.detailJson)
       return {
         id: getCachedRemotePatchId(detail),
@@ -1256,8 +1253,12 @@ const fetchCachedGameFeed = (page: number, limit: number) => {
         downloads: [],
         source: 'local-cache'
       }
-    }),
-    total,
+    })
+  const filtered = applyQueryToDeveloperFallbackList(list, query)
+
+  return {
+    list: filtered.slice(offset, offset + safeLimit),
+    total: filtered.length,
     source: 'local-cache'
   }
 }
@@ -2218,7 +2219,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
       }
     }
 
-    const cached = fetchCachedGameFeed(page, limit)
+    const cached = fetchCachedGameFeed(page, limit, query)
     if (cached.list.length > 0) {
       log.warn(`[API] GET /galgame and Developer API fallback failed; returning ${cached.list.length} cached games`)
       return cached
