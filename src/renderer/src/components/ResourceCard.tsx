@@ -47,7 +47,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({ resource, onClick })
   } = useLocalCollectionStore();
   const isClickable = resource.uniqueId && resource.uniqueId.length === 8;
   const hasRemotePatchId = Boolean(resource.id && resource.id > 0);
-  const isDeveloperApiMode = developerApiStatus?.configured === true;
+  const isDeveloperApiMode = developerApiStatus?.configured === true && developerApiStatus.usable === true;
   const isDetailLoadingForCard = isDetailLoading && selectedResource?.uniqueId === resource.uniqueId;
   const visibleTags = Array.isArray(resource.tags) ? resource.tags.filter(Boolean).slice(0, 3) : [];
   const [isCollectMenuOpen, setIsCollectMenuOpen] = React.useState(false);

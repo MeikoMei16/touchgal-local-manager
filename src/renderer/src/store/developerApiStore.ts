@@ -23,6 +23,7 @@ export const useDeveloperApiStore = create<DeveloperApiState>((set, get) => ({
       set({
         status: {
           configured: true,
+          usable: false,
           isDeveloperApiCredential: true,
           applicationStatus: 'error',
           dailyLimit: null,

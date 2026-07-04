@@ -305,11 +305,14 @@ const normalizeDeveloperApiStatusInput = (value: unknown) => {
   const raw = objectRecord(value);
   const quota = objectRecord(raw.quota);
   const rateLimit = objectRecord(raw.rateLimit ?? raw.rate_limit);
+  const configured = raw.configured ?? true;
+  const applicationStatus = raw.applicationStatus ?? raw.application_status ?? raw.status ?? 'unknown';
   return {
     ...raw,
-    configured: raw.configured ?? true,
+    configured,
+    usable: raw.usable ?? (configured === true && applicationStatus !== 'error' && applicationStatus !== 'missing'),
     applicationId: raw.applicationId ?? raw.application_id ?? raw.id,
-    applicationStatus: raw.applicationStatus ?? raw.application_status ?? raw.status ?? 'unknown',
+    applicationStatus,
     dailyLimit: raw.dailyLimit ?? raw.daily_limit ?? quota.daily ?? null,
     minuteLimit: raw.minuteLimit ?? raw.minute_limit ?? rateLimit.minute ?? quota.minute ?? null,
   };
@@ -559,6 +562,7 @@ export const DeveloperApiStatusSchema = z.preprocess(
   normalizeDeveloperApiStatusInput,
   z.object({
     configured: booleanDefault(),
+    usable: booleanDefault(),
     isDeveloperApiCredential: z.literal(true).catch(true),
     applicationId: stringDefault().optional(),
     applicationStatus: stringDefault('unknown'),

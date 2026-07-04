@@ -180,6 +180,7 @@ export interface BrowseHistoryEntry {
 
 export interface DeveloperApiStatus {
   configured: boolean;
+  usable: boolean;
   isDeveloperApiCredential: true;
   applicationId?: string;
   applicationStatus?: string;

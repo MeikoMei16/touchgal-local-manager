@@ -40,7 +40,7 @@ export const useLocalCollectionStore = create<LocalCollectionState>()((set, get)
     } catch (error) {
       const message = normalizeError(error);
       set({ error: message, isLoading: false });
-      throw new Error(message);
+      throw new Error(message, { cause: error });
     }
   },
   deleteCollection: async (collectionId: number) => {
@@ -51,7 +51,7 @@ export const useLocalCollectionStore = create<LocalCollectionState>()((set, get)
     } catch (error) {
       const message = normalizeError(error);
       set({ error: message, isLoading: false });
-      throw new Error(message);
+      throw new Error(message, { cause: error });
     }
   },
   addToCollection: async (collectionId: number, game: LocalCollectionGameInput) => {
@@ -62,7 +62,7 @@ export const useLocalCollectionStore = create<LocalCollectionState>()((set, get)
     } catch (error) {
       const message = normalizeError(error);
       set({ error: message, isLoading: false });
-      throw new Error(message);
+      throw new Error(message, { cause: error });
     }
   },
   removeFromCollection: async (collectionId: number, uniqueId: string) => {
@@ -73,7 +73,7 @@ export const useLocalCollectionStore = create<LocalCollectionState>()((set, get)
     } catch (error) {
       const message = normalizeError(error);
       set({ error: message, isLoading: false });
-      throw new Error(message);
+      throw new Error(message, { cause: error });
     }
   },
   createCollectionAndAdd: async (name: string, game: LocalCollectionGameInput) => {

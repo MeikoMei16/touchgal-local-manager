@@ -780,7 +780,7 @@ export const FavoritesView: React.FC = () => {
   const { user, userCollections, isLoading: isAuthLoading, fetchUserActivity, setIsLoginOpen } = useAuthStore();
   const developerApiStatus = useDeveloperApiStore((state) => state.status);
   const refreshDeveloperApiStatus = useDeveloperApiStore((state) => state.refreshStatus);
-  const isDeveloperApiMode = developerApiStatus?.configured === true;
+  const isDeveloperApiMode = developerApiStatus?.configured === true && developerApiStatus.usable === true;
   const [newLocalCollectionName, setNewLocalCollectionName] = React.useState('');
   const [newCloudCollectionName, setNewCloudCollectionName] = React.useState('');
   const [isCloudCollectionPublic, setIsCloudCollectionPublic] = React.useState(false);

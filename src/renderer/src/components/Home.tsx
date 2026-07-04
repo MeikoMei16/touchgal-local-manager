@@ -60,7 +60,10 @@ export const Home: React.FC = () => {
     : 'border-amber-200 bg-amber-50 text-amber-900';
 
   useEffect(() => {
-    setMinRatingCountDraft(String(lastHomeQuery.minRatingCount || 0));
+    const timer = window.setTimeout(() => {
+      setMinRatingCountDraft(String(lastHomeQuery.minRatingCount || 0));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [lastHomeQuery.minRatingCount]);
 
   useEffect(() => {
@@ -73,12 +76,13 @@ export const Home: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setJumpPage(String(currentPage));
+    const timer = window.setTimeout(() => setJumpPage(String(currentPage)), 0);
     const scrollArea = document.querySelector('[data-app-scroll-container="true"]') as HTMLElement | null;
     if (scrollArea) {
       scrollArea.scrollTo({ top: 0, behavior: 'auto' });
       scrollArea.focus();
     }
+    return () => window.clearTimeout(timer);
   }, [currentPage]);
 
   const handleJumpPage = (e: React.KeyboardEvent<HTMLInputElement>) => {

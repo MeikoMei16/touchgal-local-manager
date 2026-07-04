@@ -49,6 +49,7 @@ const TOUCHGAL_DEVELOPER_CONSOLE_URL = 'https://developer.touchgal.com/dashboard
 
 const getDeveloperApiStatusTone = (status: DeveloperApiStatus | null) => {
   if (!status?.configured) return 'missing';
+  if (!status.usable || status.applicationStatus === 'error') return 'error';
   if (status.applicationStatus === 'approved') return 'ready';
   return 'pending';
 };
@@ -84,6 +85,7 @@ const SettingsView: React.FC = () => {
     } catch {
       setDeveloperApiStatus({
         configured: true,
+        usable: false,
         isDeveloperApiCredential: true,
         applicationStatus: 'error',
         dailyLimit: null,
@@ -140,6 +142,7 @@ const SettingsView: React.FC = () => {
         if (!cancelled) {
           setDeveloperApiStatus({
             configured: true,
+            usable: false,
             isDeveloperApiCredential: true,
             applicationStatus: 'error',
             dailyLimit: null,
@@ -190,7 +193,7 @@ const SettingsView: React.FC = () => {
       ? '已启用'
       : developerApiTone === 'missing'
         ? '未配置'
-        : developerApiStatus?.applicationStatus === 'error'
+        : developerApiTone === 'error'
           ? '连接失败'
           : developerApiStatus?.applicationStatus || '待确认';
 

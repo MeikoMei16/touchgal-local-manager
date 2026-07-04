@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useAuthStore } from '../store/useTouchGalStore';
 import { User, Lock, ShieldCheck, X, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { CaptchaChallenge } from './CaptchaChallenge';
@@ -11,26 +11,29 @@ export const LoginModal: React.FC = () => {
   const [captcha, setCaptcha] = useState('');
   const [isChallengeOpen, setIsChallengeOpen] = useState(false);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     clearAuthUi();
     setCaptcha('');
     setIsChallengeOpen(false);
     setIsLoginOpen(false);
-  };
+  }, [clearAuthUi, setIsLoginOpen]);
 
   useEffect(() => {
     // Check if we already have a challenge or URL
-    if (isChallengeOpen && !captchaChallenge) {
-      setIsChallengeOpen(false);
-    }
+    const timer = window.setTimeout(() => {
+      if (isChallengeOpen && !captchaChallenge) {
+        setIsChallengeOpen(false);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [captchaChallenge, isChallengeOpen]);
 
   // Close modal on successful login
   useEffect(() => {
-    if (user) {
-      closeModal();
-    }
-  }, [user]);
+    if (!user) return undefined;
+    const timer = window.setTimeout(() => closeModal(), 0);
+    return () => window.clearTimeout(timer);
+  }, [user, closeModal]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,9 +55,12 @@ export const LoginModal: React.FC = () => {
 
   // This effect handles jumping to challenge if it's returned
   useEffect(() => {
-    if (captchaChallenge) {
-      setIsChallengeOpen(true);
-    }
+    const timer = window.setTimeout(() => {
+      if (captchaChallenge) {
+        setIsChallengeOpen(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [captchaChallenge]);
 
   const handleChallengeSuccess = async (code: string) => {

@@ -41,47 +41,50 @@ export const LocalGameWindow: React.FC<LocalGameWindowProps> = ({
   const localGameId = localGameIdProp ?? queryLocalGameId;
 
   React.useEffect(() => {
-    if (initialGame) {
-      setGame(initialGame);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    if (!localGameId) {
-      setError('缺少本地游戏 ID');
-      setIsLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
-    const loadGame = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const nextGame = await window.api.getLinkedLocalGame(localGameId);
-        if (cancelled) return;
-        if (!nextGame) {
-          setError('未找到对应的本地游戏条目');
-          setGame(null);
-          return;
-        }
-        setGame(nextGame);
-      } catch (loadError) {
-        if (cancelled) return;
-        setError(loadError instanceof Error ? loadError.message : '读取本地游戏失败');
-        setGame(null);
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+    const timer = window.setTimeout(() => {
+      if (initialGame) {
+        setGame(initialGame);
+        setError(null);
+        setIsLoading(false);
+        return;
       }
-    };
 
-    void loadGame();
+      if (!localGameId) {
+        setError('缺少本地游戏 ID');
+        setIsLoading(false);
+        return;
+      }
+
+      const loadGame = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+          const nextGame = await window.api.getLinkedLocalGame(localGameId);
+          if (cancelled) return;
+          if (!nextGame) {
+            setError('未找到对应的本地游戏条目');
+            setGame(null);
+            return;
+          }
+          setGame(nextGame);
+        } catch (loadError) {
+          if (cancelled) return;
+          setError(loadError instanceof Error ? loadError.message : '读取本地游戏失败');
+          setGame(null);
+        } finally {
+          if (!cancelled) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      void loadGame();
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [initialGame, localGameId]);
 

@@ -42,10 +42,11 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
   const [bulkTargetId, setBulkTargetId] = React.useState<string>('');
   const [moveTargetById, setMoveTargetById] = React.useState<Record<string, string>>({});
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const folderId = folder?.id;
 
   const otherFolders = React.useMemo(
-    () => allFolders.filter((candidate) => candidate?.id && candidate.id !== folder?.id),
-    [allFolders, folder?.id]
+    () => allFolders.filter((candidate) => candidate?.id && candidate.id !== folderId),
+    [allFolders, folderId]
   );
 
   const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -58,13 +59,13 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
 
   const loadPage = React.useCallback(
     async (targetPage: number, { silent = false }: { silent?: boolean } = {}) => {
-      if (!folder?.id) return;
+      if (!folderId) return;
       if (!silent) {
         setIsLoading(true);
       }
       setError(null);
       try {
-        const response = await TouchGalClient.getFavoriteFolderPatches(folder.id, targetPage, PAGE_SIZE);
+        const response = await TouchGalClient.getFavoriteFolderPatches(folderId, targetPage, PAGE_SIZE);
         setItems(Array.isArray(response?.patches) ? response.patches : []);
         setTotal(typeof response?.total === 'number' ? response.total : 0);
       } catch (fetchError) {
@@ -77,7 +78,7 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
         }
       }
     },
-    [folder?.id]
+    [folderId]
   );
 
   React.useEffect(() => {
@@ -96,18 +97,27 @@ export const CloudCollectionOverlay: React.FC<CloudCollectionOverlayProps> = ({
   }, [onClose]);
 
   React.useEffect(() => {
-    setPage(1);
-    setSelectedIds([]);
-    setBulkTargetId('');
-    setMoveTargetById({});
-  }, [folder?.id]);
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSelectedIds([]);
+      setBulkTargetId('');
+      setMoveTargetById({});
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [folderId]);
 
   React.useEffect(() => {
-    void loadPage(page);
+    const timer = window.setTimeout(() => {
+      void loadPage(page);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadPage, page]);
 
   React.useEffect(() => {
-    setSelectedIds((current) => current.filter((id) => items.some((item) => item.uniqueId === id)));
+    const timer = window.setTimeout(() => {
+      setSelectedIds((current) => current.filter((id) => items.some((item) => item.uniqueId === id)));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [items]);
 
   const patchCount = typeof total === 'number' && total >= 0 ? total : folder?._count?.patch || 0;

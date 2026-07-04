@@ -98,7 +98,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({
   const [activeCloudFolderId, setActiveCloudFolderId] = React.useState<number | null>(null);
   const [cloudFolders, setCloudFolders] = React.useState<any[]>([]);
   const hasRemotePatchId = Boolean(resource.id && resource.id > 0);
-  const isDeveloperApiMode = developerApiStatus?.configured === true;
+  const isDeveloperApiMode = developerApiStatus?.configured === true && developerApiStatus.usable === true;
   const resourceTags = React.useMemo(() => {
     const seen = new Set<string>();
     const tags: string[] = [];

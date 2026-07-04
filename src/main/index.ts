@@ -48,7 +48,9 @@ import {
   fetchDeveloperGameDetail,
   fetchDeveloperGameResources,
   fetchDeveloperGameSearch,
-  isTouchGalDeveloperApiConfigured
+  isTouchGalDeveloperApiConfigured,
+  isTouchGalDeveloperApiUsable,
+  shouldAttemptTouchGalDeveloperApi
 } from './developerApi'
 
 // Configure logging
@@ -444,7 +446,7 @@ const isLegacySessionUnavailableError = (error: unknown) => {
 }
 
 const shouldReturnDeveloperOnlyEmptyLegacyRead = (error: unknown) =>
-  isTouchGalDeveloperApiConfigured() && isLegacySessionUnavailableError(error)
+  isTouchGalDeveloperApiUsable() && isLegacySessionUnavailableError(error)
 
 const buildDeveloperOnlyLegacyReadFallback = <T extends Record<string, unknown>>(fallback: T) => ({
   ...fallback,
@@ -453,9 +455,8 @@ const buildDeveloperOnlyLegacyReadFallback = <T extends Record<string, unknown>>
 })
 
 const getDeveloperModeLegacyRequestConfig = (): TouchGalAxiosRequestConfig =>
-  isTouchGalDeveloperApiConfigured()
-    ? { __touchGalSkipChallengeVerification: true }
-    : {}
+  // Legacy fallbacks should trigger the normal browser verification flow on Cloudflare challenges.
+  ({})
 
 const LEGACY_CLOUD_COLLECTION_LOGIN_REQUIRED_MESSAGE =
   '云端收藏需要旧站登录；TouchGal Developer API 暂不支持云端收藏写入。'
@@ -2034,12 +2035,7 @@ const fetchLegacyPatchDetail = async (
 }
 
 const fetchLegacyPatchDetailWhenAccessible = async (uniqueId: string) => {
-  if (!(await hasTouchGalClearanceCookie())) {
-    log.info(`[API] Skipping legacy detail hydration for ${uniqueId}; TouchGal clearance cookie is not available`)
-    return null
-  }
-
-  return fetchLegacyPatchDetail(uniqueId, { skipChallengeVerification: true })
+  return fetchLegacyPatchDetail(uniqueId)
 }
 
 const cacheFetchedGameDetail = (uniqueId: string, detail: any) => {
@@ -2253,16 +2249,45 @@ app.on('window-all-closed', () => {
   }
 })
 
+const REDACTED_LOG_VALUE = '[REDACTED]'
+const SENSITIVE_LOG_KEY_PATTERN = /password|token|captcha|cookie|authorization|api[-_]?key|secret/i
+
+const redactForLog = (value: unknown, seen = new WeakSet<object>()): unknown => {
+  if (!value || typeof value !== 'object') return value
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactForLog(item, seen))
+  }
+
+  if (seen.has(value)) return '[Circular]'
+  seen.add(value)
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      SENSITIVE_LOG_KEY_PATTERN.test(key) ? REDACTED_LOG_VALUE : redactForLog(item, seen)
+    ])
+  )
+}
+
+const redactIpcArgsForLog = (channel: string, args: unknown[]) => {
+  if (channel === 'tg-login') {
+    return args.map(() => REDACTED_LOG_VALUE)
+  }
+
+  return args.map((arg) => redactForLog(arg))
+}
+
 // IPC Handlers with Logging
 const handleWithLog = (channel: string, listener: (...args: any[]) => any) => {
   ipcMain.handle(channel, async (event, ...args) => {
-    log.debug(`[IPC Request] ${channel}`, args)
+    log.debug(`[IPC Request] ${channel}`, redactIpcArgsForLog(channel, args))
     try {
       const result = await listener(event, ...args)
       log.debug(`[IPC Response] ${channel}`, { success: true })
       return result
     } catch (error) {
-      log.error(`[IPC Error] ${channel}`, error)
+      log.error(`[IPC Error] ${channel}`, getSafeErrorMessage(error))
       throw error
     }
   })
@@ -2476,7 +2501,8 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     log.warn('[API] selectedTags received by tg-fetch-resources; ignoring upstream tag filtering and relying on local advanced pipeline');
   }
 
-  // Use the standard /galgame (GET) endpoint only.
+  // Home feed intentionally keeps the legacy /galgame endpoint first: the
+  // Developer API does not currently expose an equivalent general feed.
   // Tag filtering is intentionally NOT delegated upstream because /galgame tagString is unreliable
   // and /search has retrieval semantics that do not match strict local filtering.
   // Advanced Year Logic Translation (Intersection of all constraints)
@@ -2534,7 +2560,7 @@ handleWithLog('tg-fetch-resources', async (_event, page: number, limit: number, 
     return normalized
   } catch (err: any) {
     log.error('[API] GET /galgame error:', err.response?.data || err.message);
-    if (isTouchGalDeveloperApiConfigured()) {
+    if (shouldAttemptTouchGalDeveloperApi()) {
       try {
         const fallback = await fetchDeveloperBrowseFallback(page, limit, query)
         if (fallback.list.length > 0) {
@@ -2587,7 +2613,7 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
     }
   }
 
-  if (isTouchGalDeveloperApiConfigured() && !preferLegacySearch) {
+  if (shouldAttemptTouchGalDeveloperApi() && !preferLegacySearch) {
     try {
       return await fetchFromDeveloperApi()
     } catch (error) {
@@ -2611,16 +2637,14 @@ handleWithLog('tg-search-resources', async (_event, keyword: string, page: numbe
 
     return normalized
   } catch (error) {
-    if (!isTouchGalDeveloperApiConfigured()) {
-      throw error
-    }
-
     if (preferLegacySearch) {
       log.warn('[API] Legacy /search failed for optioned search; returning Developer API keyword results:', getSafeErrorMessage(error))
-      try {
-        return await fetchFromDeveloperApi(true)
-      } catch (fallbackError) {
-        log.warn('[Developer API] Search fallback failed after legacy /search error; trying local cache:', getSafeErrorMessage(fallbackError))
+      if (shouldAttemptTouchGalDeveloperApi()) {
+        try {
+          return await fetchFromDeveloperApi(true)
+        } catch (fallbackError) {
+          log.warn('[Developer API] Search fallback failed after legacy /search error; trying local cache:', getSafeErrorMessage(fallbackError))
+        }
       }
     } else {
       log.warn('[API] Legacy /search failed after Developer API search error; trying local cache:', getSafeErrorMessage(error))
@@ -2642,7 +2666,7 @@ handleWithLog('tg-get-patch-detail', async (_event, uniqueId: string) => {
   }
 
   let developerDetail: any | null = null
-  if (isTouchGalDeveloperApiConfigured()) {
+  if (shouldAttemptTouchGalDeveloperApi()) {
     try {
       developerDetail = await fetchDeveloperGameDetail(uniqueId)
     } catch (error) {
@@ -2790,7 +2814,7 @@ handleWithLog('tg-get-patch-ratings', async (_event, patchId: number, page: numb
 })
 
 handleWithLog('tg-get-patch-introduction', async (_event, uniqueId: string) => {
-  if (isTouchGalDeveloperApiConfigured()) {
+  if (shouldAttemptTouchGalDeveloperApi()) {
     try {
       const detail = await fetchDeveloperGameDetail(uniqueId)
       return buildPatchIntroductionFromDetail(detail)
@@ -2866,7 +2890,7 @@ handleWithLog('tg-match-folder', async (_event, folderName: string) => {
   }
 
   const localMatches = mergeRows(aliasMatches, results as Array<any>)
-  if (localMatches.length > 0 || !isTouchGalDeveloperApiConfigured()) {
+  if (localMatches.length > 0 || !shouldAttemptTouchGalDeveloperApi()) {
     return localMatches
   }
 
@@ -3170,7 +3194,7 @@ handleWithLog('tg-search-tags', async (_event, keyword: string) => {
   if (query.length === 0) return []
 
   const cachedSuggestions = buildCachedTagSuggestions(keyword)
-  if (isTouchGalDeveloperApiConfigured()) {
+  if (shouldAttemptTouchGalDeveloperApi()) {
     if (cachedSuggestions.length > 0) return cachedSuggestions
 
     try {
@@ -3209,7 +3233,7 @@ handleWithLog('tg-get-user-status-self', async () => {
     const response = await API_CLIENT.get('/user/status', getDeveloperModeLegacyRequestConfig())
     return ensureValidResponse(response.data)
   } catch (error) {
-    if (!isTouchGalDeveloperApiConfigured()) {
+    if (!isTouchGalDeveloperApiUsable()) {
       throw error
     }
     log.warn('[API] Legacy /user/status failed; treating TouchGal user session as unavailable:', getSafeErrorMessage(error))
@@ -3221,6 +3245,7 @@ handleWithLog('tg-get-developer-api-status', async () => {
   if (!isTouchGalDeveloperApiConfigured()) {
     return {
       configured: false,
+      usable: false,
       isDeveloperApiCredential: true,
       applicationStatus: 'missing',
       dailyLimit: null,

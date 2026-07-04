@@ -39,6 +39,15 @@ interface DeveloperSearchPagination {
   has_more?: boolean
 }
 
+interface DeveloperApiStatusValue extends Record<string, unknown> {
+  configured: boolean
+  usable: boolean
+  isDeveloperApiCredential: true
+  applicationStatus: string
+  dailyLimit: unknown
+  minuteLimit: unknown
+}
+
 interface DeveloperSearchOptions {
   hydrateDetails?: boolean
 }
@@ -581,11 +590,24 @@ const normalizeDeveloperPagination = (
 ): DeveloperSearchResult['pagination'] => {
   if (!pagination) return null
 
+  const page = normalizeDeveloperNumber(pagination.page) ?? undefined
+  const limit = normalizeDeveloperNumber(pagination.limit) ?? undefined
+  const total = normalizeDeveloperNumber(pagination.total) ?? fallbackTotal
+  const explicitHasMore = typeof pagination.hasMore === 'boolean'
+    ? pagination.hasMore
+    : typeof pagination.has_more === 'boolean'
+      ? pagination.has_more
+      : null
+
   return {
-    page: normalizeDeveloperNumber(pagination.page) ?? undefined,
-    limit: normalizeDeveloperNumber(pagination.limit) ?? undefined,
-    total: normalizeDeveloperNumber(pagination.total) ?? fallbackTotal,
-    hasMore: Boolean(pagination.hasMore ?? pagination.has_more),
+    page,
+    limit,
+    total,
+    hasMore: explicitHasMore ?? (
+      typeof page === 'number' && typeof limit === 'number'
+        ? page * limit < total
+        : false
+    ),
   }
 }
 
@@ -740,7 +762,14 @@ const detailCache = new Map<string, Promise<ReturnType<typeof normalizeDeveloper
 const searchCache = new Map<string, { expiresAt: number; value: DeveloperSearchResult }>()
 const searchInFlightCache = new Map<string, Promise<DeveloperSearchResult>>()
 const resourceCache = new Map<string, Promise<ReturnType<typeof normalizeDeveloperGameResources>>>()
-let statusCache: { expiresAt: number; value: Record<string, unknown> } | null = null
+let statusCache: { expiresAt: number; value: DeveloperApiStatusValue } | null = null
+let developerApiUsable = false
+
+export const isTouchGalDeveloperApiUsable = () =>
+  isTouchGalDeveloperApiConfigured() && developerApiUsable
+
+export const shouldAttemptTouchGalDeveloperApi = () =>
+  isTouchGalDeveloperApiConfigured() && statusCache?.value.usable !== false
 
 const runLimited = async <T, R>(
   items: T[],
@@ -894,21 +923,41 @@ export const fetchDeveloperGameResources = async (uniqueId: string) => {
 export const fetchDeveloperApiStatus = async () => {
   if (statusCache && statusCache.expiresAt > Date.now()) return statusCache.value
 
-  const client = createDeveloperApiClient()
-  const response = await requestDeveloperApi(() =>
-    client.get<DeveloperApiResponse<Record<string, unknown>>>('/me')
-  )
-  const data = unwrapDeveloperResponse(response.data)
-  updateDeveloperRequestLimit(getDeveloperMinuteLimit(data))
-  const safeData = { ...data }
-  delete safeData.tokenPrefix
-  delete safeData.token_prefix
+  try {
+    const client = createDeveloperApiClient()
+    const response = await requestDeveloperApi(() =>
+      client.get<DeveloperApiResponse<Record<string, unknown>>>('/me')
+    )
+    const data = unwrapDeveloperResponse(response.data)
+    updateDeveloperRequestLimit(getDeveloperMinuteLimit(data))
+    const safeData = { ...data }
+    delete safeData.tokenPrefix
+    delete safeData.token_prefix
 
-  const value = {
-    ...safeData,
-    configured: true,
-    isDeveloperApiCredential: true,
+    const value: DeveloperApiStatusValue = {
+      ...safeData,
+      configured: true,
+      usable: true,
+      isDeveloperApiCredential: true,
+      applicationStatus: String(safeData.applicationStatus ?? safeData.application_status ?? safeData.status ?? 'unknown'),
+      dailyLimit: safeData.dailyLimit ?? safeData.daily_limit ?? asDeveloperRecord(safeData.quota).daily ?? null,
+      minuteLimit: getDeveloperMinuteLimit(safeData) ?? null,
+    }
+    developerApiUsable = true
+    statusCache = { expiresAt: Date.now() + DEVELOPER_STATUS_CACHE_TTL_MS, value }
+    return value
+  } catch (error) {
+    developerApiUsable = false
+    const value: DeveloperApiStatusValue = {
+      configured: true,
+      usable: false,
+      isDeveloperApiCredential: true,
+      applicationStatus: 'error',
+      dailyLimit: null,
+      minuteLimit: null,
+      error: error instanceof Error ? error.message : String(error),
+    }
+    statusCache = { expiresAt: Date.now() + DEVELOPER_STATUS_CACHE_TTL_MS, value }
+    return value
   }
-  statusCache = { expiresAt: Date.now() + DEVELOPER_STATUS_CACHE_TTL_MS, value }
-  return value
 }

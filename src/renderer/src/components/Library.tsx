@@ -181,7 +181,7 @@ export const Library: React.FC = () => {
     return sorted;
   }, [linkedGames, searchValue, selectedCollection, sortBy]);
 
-  const hydrateLibrary = async () => {
+  const hydrateLibrary = React.useCallback(async () => {
     setIsBootLoading(true);
     try {
       const [nextRoots, nextLinked] = await Promise.all([
@@ -195,14 +195,20 @@ export const Library: React.FC = () => {
     } finally {
       setIsBootLoading(false);
     }
-  };
+  }, [pushToast]);
 
   React.useEffect(() => {
-    void hydrateLibrary();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void hydrateLibrary();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [hydrateLibrary]);
 
   React.useEffect(() => {
-    setSelectedGameIds((current) => current.filter((id) => linkedGames.some((game) => game.id === id)));
+    const timer = window.setTimeout(() => {
+      setSelectedGameIds((current) => current.filter((id) => linkedGames.some((game) => game.id === id)));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [linkedGames]);
 
   const handleAddRoot = async (candidatePath: string) => {

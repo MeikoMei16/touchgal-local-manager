@@ -58,7 +58,7 @@ const ProfileView: React.FC = () => {
   } = useAuthStore();
   const developerApiStatus = useDeveloperApiStore((state) => state.status);
   const refreshDeveloperApiStatus = useDeveloperApiStore((state) => state.refreshStatus);
-  const isDeveloperApiMode = developerApiStatus?.configured === true;
+  const isDeveloperApiMode = developerApiStatus?.configured === true && developerApiStatus.usable === true;
   const { selectResource } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'comments' | 'ratings' | 'collections' | 'history'>('history');
